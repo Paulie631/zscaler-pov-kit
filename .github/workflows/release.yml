@@ -12,12 +12,12 @@ permissions:
 concurrency: release
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.v.outputs.version }}
       needed: ${{ steps.v.outputs.needed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - id: v
         env: {GH_TOKEN: "${{ github.token }}"}
         run: |
@@ -35,10 +35,10 @@ jobs:
     uses: ./.github/workflows/ci.yml
   publish:
     needs: [check, test]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with: {python-version: "3.12"}
       - run: python tools/package.py
       - name: Guides (Markdown and Word, stamped with this version)
