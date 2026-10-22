@@ -21,7 +21,7 @@ the same steps on the command line.
 2. Ask the customer for a pilot group of real users from their own directory, and one or more pilot devices.
 3. Start the POV with the products in scope and its end date: `pov-kit new "<customer>" --products
    zia,zcc,zpa,aiguard,zdx,casb --ends YYYY-MM-DD`, then
-   `set vanity_domain`, `set pilot_group` and `set pilot_emails`.
+   `set vanity_domain`, `set pilot_group` and `set pilot_emails` (and `set customer_id` with ZPA).
    - ZPA: `set zpa.domains` and `set zpa.tcp_ports` for the POV app, and `set zpa.group` if its SCIM group has
      another name.
    - CASB: the customer connects a SaaS tenant (an OAuth grant) before the kickoff; `set casb.tenant` picks one.

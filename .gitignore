@@ -6,3 +6,5 @@ dist/
 pov-probe-*.json
 pov-kit-diagnostics-*.zip
 uv.lock
+err*.txt
+out*.txt

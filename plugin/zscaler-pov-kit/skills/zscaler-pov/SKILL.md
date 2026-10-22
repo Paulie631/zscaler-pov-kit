@@ -20,8 +20,8 @@ user's browser.
 2. If none exists, copy the bundled `kit/` folder to `~/zscaler-pov-kit` and make `pov-kit` executable.
 3. Check that `uv` exists (`command -v uv` or `~/.local/bin/uv`). If not, tell the user to run `brew install uv` (Mac)
    or the PowerShell installer on docs.astral.sh/uv (Windows). Don't install it silently.
-4. Use `./pov-kit` on Mac and Linux, `.\pov-kit.cmd` on Windows, from the kit folder. Add `--pov ID` to act on a POV
-   other than the current one (`./pov-kit list` shows them).
+4. Use `./pov-kit` on Mac and Linux, `.\pov-kit.cmd` on Windows, from the kit folder. Add `--pov ID` (before or after the command) to act
+   on a POV other than the current one (`./pov-kit list` shows them).
 5. If no shell on the user's computer is available, give the user the exact commands to run themselves.
 
 ## Commands
