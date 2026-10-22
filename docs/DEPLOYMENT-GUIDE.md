@@ -1,16 +1,24 @@
 # Zscaler POV Kit: SE deployment guide
 
-Version 0.5.0. This guide ships with the kit and changes in the same branch as the behavior it describes.
+Version 0.6.0. This guide ships with the kit and changes in the same branch as the behavior it describes.
 
 Run `pov-kit gui` and follow the console's Setup tab; every step below has a matching wizard step. The commands are
 the same steps on the command line.
+
+## Once, on your laptop
+
+- `pov-kit backup setup <a folder synced off the laptop>` (OneDrive, Google Drive, iCloud), with a passphrase you keep
+  in your password manager. Every POV is then backed up, encrypted, after every change.
+- `pov-kit remind install`: a daily notification when a POV is ending, overdue, or not backed up.
+- In your own lab tenant: `pov-kit selftest --lab`.
 
 ## Before the POV
 
 1. Agree the success criteria with the customer from the catalog (`povkit/catalog/`); record them with
    `pov-kit set criteria IS-URL-01,IS-SSL-01,...`.
 2. Ask the customer for a pilot group of real users from their own directory, and one or more pilot devices.
-3. Start the POV with the products in scope: `pov-kit new "<customer>" --products zia,zcc,zpa,aiguard,zdx,casb`, then
+3. Start the POV with the products in scope and its end date: `pov-kit new "<customer>" --products
+   zia,zcc,zpa,aiguard,zdx,casb --ends YYYY-MM-DD`, then
    `set vanity_domain`, `set pilot_group` and `set pilot_emails`.
    - ZPA: `set zpa.domains` and `set zpa.tcp_ports` for the POV app, and `set zpa.group` if its SCIM group has
      another name.
@@ -28,20 +36,25 @@ the same steps on the command line.
    group, an unrecognised IdP (choose it in Pilot users so its sign-in sites stay out of SSL inspection).
 2. `pov-kit plan`. Walk the admin through `plan.html`: every object, who it affects, where it sits, and the customer
    actions only they make.
-3. When they agree: `pov-kit approve --by "<name, title>"`. Any later change to the plan needs a fresh approval.
+3. When they agree: `pov-kit approve --by "<name, title>"`. Or send them `plan.html`: its approval form saves a file
+   they send back, and `pov-kit approve --file <file>` checks it's for this exact change list. Any later change to
+   the plan needs a fresh approval.
 4. Apply. (Two-client mode: the admin creates the apply client first, entered at the Approval step.)
-5. If Client Connector refused the forwarding profile (a bare 400), build both profiles from the printed spec, then
-   `pov-kit status --fix` adopts them.
-6. ZPA: `pov-kit zpa template --show-key`; the customer deploys the stack in their AWS account (the App Connector
-   AMI from the Marketplace, a subnet that reaches the app and Zscaler). Connectors show up within about 15 minutes.
+5. Apply creates both Client Connector profiles. If Client Connector refuses them even in their plainest form (a
+   bare 400), build them from the printed spec, then `pov-kit status --fix` adopts them.
+6. ZPA: `pov-kit zpa template --show-key` (add `--cloud azure` for Azure); the customer deploys it in their account
+   (AWS: the App Connector AMI from the Marketplace; Azure: accept the image terms once). Connectors show up within
+   about 15 minutes.
 7. AI Guard: the policy starts in Monitor. `pov-kit aiguard policy attacks` (or `data`) when the customer wants to see
    blocking.
 8. Work through the customer actions with the admin, then `pov-kit status`.
 
 ## During the POV
 
-- **New use cases.** When the customer asks "can you show...?", type it in the console's Use cases tab. Before the
-  first one, record their agreement to share the discovery snapshot with Claude (through your AI Guard tenant). Review
+- **New use cases.** When the customer asks "can you show...?", check the library first (no AI call), then type it
+  in the console's Use cases tab. Before the first one, record their agreement to share the discovery snapshot with
+  Claude through your AI Guard tenant: with names replaced (the default), or in full if they prefer. Refine a
+  proposal in words until it's right, and save what worked to the library. Review
   the proposal with them; **Add to the change list**, then make the change list again, get it approved and Apply.
   Directions go to whoever owns that setting. Use cases work in every product of the POV: a ZPA app needs the POV's
   App Connectors running, a ZDX trace needs pilot devices reporting, a CASB rule needs a connected SaaS tenant.
@@ -54,7 +67,8 @@ the same steps on the command line.
 
 ## Closing
 
-1. `pov-kit report` and give the customer `report.html` (or its PDF).
+1. `pov-kit report --summary` (Claude drafts the executive summary from the results) and give the customer
+   `report.html` (or its PDF).
 2. Agree the exit with the customer: `pov-kit handover teardown`, or `pov-kit handover terraform` to keep the
    configuration. Both remove the POV's secrets and discovery data from your laptop.
 3. ZPA: delete the connector stack in AWS and the enrolled connectors in the ZPA console first; teardown keeps the

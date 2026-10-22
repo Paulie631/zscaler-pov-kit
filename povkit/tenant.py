@@ -51,12 +51,18 @@ class Tenant:
         if resource == "zpa.policies" and "conditions" in kw:
             kw = dict(kw, conditions=tuplify(kw["conditions"]))   # the SDK reads rule conditions as tuples
         t0 = time.time()
+        from . import recorder
+        rec = recorder.enabled(self.pov)
         try:
             out = getattr(api, method)(*a, **kw)
         except Exception as e:
             self.pov.log("api", f"{resource}.{method} failed", "error", error=str(e)[:500])
+            if rec:
+                recorder.write(self.pov, resource, method, a, kw, error=e)
             raise KitError(f"{resource}.{method} failed: {e}") from e
         if not (isinstance(out, tuple) and len(out) == 3):
+            if rec:
+                recorder.write(self.pov, resource, method, a, kw, _plain(out))
             return _plain(out)
         result, resp, err = out
         write = not re.match(r"(list|get|search|status)", method)
@@ -64,11 +70,16 @@ class Tenant:
             self.pov.log("api", f"{self.which} {resource}.{method}", "error" if err else "ok",
                          ms=int((time.time() - t0) * 1000), **({"error": str(err)[:500]} if err else {}))
         if err:
+            if rec:
+                recorder.write(self.pov, resource, method, a, kw, error=err)
             if re.search(r"\b401\b|invalid_client|unauthori", str(err), re.I):
                 raise KitError(OAUTH_FAILED)
             raise KitError(f"{resource}.{method} failed: {err}")
         body = resp.get_body() if resp is not None and hasattr(resp, "get_body") else None
-        return body if body is not None else _plain(result)
+        res = body if body is not None else _plain(result)
+        if rec:
+            recorder.write(self.pov, resource, method, a, kw, res)
+        return res
 
 
 def tuplify(conditions):

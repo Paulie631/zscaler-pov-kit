@@ -88,6 +88,8 @@ def apply(pov, tenant_for, log):
     pov.cfg["state"] = "applied"
     pov.save()
     pov.log("apply", f"apply done: {len(led.active())} POV objects")
+    from . import backup
+    backup.save(pov)
     return led
 
 
@@ -109,6 +111,9 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
     for p in products.selected(pov.products):
         if p.ready:
             checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}") for x in p.drift(ro, pov, led, items)]
+    from . import backup, remind
+    checks.append(remind.end_check(pov))
+    checks.append(backup.check(pov))
     open_actions = [i for i in items if i["action"] == "customer_action"]
     if open_actions:
         checks.append(check("customer-actions", "Customer actions to confirm", INFO,
@@ -140,6 +145,8 @@ def teardown(pov, tenant_for, log, include_adopted=False):
     pov.cfg["state"] = "torn_down" if not led.active() else "partly_torn_down"
     pov.save()
     pov.log("teardown", f"teardown: {len(led.active())} objects left")
+    from . import backup
+    backup.save(pov)
     return out
 
 

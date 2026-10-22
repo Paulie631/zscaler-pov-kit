@@ -4,7 +4,7 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.5.0**: every product module, the identity step,
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.6.0**: every product module, the identity step,
 the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
@@ -37,21 +37,23 @@ tenants.
 The console opens in your browser (this computer only). Its **Setup** tab walks through eight steps, like the demo
 kit's wizard:
 
-1. **Start a POV**: customer, products, prefix, and one API client (recommended) or two.
+1. **Start a POV**: customer, products, prefix, end date, and one API client (recommended) or two.
 2. **Connect**: copy the role spec for the customer's admin, then enter the vanity domain, client ID and secret
    (straight to the keychain).
 3. **Pilot users**: the pilot group (or Hosted DB test users), their emails, the IdP, and per-product details such as
    the ZPA app and whether ZPA scopes by SCIM group or SAML attribute.
 4. **Preflight**: read-only checks of every product and of the pilot users across products.
 5. **Change list**: everything the kit will create, who it affects, and what only the customer does.
-6. **Approval**: who approved this exact change list.
+6. **Approval**: who approved this exact change list, recorded here or by the customer on the change-list page
+   (it has an approval form that saves a file you import).
 7. **Apply**: live progress, then a status check.
-8. **Next steps**: customer actions, the probe pack, the ZPA connector template and key, the AI Guard profile, test
-   users' sign-ins.
+8. **Next steps**: customer actions, the probe pack, the ZPA connector template (AWS or Azure) and key, the AI Guard
+   profile, test users' sign-ins.
 
-**Status** compares the tenant with what was approved (and fixes drift on POV objects only), **Success criteria**
-runs the API proofs, imports probe results, records attestations and builds the report, **Handover** exports to
-Terraform or tears down, and **Logs** holds the activity log and the diagnostics zip.
+**Status** compares the tenant with what was approved (and fixes drift on POV objects only) and holds the safety net
+(end date, encrypted backups, reminders), **Success criteria** runs the API proofs, imports probe results, records
+attestations, drafts the executive summary and builds the report, **Handover** exports to Terraform or tears down,
+and **Logs** holds the activity log, the diagnostics zip and the lab tools (self-test, API recording).
 
 Everything is also on the command line:
 
@@ -64,13 +66,13 @@ Everything is also on the command line:
 ./pov-kit connect                                  # one client; --discovery / --apply for two
 ./pov-kit preflight
 ./pov-kit plan                                     # show the customer plan.html
-./pov-kit approve --by "Jane Doe, CISO"
+./pov-kit approve --by "Jane Doe, CISO"           # or --file approval-....json from the customer
 ./pov-kit apply
 ./pov-kit status                                   # --fix repairs drift on POV objects only
 ```
 
-Product extras: `./pov-kit set zpa.domains hr.acme.internal` (the POV app) and `./pov-kit zpa template` (its App
-Connectors on AWS); `./pov-kit aiguard policy attacks` (what the POV's AI Guard policy blocks); `./pov-kit set
+Product extras: `./pov-kit set zpa.domains hr.acme.internal` (the POV app) and `./pov-kit zpa template [--cloud
+azure]` (its App Connectors on AWS or Azure); `./pov-kit aiguard policy attacks` (what the POV's AI Guard policy blocks); `./pov-kit set
 pilot_emails jane@acme.com,raj@acme.com` (for ZDX and device checks).
 
 `./pov-kit probe-pack` writes this POV's probe tests. On a pilot device with Client Connector signed in:
@@ -81,11 +83,33 @@ pilot_emails jane@acme.com,raj@acme.com` (for ZDX and device checks).
 ./pov-kit test --api                               # automated API proofs
 ./pov-kit attest IS-URL-01 --note "Blocks seen in Web Insights for the pilot user"
 ./pov-kit test
-./pov-kit report                                   # report.html, print to PDF
+./pov-kit report --summary                         # report.html, opened by Claude's executive summary
 ./pov-kit handover teardown                        # or: handover terraform
 ```
 
 `./pov-kit diagnostics` writes a zip for the kit owner: no secrets, no customer object names.
+
+## The safety net: nothing left behind
+
+- **End date.** Every POV has one (30 days unless `--ends` or `set ends`). Status warns in the last week and fails
+  once it has passed with POV objects still in the tenant.
+- **Reminders.** `./pov-kit remind install` adds a daily scheduled task (Task Scheduler, a LaunchAgent or cron) that
+  reads only the POV folders on this laptop and shows a notification when a POV is ending, overdue or not backed up.
+- **Encrypted backups.** `./pov-kit backup setup ~/OneDrive/pov-backups` asks for a passphrase (keep it in your
+  password manager) and, after every apply, Fix drift, teardown and handover, writes each POV's ledger, approval and
+  change list there, encrypted. On a new laptop: `./pov-kit backup restore <pov-id>`, then `connect`.
+- **Recover without a backup.** `./pov-kit recover <pov-id> --customer "Acme Corp" --products zia,zpa` makes an empty
+  POV with the same ID; after `connect`, `./pov-kit recover <pov-id>` sweeps the tenant read-only for objects with the
+  prefix and that POV's stamp, and `--write` records them so teardown can remove them. Objects found by name only are
+  recorded as adopted; another POV's objects are never touched.
+
+## Before a customer: the lab tools
+
+- `./pov-kit selftest --lab` in your own lab tenant: reads every product, then creates, reads back and deletes one
+  harmless object per product (a ZIA label, a disabled ZPA segment group, an AI Guard app).
+- `./pov-kit record on` saves every API call and response, redacted, in the POV folder; `./pov-kit record export
+  lab-1` turns them into `tests/fixtures/lab-1.jsonl` (field names, types and Zscaler's own values only). The offline
+  tests then check the fake tenant against the real API and run discovery on the recording.
 
 ## Use cases from a prompt
 
@@ -114,8 +138,18 @@ the tenant snapshot and proposes:
   Detection API with the use case's own key by `pov-kit test --api`), or an attestation, proved in the report like the
   catalog's.
 
-Before the first use, record the customer's agreement: Claude reads the full discovery snapshot, which travels through
-your AI Guard tenant to Anthropic. The proxy key is your AI Guard demo kit's Anthropic app key if it's on this
+**What Claude sees.** By default the customer's names, emails and domains are replaced by placeholders on your laptop
+before anything is sent (`ai.share names_only`); Claude sees the policy's shape, and its reply is swapped back before
+the kit checks it. `pov-kit set ai.share full` sends the snapshot as discovery read it, and needs its own agreement.
+
+**Refine, then reuse.** Refine a proposal in words ("make it Caution, not Block"); the earlier version is kept.
+**Save to library** keeps a use case that worked, with the customer's names taken out, for the next POV: using it
+checks it against the new tenant and makes no AI call. Point the library at a shared folder for the team with
+`pov-kit usecase library --folder PATH`. Claude answers through a fixed tool format, so its replies arrive as
+structured data rather than text to parse.
+
+Before the first use, record the customer's agreement: Claude reads the discovery snapshot (names replaced, unless
+you choose otherwise), which travels through your AI Guard tenant to Anthropic. The proxy key is your AI Guard demo kit's Anthropic app key if it's on this
 computer, or one you save with `pov-kit ai connect`; your Anthropic key stays in your own AI Guard tenant.
 
 ## Products and criteria

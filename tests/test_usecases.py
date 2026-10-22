@@ -67,13 +67,30 @@ def test_nothing_goes_to_claude_without_consent_and_a_key(pov, tenant_for, claud
     assert claude == []
 
 
-def test_claude_goes_through_ai_guard_with_the_snapshot(pov, ready, claude):
-    usecases.propose(pov, ready, "Let pilot users open Dropbox but not upload to it")
+def test_claude_goes_through_ai_guard_with_names_replaced(pov, ready, claude):
+    uc = usecases.propose(pov, ready, "Let POV Pilot open Dropbox but not upload to it, like jane@acme.com does")
     req = claude[0]
     assert req["url"].endswith("/v1/messages") and "proxy.zseclipse.net" in req["url"]
     assert req["headers"]["X-ApiKey"] == "proxy-key-123"
-    assert "Corp: Block adult" in req["json"]["messages"][0]["content"]   # the full snapshot, as agreed
-    assert "Dropbox" in req["json"]["messages"][0]["content"]
+    sent = req["json"]["messages"][0]["content"]
+    for name in ("Corp: Block adult", "POV Pilot", "Acme Corp", "jane@acme.com"):   # names only, by default
+        assert name not in sent
+    assert "Dropbox" in sent and "GAMBLING" in sent                            # Zscaler's own values stay
+    assert req["json"]["tool_choice"]["name"] == "propose_use_case"
+    assert uc["shared"] == "names_only" and uc["masked"] >= 3
+
+
+def test_full_sharing_needs_its_own_agreement(pov, ready, claude):
+    from povkit import settings
+    from povkit.core import KitError
+    settings.set_value(pov, "ai.share", "full")
+    with pytest.raises(KitError, match="in full"):                           # the agreement was for names only
+        usecases.propose(pov, ready, "x")
+    ai.record_consent(pov, "Jane Doe, CISO")
+    usecases.propose(pov, ready, "Let pilot users open Dropbox but not upload to it")
+    assert "Corp: Block adult" in claude[-1]["json"]["messages"][0]["content"]
+    settings.set_value(pov, "ai.share", "names_only")
+    assert ai.consent(pov)                                                   # full covers names only
 
 
 def test_the_kit_validates_what_claude_proposes(pov, ready):

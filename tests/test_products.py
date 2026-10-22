@@ -104,6 +104,27 @@ def test_connector_template_hides_the_key_and_opens_no_ports():
     assert "fake" not in json.dumps(tpl)
 
 
+def test_azure_template_uses_zscalers_image_and_opens_no_ports():
+    tpl = connector_template.build_azure("acme-1234")
+    assert tpl["parameters"]["provisioningKey"]["type"] == "securestring"
+    vms = [r for r in tpl["resources"] if r["type"] == "Microsoft.Compute/virtualMachines"]
+    assert len(vms) == 2
+    for v in vms:
+        assert v["plan"] == {"name": "zpa-con-azure", "publisher": "zscaler", "product": "zscaler-private-access"}
+        assert v["properties"]["osProfile"]["linuxConfiguration"]["disablePasswordAuthentication"] is True
+        assert "provisioningKey" in v["properties"]["osProfile"]["customData"]
+    nics = [r for r in tpl["resources"] if r["type"] == "Microsoft.Network/networkInterfaces"]
+    assert all("publicIPAddress" not in n["properties"]["ipConfigurations"][0]["properties"] for n in nics)
+    nsg = next(r for r in tpl["resources"] if r["type"] == "Microsoft.Network/networkSecurityGroups")
+    rules = nsg["properties"]["securityRules"]
+    assert [r["properties"]["access"] for r in rules if r["properties"]["direction"] == "Inbound"] == ["Deny"]
+    text = json.dumps(tpl)
+    assert "/opt/zscaler/var/provision_key" in text and "fake" not in text
+    # the boot script survives ARM's quoting: concat('...', key, '...') with no stray single quotes
+    boot = vms[0]["properties"]["osProfile"]["customData"]
+    assert boot.startswith("[base64(concat('#!/bin/bash") and boot.endswith("'))]")
+
+
 # ---- AI Guard
 def test_aiguard_lifecycle_profile_and_api_proof(pov_all, tenant, tenant_for, monkeypatch):
     applied(pov_all, tenant_for)

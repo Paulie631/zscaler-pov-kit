@@ -40,8 +40,9 @@ def c_new(a):
     bad = [x for x in names if x not in products.REGISTRY]
     if bad:
         raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.ORDER)}.")
-    p = povs.new(a.customer, names, a.prefix)
-    print(f"POV {p.id} for {a.customer}: {', '.join(names)}, prefix '{p.prefix}'. Folder: {p.dir}")
+    from .remind import parse_date
+    p = povs.new(a.customer, names, a.prefix, parse_date(a.ends) if a.ends else None)
+    print(f"POV {p.id} for {a.customer}: {', '.join(names)}, prefix '{p.prefix}', ends {p.cfg['ends']}. Folder: {p.dir}")
     print("Next: `pov-kit set vanity_domain ACME`, `pov-kit set pilot_group \"POV Pilot\"`, then `pov-kit role-spec`.")
 
 
@@ -49,7 +50,8 @@ def c_list(a):
     cur = povs.CURRENT.read_text().strip() if povs.CURRENT.exists() else ""
     for pid in povs.all_povs():
         p = povs.Pov(pid)
-        print(f"{'*' if pid == cur else ' '} {pid:28} {p.cfg['customer']:24} {p.cfg.get('state')}")
+        from .remind import ends
+        print(f"{'*' if pid == cur else ' '} {pid:28} {p.cfg['customer']:24} {p.cfg.get('state'):16} ends {ends(p)}")
 
 
 def c_use(a):
@@ -136,7 +138,13 @@ def c_plan(a):
 
 def c_approve(a):
     p = _pov(a)
-    rec = ChangeList(p.dir).approve(a.by, a.note or "")
+    if a.file:
+        rec = ChangeList(p.dir).approve_file(a.file)
+    elif a.by:
+        rec = ChangeList(p.dir).approve(a.by, a.note or "")
+    else:
+        raise KitError("Either `--by \"Name, title\"` (approved in front of you) or `--file approval-....json` (saved "
+                       "by the customer on the change-list page).")
     p.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']}")
     nxt = ("create the apply client, `pov-kit connect --apply`, then `pov-kit apply`"
            if p.cfg.get("client_mode") == "separate" else "`pov-kit apply`")
@@ -216,10 +224,15 @@ def c_zpa_template(a):
     p = _pov(a)
     if not lifecycle.ledger(p).find("zpa.provisioning_key"):
         raise KitError("No POV provisioning key yet. Run `pov-kit apply` with ZPA in the POV first.")
-    out = Path(a.out or f"pov-{p.id}-app-connectors.json")
-    connector_template.write(out, p.id, p.prefix)
-    print(f"CloudFormation template: {out}. In the customer's AWS account: CloudFormation > Create stack > upload it, "
-          "then enter the provisioning key, the App Connector AMI (from the AWS Marketplace), the VPC and subnet.")
+    out = Path(a.out or f"pov-{p.id}-app-connectors{'-azure' if a.cloud == 'azure' else ''}.json")
+    connector_template.write(out, p.id, p.prefix, a.cloud)
+    if a.cloud == "azure":
+        print(f"Azure template: {out}. In the customer's subscription, accept the image terms once (az vm image terms "
+              "accept --publisher zscaler --offer zscaler-private-access --plan zpa-con-azure), then Deploy a custom "
+              "template > upload it, and enter the provisioning key, the subnet's resource ID and an SSH public key.")
+    else:
+        print(f"CloudFormation template: {out}. In the customer's AWS account: CloudFormation > Create stack > upload "
+              "it, then enter the provisioning key, the App Connector AMI (from the AWS Marketplace), the VPC and subnet.")
     if a.show_key:
         key = secrets.get(p.id, "zpa-provisioning-key")
         print(f"Provisioning key (paste into the stack, don't save it anywhere else): {key or '(not in the keychain)'}")
@@ -238,6 +251,10 @@ def c_aiguard_policy(a):
 def c_report(a):
     from .report import render_report
     p = _pov(a)
+    if a.summary:
+        from . import summary
+        s = summary.write(p, a.note or "")
+        print(f"Executive summary: {s['headline']}")
     rows = evidence.evaluate(p)
     out = p.path("report.html")
     out.write_text(render_report(p, rows, ChangeList(p.dir).approval()), encoding="utf-8")
@@ -325,12 +342,15 @@ def c_ai(a):
         if not a.by:
             raise KitError("Say who agreed: `pov-kit ai consent --by \"Name, title\"`.")
         ai.record_consent(p, a.by)
-        print(f"Recorded: {a.by} agreed to share {p.cfg['customer']}'s discovery snapshot with Claude through AI Guard.")
+        how = "the full" if ai.share(p) == "full" else "the names-replaced"
+        print(f"Recorded: {a.by} agreed to share {how} discovery snapshot of {p.cfg['customer']} with Claude through "
+              "AI Guard.")
     else:
         key, where = ai.proxy_key()
         c = ai.consent(p)
         print(f"AI Guard proxy key: {where if key else 'none. ' + where}")
-        print(f"Customer agreement: {c['by'] + ' on ' + c['at'][:10] if c else 'not yet'}")
+        print(f"Sharing: {ai.share(p)} (`pov-kit set ai.share names_only|full`)")
+        print(f"Customer agreement: {c['by'] + ' on ' + c['at'][:10] if c else 'not yet (for this way of sharing)'}")
 
 
 def c_usecase(a):
@@ -351,6 +371,30 @@ def c_usecase(a):
         show_usecase(uc)
         if uc["status"] == "directions":
             print("\n" + usecases.directions_md(uc))
+    elif a.action == "refine":
+        if len(a.rest) < 2:
+            raise KitError("`pov-kit usecase refine UC-01 \"make it Caution, not Block\"`")
+        snaps, _ = lifecycle.discover(p, tenant_for)
+        uc = usecases.refine(p, snaps, a.rest[0], " ".join(a.rest[1:]))
+        show_usecase(uc)
+    elif a.action == "save":
+        from . import library
+        e = library.save(p, usecases.get(p, a.rest[0]), title=a.title)
+        print(f"Saved to the library as '{e['id']}' ({library.folder()})" + ("; proved in this POV" if e["proved"] else ""))
+    elif a.action == "library":
+        from . import library
+        if a.folder:
+            print(f"Library folder: {library.set_folder(a.folder)}")
+        for e in library.entries():
+            print(f"  {e['id']:40} {'proved ' if e.get('proved') else '       '} {e['title'][:70]}")
+        if not library.entries():
+            print(f"  (empty: {library.folder()})")
+    elif a.action == "use":
+        from . import library
+        snaps, _ = lifecycle.discover(p, tenant_for)
+        uc = library.use(p, snaps, a.rest[0])
+        show_usecase(uc)
+        print(f"\nNo AI call was made. Next: `pov-kit usecase accept {uc['id']}`.")
     elif a.action in ("accept", "directions", "discard", "proposed"):
         uc = usecases.set_status(p, a.rest[0], "accepted" if a.action == "accept" else a.action)
         if uc["status"] == "accepted":
@@ -375,6 +419,88 @@ def show_usecase(uc):
           + (f"; check: {t['attest']}" if t["attest"] else ""))
 
 
+def c_backup(a):
+    from . import backup
+    if a.what == "setup":
+        if not a.folder:
+            raise KitError("Name the folder: `pov-kit backup setup ~/OneDrive/pov-backups`.")
+        pw = getpass.getpass("Backup passphrase (12+ characters; keep it in your password manager): ")
+        if pw != getpass.getpass("Again: "):
+            raise KitError("The passphrases didn't match.")
+        d = backup.setup(a.folder, pw)
+        print(f"Backups go to {d}, encrypted. Every POV on this laptop is backed up now and after every change.")
+    elif a.what == "now":
+        out = backup.save(_pov(a), quiet=False)
+        print(f"Backed up to {out}." if out else "Backups aren't set up: `pov-kit backup setup FOLDER`.")
+    elif a.what == "restore":
+        if not a.folder:
+            raise KitError("Name the backup file or POV ID: `pov-kit backup restore acme-corp-3f2a`.")
+        p = backup.restore(a.folder, getpass.getpass("Backup passphrase: "), overwrite=a.overwrite)
+        print(f"Restored POV {p.id} ({p.cfg['customer']}). Save the API client again (`pov-kit connect`), then "
+              "`pov-kit status`.")
+
+
+def c_recover(a):
+    from . import recover
+    if not (povs.POVS / a.pov_id / "pov.json").exists():
+        if not (a.customer and a.products):
+            raise KitError("This POV isn't on this laptop. If you have a backup, `pov-kit backup restore "
+                           f"{a.pov_id}`. Otherwise: `pov-kit recover {a.pov_id} --customer NAME --products zia,zpa,...`.")
+        p = povs.create_with_id(a.pov_id, a.customer, [x.strip() for x in a.products.split(",") if x.strip()], a.prefix)
+        print(f"Made an empty POV folder for {p.id}. Save the API client (`pov-kit connect`), then run "
+              f"`pov-kit recover {p.id}` again to find its objects.")
+        return 0
+    p = povs.Pov(a.pov_id)
+    povs.use(p.id)
+    finds, problems = recover.run(p, tenant_for, write=a.write)
+    for f in finds:
+        print(f"  {f['proof']:10} {f['product']:8} {f['name']}  -> {f['status']}")
+    for x in problems:
+        print(f"  couldn't read {x}")
+    n = sum(1 for f in finds if f["proof"] != "other POV")
+    print(f"\n{n} objects of POV {p.id} found (read-only)." + ("" if a.write else " Run again with --write to record "
+          "them in the ledger, then `pov-kit handover teardown` or `pov-kit status`."))
+    return 2 if problems else 0
+
+
+def c_remind(a):
+    from . import remind
+    if a.what == "install":
+        print(f"Reminders on: {remind.install()}. They read only the POV folders on this laptop.")
+    elif a.what == "uninstall":
+        remind.uninstall()
+        print("Reminders off.")
+    else:
+        urgent, summary = remind.run(weekly=True if a.weekly else None)
+        if not (urgent or summary):
+            print("Nothing needs doing.")
+
+
+def c_record(a):
+    from . import recorder
+    p = _pov(a)
+    if a.what in ("on", "off"):
+        p.cfg["record"] = a.what == "on"
+        p.save()
+        print(f"Recording {'on: every API call is saved, redacted, to ' + str(p.path('recordings')) if a.what == 'on' else 'off'}.")
+    else:
+        out, n = recorder.export(p, a.name or p.id, a.out)
+        print(f"Exported {n} distinct calls to {out} (field names, types and Zscaler's own values only).")
+
+
+def c_selftest(a):
+    from . import selftest
+    p = _pov(a)
+    if not a.lab:
+        raise KitError("selftest creates and deletes one object per product. Run it only in your own lab tenant: "
+                       "`pov-kit selftest --lab`.")
+    res = selftest.run(p, tenant_for, say, lab=True)
+    for x in res["steps"]:
+        say("ok" if x["ok"] else "fail", f"{x['product']:8} {x['step']:8} {x.get('detail', '')}")
+    print(f"\nselftest {'passed' if res['ok'] else 'FAILED'} in {res['seconds']} s.")
+    return 0 if res["ok"] else 1
+
+
 def c_version(a):
     print(VERSION)
 
@@ -394,6 +520,7 @@ def parser():
     s.add_argument("customer")
     s.add_argument("--products", default="zia,zcc", help="any of: zia,zcc,zpa,aiguard,zdx,casb")
     s.add_argument("--prefix", default="ZPOV")
+    s.add_argument("--ends", help="end date, YYYY-MM-DD (default: 30 days from now)")
     cmd("list", c_list, "list POVs on this laptop")
     s = cmd("use", c_use, "switch to another POV")
     s.add_argument("pov_id")
@@ -410,8 +537,9 @@ def parser():
     s.add_argument("--json", action="store_true")
     cmd("discover", c_discover, "read-only snapshot of the tenant")
     cmd("plan", c_plan, "write the change list for the customer to approve")
-    s = cmd("approve", c_approve, "record the customer's approval of the change list")
-    s.add_argument("--by", required=True)
+    s = cmd("approve", c_approve, "record the customer's approval (--by, or --file from the change-list page)")
+    s.add_argument("--by")
+    s.add_argument("--file")
     s.add_argument("--note")
     cmd("apply", c_apply, "create the approved objects")
     s = cmd("status", c_status, "drift on POV objects; --fix repairs only those")
@@ -433,14 +561,17 @@ def parser():
     s = cmd("test", c_test, "evaluate the success criteria (--api runs the automated API proofs first)")
     s.add_argument("--criteria")
     s.add_argument("--api", action="store_true")
-    s = cmd("zpa", c_zpa_template, "zpa template: the App Connector CloudFormation template")
+    s = cmd("zpa", c_zpa_template, "zpa template [--cloud aws|azure]: the App Connector template")
     s.add_argument("what", choices=["template"])
+    s.add_argument("--cloud", choices=["aws", "azure"], default="aws")
     s.add_argument("--out")
     s.add_argument("--show-key", action="store_true")
     s = cmd("aiguard", c_aiguard_policy, "aiguard policy monitor|attacks|data: what the POV's AI Guard policy blocks")
     s.add_argument("what", choices=["policy"])
     s.add_argument("profile", choices=["monitor", "attacks", "data"])
-    cmd("report", c_report, "write the evidence report")
+    s = cmd("report", c_report, "write the evidence report (--summary: Claude drafts the executive summary first)")
+    s.add_argument("--summary", action="store_true")
+    s.add_argument("--note", help="with --summary: what to emphasize")
     s = cmd("handover", c_handover, "the clean exit: teardown, or terraform")
     s.add_argument("how", choices=["teardown", "terraform"])
     s.add_argument("--yes", action="store_true")
@@ -452,14 +583,37 @@ def parser():
     s = cmd("ai", c_ai, "ai connect|consent|status: Claude through AI Guard for use cases")
     s.add_argument("what", choices=["connect", "consent", "status"])
     s.add_argument("--by")
-    s = cmd("usecase", c_usecase, "usecase ask \"...\" | list | show ID | accept ID | directions ID | discard ID")
-    s.add_argument("action", choices=["ask", "list", "show", "accept", "directions", "discard", "proposed"])
+    s = cmd("usecase", c_usecase, "usecase ask \"...\" | list | show ID | refine ID \"...\" | accept ID | directions ID | "
+            "discard ID | save ID | library | use NAME")
+    s.add_argument("action", choices=["ask", "list", "show", "refine", "accept", "directions", "discard", "proposed",
+                                      "save", "library", "use"])
     s.add_argument("rest", nargs="*")
+    s.add_argument("--title", help="with save: the library entry's title")
+    s.add_argument("--folder", help="with library: use this folder (e.g. a shared, synced team folder)")
     s = cmd("gui", c_gui, "the POV console in your browser (setup wizard, status, criteria, handover, logs)")
     s.add_argument("--port", type=int, default=8790)
     s.add_argument("--no-browser", action="store_true")
     s = cmd("users", c_users, "the POV's Hosted DB test users (--show prints their passwords)")
     s.add_argument("--show", action="store_true")
+    s = cmd("backup", c_backup, "backup setup FOLDER | now | restore FILE-or-POV-ID: encrypted ledger backups")
+    s.add_argument("what", choices=["setup", "now", "restore"])
+    s.add_argument("folder", nargs="?")
+    s.add_argument("--overwrite", action="store_true")
+    s = cmd("recover", c_recover, "find a POV's objects in the tenant (read-only) and rebuild its ledger")
+    s.add_argument("pov_id")
+    s.add_argument("--customer")
+    s.add_argument("--products")
+    s.add_argument("--prefix", default="ZPOV")
+    s.add_argument("--write", action="store_true")
+    s = cmd("remind", c_remind, "remind install|uninstall|run: a daily check for POVs ending or left behind")
+    s.add_argument("what", choices=["install", "uninstall", "run"])
+    s.add_argument("--weekly", action="store_true", help="with run: include the weekly summary")
+    s = cmd("record", c_record, "record on|off|export NAME: save redacted API traffic for the offline tests")
+    s.add_argument("what", choices=["on", "off", "export"])
+    s.add_argument("name", nargs="?")
+    s.add_argument("--out")
+    s = cmd("selftest", c_selftest, "in YOUR LAB tenant: read, create, read back and delete one object per product")
+    s.add_argument("--lab", action="store_true")
     cmd("version", c_version, "print the version")
     return ap
 

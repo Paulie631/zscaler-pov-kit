@@ -7,7 +7,12 @@ The proxy key is an AI Guard app key in PROXY mode. The kit looks for one in thi
 The SE's Anthropic API key lives in the SE's own AI Guard tenant as a provider credential; it never goes into the
 customer's tenant or this kit. AI Guard scans every request and reply, so the assistant itself demos AI Guard.
 
-Nothing goes to Claude until the customer has agreed to share the discovery snapshot (recorded per POV).
+Nothing goes to Claude until the customer has agreed to share the discovery snapshot (recorded per POV), in one of
+two ways (`pov-kit set ai.share`):
+  names_only   the default: the customer's names are swapped for placeholders on the laptop (pseudo.py)
+  full         the snapshot as discovery read it
+An agreement covers the way it was given for, or a narrower one: agreeing to 'full' covers 'names_only', not the
+other way round.
 """
 from __future__ import annotations
 
@@ -40,17 +45,32 @@ def proxy_key():
                   "computer.")
 
 
+SHARES = ("names_only", "full")
+
+
+def share(pov):
+    return (pov.cfg.get("ai") or {}).get("share") or "names_only"
+
+
 def consent(pov):
-    return (pov.cfg.get("ai") or {}).get("consent")
+    """The recorded agreement, if it covers how this POV shares now."""
+    c = (pov.cfg.get("ai") or {}).get("consent")
+    if not c:
+        return None
+    given = c.get("share", "full")   # agreements recorded before 0.6 were for the full snapshot
+    return c if SHARES.index(given) >= SHARES.index(share(pov)) else None
 
 
 def record_consent(pov, by):
     by = (by or "").strip()
     if not by:
         raise KitError("Say who at the customer agreed (name and title).")
-    pov.cfg.setdefault("ai", {})["consent"] = {"by": by, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+    how = share(pov)
+    pov.cfg.setdefault("ai", {})["consent"] = {"by": by, "share": how,
+                                                "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     pov.save()
-    pov.log("ai", f"customer agreed to share the discovery snapshot with Claude through AI Guard ({by})")
+    what = "the full discovery snapshot" if how == "full" else "the discovery snapshot with their names replaced"
+    pov.log("ai", f"customer agreed to share {what} with Claude through AI Guard ({by})")
 
 
 def post(url, json, headers, timeout):
@@ -61,21 +81,25 @@ def post(url, json, headers, timeout):
 TRANSPORT = post   # tests swap in a fake
 
 
-def ask(pov, system, user, max_tokens=4000, timeout=180):
-    """One Claude message through the AI Guard proxy. -> reply text."""
-    if not consent(pov):
-        raise KitError("The customer hasn't agreed to share the discovery snapshot with Claude (through AI Guard) yet. "
-                       "Record their agreement in the Use cases tab, or `pov-kit ai consent --by \"Name, title\"`.")
+def ask(pov, system, user, max_tokens=4000, timeout=180, tool=None, needs_consent=True):
+    """One Claude message through the AI Guard proxy. -> reply text, or with `tool` (a tool definition Claude must
+    call) -> (the tool's input or None, reply text)."""
+    if needs_consent and not consent(pov):
+        raise KitError("The customer hasn't agreed to share the discovery snapshot with Claude (through AI Guard) yet"
+                       + (" in full" if share(pov) == "full" else "") + ". Record their agreement in the Use cases tab, "
+                       "or `pov-kit ai consent --by \"Name, title\"`.")
     key, where = proxy_key()
     if not key:
         raise KitError(where)
     model = (pov.cfg.get("ai") or {}).get("model") or DEFAULT_MODEL
     t0 = time.time()
     try:
-        r = TRANSPORT(f"{PROXY_HOST}/v1/messages", json={
-            "model": model, "max_tokens": max_tokens, "system": system,
-            "messages": [{"role": "user", "content": user}],
-            "metadata": {"user_id": re.sub(r"[^A-Za-z0-9_-]", "-", f"pov-kit-{pov.id}")}},
+        body = {"model": model, "max_tokens": max_tokens, "system": system,
+                "messages": [{"role": "user", "content": user}],
+                "metadata": {"user_id": re.sub(r"[^A-Za-z0-9_-]", "-", f"pov-kit-{pov.id}")}}
+        if tool:
+            body.update(tools=[tool], tool_choice={"type": "tool", "name": tool["name"]})
+        r = TRANSPORT(f"{PROXY_HOST}/v1/messages", json=body,
             headers={"X-ApiKey": key, "x-api-key": "unused", "anthropic-version": "2023-06-01",
                      "content-type": "application/json"}, timeout=timeout)
     except Exception as e:
@@ -91,4 +115,9 @@ def ask(pov, system, user, max_tokens=4000, timeout=180):
         raise KitError(f"The AI Guard proxy answered HTTP {r.status_code}: {text[:200]}".replace(key, "<key>"))
     d = r.json()
     pov.log("ai", f"Claude ({model}) through AI Guard: reply in {ms} ms", "ok", ms=ms)
-    return " ".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text").strip()
+    text = " ".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text").strip()
+    if tool:
+        used = next((b.get("input") for b in d.get("content", []) if b.get("type") == "tool_use"
+                     and b.get("name") == tool["name"]), None)
+        return (used if isinstance(used, dict) else None), text
+    return text

@@ -1,6 +1,13 @@
-"""CloudFormation template for the POV's two ZPA App Connectors on AWS, in the shape of the demo kit's zia_aws.py.
+"""Templates for the POV's two ZPA App Connectors: AWS CloudFormation (in the shape of the demo kit's zia_aws.py)
+and an Azure Resource Manager template.
 
-`pov-kit zpa template` writes it for this POV. The customer (or the SE in the customer's account) uploads it in the
+`pov-kit zpa template [--cloud aws|azure]` writes one for this POV. The Azure template follows Zscaler's own
+Azure modules (github.com/zscaler/terraform-azurerm-zpa-app-connector-modules): the Marketplace image
+zscaler / zscaler-private-access / zpa-con-azure with its purchase plan, a 4-vCPU size, and the provisioning-key
+first boot from their user_data_zscaler.sh. Each VM has no public IP and an NSG that denies all inbound; sign-in is
+by SSH key (zsroot), through the customer's own bastion if they need it.
+
+AWS: The customer (or the SE in the customer's account) uploads it in the
 CloudFormation console; deleting the stack removes everything it made.
 
 The stack: two instances of Zscaler's App Connector image (the AMI from the customer's AWS Marketplace subscription,
@@ -88,6 +95,82 @@ def build(pov_id, prefix="ZPOV", instance_type="m5.large"):
     }
 
 
-def write(path, pov_id, prefix="ZPOV"):
-    path.write_text(json.dumps(build(pov_id, prefix), indent=2), encoding="utf-8")
+AZ_IMAGE = {"publisher": "zscaler", "offer": "zscaler-private-access", "sku": "zpa-con-azure"}
+AZ_SIZES = ["Standard_D4s_v5", "Standard_D4s_v3", "Standard_D4s_v4", "Standard_D4as_v5", "Standard_F4s_v2",
+            "Standard_D8s_v5", "Standard_D8as_v5"]
+AZ_BOOT = ["#!/bin/bash\n# ZPA App Connector first boot for POV {pov}: enroll with the POV's provisioning key.\n"
+           "systemctl stop zpa-connector 2>/dev/null || true\n"
+           "echo \"", "\" > /opt/zscaler/var/provision_key\nchmod 644 /opt/zscaler/var/provision_key\n"
+           "systemctl start zpa-connector\nnohup yum update -y > /var/log/yum-update.log 2>&1 &\n"]
+
+
+def build_azure(pov_id, prefix="ZPOV"):
+    """An ARM template (deploy with 'Deploy a custom template' in the Azure portal, or az deployment group create).
+    The Marketplace terms must be accepted once per subscription:
+    az vm image terms accept --publisher zscaler --offer zscaler-private-access --plan zpa-con-azure"""
+    tags = {"zpov": pov_id, "purpose": f"{prefix} App Connector"}
+    boot = ("[base64(concat('" + AZ_BOOT[0].format(pov=pov_id).replace("'", "''") + "', parameters('provisioningKey'), '"
+            + AZ_BOOT[1].replace("'", "''") + "'))]")
+    vm = lambda n: [  # noqa: E731
+        {"type": "Microsoft.Network/networkInterfaces", "apiVersion": "2023-09-01",
+         "name": f"[concat(parameters('namePrefix'), '-nic{n}')]", "location": "[parameters('location')]", "tags": tags,
+         "dependsOn": ["[resourceId('Microsoft.Network/networkSecurityGroups', concat(parameters('namePrefix'), '-nsg'))]"],
+         "properties": {"ipConfigurations": [{"name": "ipconfig1", "properties": {
+             "subnet": {"id": "[parameters('subnetId')]"}, "privateIPAllocationMethod": "Dynamic"}}],
+             "networkSecurityGroup": {"id": "[resourceId('Microsoft.Network/networkSecurityGroups', "
+                                            "concat(parameters('namePrefix'), '-nsg'))]"}}},
+        {"type": "Microsoft.Compute/virtualMachines", "apiVersion": "2023-09-01",
+         "name": f"[concat(parameters('namePrefix'), '-vm{n}')]", "location": "[parameters('location')]", "tags": tags,
+         "zones": f"[if(parameters('useZones'), createArray('{n}'), json('null'))]",
+         "dependsOn": [f"[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('namePrefix'), '-nic{n}'))]"],
+         "plan": {"name": AZ_IMAGE["sku"], "publisher": AZ_IMAGE["publisher"], "product": AZ_IMAGE["offer"]},
+         "properties": {
+             "hardwareProfile": {"vmSize": "[parameters('vmSize')]"},
+             "storageProfile": {"imageReference": dict(AZ_IMAGE, version="[parameters('imageVersion')]"),
+                                "osDisk": {"createOption": "FromImage", "managedDisk": {"storageAccountType": "Premium_LRS"},
+                                           "deleteOption": "Delete"}},
+             "osProfile": {"computerName": f"[concat(parameters('namePrefix'), '-ac{n}')]",
+                           "adminUsername": "zsroot", "customData": boot,
+                           "linuxConfiguration": {"disablePasswordAuthentication": True, "ssh": {"publicKeys": [{
+                               "path": "/home/zsroot/.ssh/authorized_keys", "keyData": "[parameters('sshPublicKey')]"}]}}},
+             "networkProfile": {"networkInterfaces": [{
+                 "id": f"[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('namePrefix'), '-nic{n}'))]",
+                 "properties": {"deleteOption": "Delete"}}]}}}]
+    return {
+        "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+        "contentVersion": "1.0.0.0",
+        "metadata": {"description": f"Zscaler POV {pov_id}: two ZPA App Connectors for the POV connector group. Delete "
+                                    f"the resource group (or these resources) to remove them."},
+        "parameters": {
+            "provisioningKey": {"type": "securestring", "minLength": 20,
+                                "metadata": {"description": "The POV's provisioning key (pov-kit zpa template --show-key)."}},
+            "subnetId": {"type": "string", "metadata": {"description": "Resource ID of a subnet that reaches the POV "
+                                                                       "application and the internet on TCP 443 (a NAT "
+                                                                       "gateway is fine)."}},
+            "sshPublicKey": {"type": "string", "metadata": {"description": "SSH public key for the zsroot user."}},
+            "vmSize": {"type": "string", "defaultValue": AZ_SIZES[0], "allowedValues": AZ_SIZES},
+            "imageVersion": {"type": "string", "defaultValue": "latest",
+                             "metadata": {"description": "App Connector image version (latest, or a pinned one)."}},
+            "useZones": {"type": "bool", "defaultValue": False,
+                         "metadata": {"description": "Put the two connectors in availability zones 1 and 2."}},
+            "namePrefix": {"type": "string", "defaultValue": f"{prefix.lower()}-ac-{pov_id[-4:]}", "maxLength": 40},
+            "location": {"type": "string", "defaultValue": "[resourceGroup().location]"},
+        },
+        "resources": [
+            {"type": "Microsoft.Network/networkSecurityGroups", "apiVersion": "2023-09-01",
+             "name": "[concat(parameters('namePrefix'), '-nsg')]", "location": "[parameters('location')]", "tags": tags,
+             "properties": {"securityRules": [{"name": "deny-all-inbound", "properties": {
+                 "priority": 4000, "direction": "Inbound", "access": "Deny", "protocol": "*", "sourcePortRange": "*",
+                 "destinationPortRange": "*", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*",
+                 "description": "App Connectors only make outbound connections."}}]}},
+            *vm(1), *vm(2),
+        ],
+        "outputs": {"connectors": {"type": "string",
+                                   "value": "[concat(parameters('namePrefix'), '-vm1, ', parameters('namePrefix'), '-vm2')]"}},
+    }
+
+
+def write(path, pov_id, prefix="ZPOV", cloud="aws"):
+    tpl = build_azure(pov_id, prefix) if cloud == "azure" else build(pov_id, prefix)
+    path.write_text(json.dumps(tpl, indent=2), encoding="utf-8")
     return path

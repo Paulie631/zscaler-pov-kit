@@ -15,3 +15,18 @@ Once it is reviewed, copy the final version here so it is versioned with the cod
 | Existing customer objects are never written | `core/guard.py` `LedgerTenant`: creates only approved items; updates and deletes only owned objects |
 | Rules are scoped and placed openly | `products/zia.py` `plan`: pilot group on every rule, placement in the change list |
 | Activation never ships someone else's work | `products/zia.py` `guard_activation`: apply, Fix drift and teardown stop on pending changes |
+
+## 0.6: nothing left behind
+
+The ledger is the only record of what a POV created, so 0.6 keeps it safe off the laptop and can rebuild it:
+
+- **Backups** (backup.py): after every change to the tenant, pov.json, the ledger, the approval and the change list go
+  to a folder the SE chose, encrypted with a passphrase-derived key. `backup restore` recreates the POV folder on a new
+  laptop; the API client is saved again with `connect`.
+- **Recover** (recover.py): without a backup, a read-only sweep finds the POV's objects by prefix and stamp. Stamped
+  objects are recorded as owned, prefix-only ones as adopted (teardown keeps them unless told otherwise), and another
+  POV's stamp means "leave alone". Keys are matched to the saved change list where there is one.
+- **End dates and reminders** (remind.py): a status check and a daily, local-only notification.
+
+The AI use cases send less: names are placeholders by default (pseudo.py), and the masking is undone on the laptop
+before validation, so the kit's checks always run on real values. Claude answers through a tool with a fixed schema.

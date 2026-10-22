@@ -19,8 +19,9 @@ def is_read(method: str) -> bool:
     return bool(READ.match(method))
 
 
-# Products whose API takes integer IDs in request bodies. ZPA and the others take IDs as strings.
-INT_IDS = {"zia", "aiguard"}
+# Products whose API takes integer IDs in request bodies (Client Connector too, as the demo kit sends them).
+# ZPA and the others take IDs as strings.
+INT_IDS = {"zia", "aiguard", "zcc"}
 
 
 def native(v, product="zia"):

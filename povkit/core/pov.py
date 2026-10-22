@@ -69,7 +69,7 @@ class Pov:
         return gone
 
 
-def new(customer: str, products: list[str], prefix: str = naming.DEFAULT_PREFIX) -> Pov:
+def new(customer: str, products: list[str], prefix: str = naming.DEFAULT_PREFIX, ends: str | None = None) -> Pov:
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{1,11}", prefix):
         raise KitError("The prefix must be 2 to 12 letters, digits or dashes, starting with a letter.")
     pov_id = f"{slug(customer)}-{_rand.token_hex(2)}"
@@ -78,7 +78,25 @@ def new(customer: str, products: list[str], prefix: str = naming.DEFAULT_PREFIX)
     cfg = {"pov_id": pov_id, "customer": customer, "products": products, "prefix": prefix,
            "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "placement": "top",
            "pilot_group": None, "vanity_domain": None, "cloud": None,
-           "client_mode": "single", "clients": {}, "state": "new"}
+           "client_mode": "single", "clients": {}, "state": "new",
+           "ends": ends or time.strftime("%Y-%m-%d", time.gmtime(time.time() + 30 * 86400))}
+    (d / "pov.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    use(pov_id)
+    return Pov(pov_id)
+
+
+def create_with_id(pov_id: str, customer: str, products: list[str], prefix: str = naming.DEFAULT_PREFIX) -> Pov:
+    """For `pov-kit recover` on a new laptop: the POV keeps the ID its objects are stamped with."""
+    if not re.fullmatch(r"[a-z0-9-]{3,40}", pov_id):
+        raise KitError(f"'{pov_id}' isn't a POV ID (like acme-corp-3f2a).")
+    d = POVS / pov_id
+    if (d / "pov.json").exists():
+        return Pov(pov_id)
+    d.mkdir(parents=True, exist_ok=True)
+    cfg = {"pov_id": pov_id, "customer": customer, "products": products, "prefix": prefix,
+           "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "placement": "top",
+           "pilot_group": None, "vanity_domain": None, "cloud": None, "client_mode": "single", "clients": {},
+           "state": "new", "recovered": True}
     (d / "pov.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     use(pov_id)
     return Pov(pov_id)

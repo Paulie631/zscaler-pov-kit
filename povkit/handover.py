@@ -75,6 +75,8 @@ def finish(pov):
     gone = secrets.delete_all(pov.id, usecases.secret_names(pov))
     purged = pov.purge_customer_data()
     pov.cfg["state"] = "handed_over"
+    from . import backup
+    backup.save(pov)
     pov.cfg["clients"] = {k: ({"client_id": v.get("client_id"), "deleted_secret": True} if v else None)
                           for k, v in (pov.cfg.get("clients") or {}).items()}
     pov.save()

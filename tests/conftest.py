@@ -23,7 +23,9 @@ class FakeTenant:
         self.next_id = 1000
         self.activation = "ACTIVE"
         self.zidentity = False
-        self.zcc_fwd_400 = False
+        self.zcc_fwd_400 = False      # refuse every forwarding profile (bare 400)
+        self.zcc_fwd_refusals = 0     # refuse this many attempts first, then accept (plainer copies get through)
+        self.zcc_app_400 = False
         self.saml = True
         self.groups = [{"id": 77, "name": "POV Pilot"}, {"id": 78, "name": "Everyone"}]
         self.rules = {"url_filtering": [{"id": 1, "name": "Corp: Block adult", "order": 1, "state": "ENABLED",
@@ -114,6 +116,9 @@ class FakeTenant:
             if method == "update_forwarding_profile":
                 if self.zcc_fwd_400:
                     raise KitError("400 Bad Request")
+                if self.zcc_fwd_refusals:
+                    self.zcc_fwd_refusals -= 1
+                    raise KitError("400 Bad Request")
                 self.fwds.append(dict(kw, id=self._id()))
                 return {"success": "true"}
             if method == "delete_forwarding_profile":
@@ -122,6 +127,11 @@ class FakeTenant:
         if resource == "zcc.web_policy":
             if method == "list_by_company":
                 return copy.deepcopy(self.apps)
+            if method == "web_policy_edit":
+                if self.zcc_app_400:
+                    raise KitError("400 Bad Request")
+                self.apps.append(dict(kw, id=self._id()))
+                return {"success": "true"}
             if method == "delete_web_policy":
                 self.apps = [x for x in self.apps if str(x["id"]) != str(a[0])]
                 return {}

@@ -3,6 +3,12 @@
 Run in a lab tenant set up like a customer's: some rules of its own, a pilot group with two users, Client Connector on
 one Windows pilot device. Each item settles an open question in the design or breaks a safety rule on purpose.
 
+## First: the self-test and a recording
+
+- [ ] `pov-kit record on`, then `pov-kit selftest --lab`: every product reads, and ZIA, ZPA and AI Guard each create,
+  read back and delete their object. Keep recording on for the whole plan, then `pov-kit record export lab-1` and
+  commit `tests/fixtures/lab-1.jsonl`; run the tests and fix every field the fake tenant has and the real API doesn't.
+
 ## Open questions
 
 - [ ] **Activation scope.** Admin A saves a change without activating. Run `apply`: it must stop. Then test with the
@@ -48,6 +54,18 @@ one Windows pilot device. Each item settles an open question in the design or br
   one; a ZDX deep trace that shows in the console; a CASB report-only rule that raises an incident. Teardown removes
   all of them. Check `add_access_rule_v2` with action `deny`, and that more than one POV access rule placed first
   keeps the order the change list shows.
+- [ ] **Client Connector app profile.** Apply creates it (`web_policy_edit`): scoped to the pilot group, first in the
+  order, installs the certificate, uses the POV forwarding profile; the read-back agrees. A pilot device picks it up
+  after Client Connector is turned off and on.
+- [ ] **Azure connectors.** Deploy the Azure template in a lab subscription (terms accepted once): both connectors
+  enroll; nothing reaches them inbound.
+- [ ] **Recover.** Delete the POV folder after apply; `recover` finds every object (ZPA provisioning keys: check the
+  list method's name), `--write` and teardown leave the tenant clean. Restore from a backup on a second computer.
+- [ ] **Reminders.** `remind install` on Windows and Mac: the notification shows, and `remind uninstall` removes it.
+- [ ] **Names only.** Read a real request's body in the AI Guard logs: no customer names, emails or domains. Claude's
+  proposals are as good as with `ai.share full` on the five console examples.
+- [ ] **Customer approval.** Open plan.html from an email attachment on Windows and Mac: the form saves the file and
+  `approve --file` accepts it; a file for an older change list is refused.
 - [ ] **Model and size.** `claude-sonnet-5-5` answers within the proxy's timeout for a large tenant snapshot (the kit
   cuts it at 150,000 characters).
 

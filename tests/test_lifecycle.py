@@ -67,6 +67,33 @@ def test_zcc_copies_default_and_switches_to_z_tunnel_2(pov, tenant, tenant_for):
     assert next(f for f in tenant.fwds if f["name"] == "Default")["forwardingProfileActions"][0]["actionType"] == 2
 
 
+def test_zcc_plainer_copy_gets_through_then_app_profile_is_scoped(pov, tenant, tenant_for):
+    tenant.fwds[0].update(trustedNetworkIds=[3], unifiedTunnel=[{"x": 1}])
+    tenant.apps[0].update(windowsPolicy={"installSslCerts": 0, "logLevel": 1}, groupAll=1, active=1)
+    tenant.zcc_fwd_refusals = 2                         # the full copy and the one without trusted networks are refused
+    led = applied(pov, tenant_for)
+    fwd = next(f for f in tenant.fwds if f["name"] == "ZPOV - Z-Tunnel 2.0")
+    assert "trustedNetworkIds" not in fwd and led.find("zcc.fwd")["state"] == "owned"
+    app = next(a for a in tenant.apps if a["name"] == "ZPOV - pilot devices")
+    assert app["groupIds"] == [77] and app["groupAll"] == 0 and app["ruleOrder"] == 1
+    assert app["forwardingProfileId"] == fwd["id"] and app["windowsPolicy"] == {"installSslCerts": 1, "logLevel": 1}
+    assert led.find("zcc.app")["state"] == "owned"
+    default = next(a for a in tenant.apps if a["name"] == "Default Windows")
+    assert default["windowsPolicy"]["installSslCerts"] == 0 and default["groupAll"] == 1      # the default is untouched
+    lifecycle.teardown(pov, tenant_for, log)
+    assert [a["name"] for a in tenant.apps] == ["Default Windows"] and [f["name"] for f in tenant.fwds] == ["Default"]
+
+
+def test_zcc_app_profile_refused_falls_back_to_build_by_hand(pov, tenant, tenant_for):
+    tenant.zcc_app_400 = True
+    led = applied(pov, tenant_for)
+    assert led.find("zcc.fwd") and not led.find("zcc.app")
+    tenant.zcc_app_400 = False
+    tenant.apps.append({"id": 41, "name": "ZPOV - pilot devices"})
+    lifecycle.status(pov, tenant_for, fix=True)
+    assert lifecycle.ledger(pov).find("zcc.app")["state"] == "adopted"
+
+
 # ---- handover
 def test_terraform_export_imports_in_place_and_retires_the_objects(pov, tenant, tenant_for):
     led = applied(pov, tenant_for)

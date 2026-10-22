@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.6.0
+
+Nothing left behind:
+- **`pov-kit recover`** finds a POV's objects in the tenant, read-only, by prefix and stamp, and rebuilds the
+  ledger (`--write`), so teardown works even when the laptop that ran the POV is gone. Another POV's objects are
+  left alone; objects found by name only are recorded as adopted.
+- **Encrypted backups** of each POV's ledger, approval and change list to a synced folder, after every change
+  (`pov-kit backup setup|now|restore`; scrypt and Fernet, passphrase in the keychain).
+- **End dates and reminders.** Every POV has an end date; status warns in the last week and fails after it with
+  objects still in the tenant. `pov-kit remind install` adds a daily desktop notification (Windows, Mac, Linux).
+
+AI use cases:
+- **Names only by default.** The customer's names, emails and domains are placeholders before anything leaves the
+  laptop; replies are swapped back before validation. `ai.share full` needs its own agreement.
+- Claude answers through a **tool with a fixed schema** (structured output); plain-text JSON is the fallback.
+- **Refine** a proposal in words; the earlier version is kept in its history.
+- A **use-case library**: save what worked (customer names taken out), reuse it in the next POV with no AI call;
+  a shared folder works for a team.
+
+Evidence and approval:
+- **Executive summary** drafted by Claude from the results only (names removed), opening the report
+  (`pov-kit report --summary`, or the Success criteria tab).
+- **The customer approves on the change-list page**: its form saves an approval file bound to the change list's
+  hash; `pov-kit approve --file` (or the Approval step) checks the hash before recording it.
+
+Lab run and setup:
+- **`pov-kit selftest --lab`**: read, create, read back and delete one harmless object per product.
+- **API recording** (`pov-kit record on|export`) and replay tests that hold the fake tenant to real responses.
+- **Client Connector app profile automated** (ported from the demo kit's setup_zcc), with plainer forwarding-profile
+  copies on a bare 400 and a read-back check. Build-by-hand-and-adopt stays the fallback. Client Connector IDs are
+  sent as integers.
+- **Azure template** for the ZPA App Connectors (`pov-kit zpa template --cloud azure`), from Zscaler's Azure modules:
+  the Marketplace image and plan, no public IPs, deny-all inbound.
+
 ## 0.5.0
 
 - **Use cases across the product suite.** Besides ZIA rules, Claude can now propose, and the kit build after a fresh

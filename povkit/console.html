@@ -126,6 +126,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
     <div class="row"><button class="primary" id="stcheck">Check now</button><button id="stfix">Fix drift</button></div>
     <div id="stout" style="margin-top:14px"></div>
   </div>
+  <div class="panel" id="stsafe"></div>
 </div></div>
 
 <div class="view" id="v-usecases"><div class="wrap stack">
@@ -138,6 +139,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
     <div class="row" style="margin-top:12px"><button class="primary" id="ucask">Ask Claude</button><span class="hint" id="uchint"></span></div>
     <div class="log" id="uclog" style="display:none"></div><div id="ucmsg"></div>
   </div>
+  <div class="panel" id="uclib" style="display:none"></div>
   <div id="uclist" class="stack"></div>
 </div></div>
 
@@ -155,6 +157,13 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
     <div id="crmsg"></div>
     <div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>ID</th><th>Criterion</th><th>Proofs</th><th>Result</th></tr></thead><tbody id="crrows"></tbody></table></div>
     <div class="hint">Click a row for its evidence, and to record what someone saw (an attestation).</div>
+  </div>
+  <div class="panel">
+    <h2>Executive summary</h2>
+    <p class="muted" style="margin-top:0">Claude drafts the page that opens the report, from the results above only: criterion titles and outcomes, with the customer's names taken out. It goes through your AI Guard proxy key.</p>
+    <div id="crsum"></div>
+    <div class="row" style="margin-top:10px;gap:8px"><input type="text" id="crsumnote" placeholder="Optional: what to emphasize, e.g. lead with the ZPA results" style="flex:1;min-width:240px"><button id="crsumgo">Draft the summary</button></div>
+    <div class="log" id="crsumlog" style="display:none"></div>
   </div>
 </div></div>
 
@@ -175,6 +184,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
 </div></div>
 
 <div class="view" id="v-logs"><div class="wrap stack">
+  <div class="panel" id="lglab"></div>
   <div class="panel">
     <div class="row" style="justify-content:space-between"><h2 style="margin:0">Activity</h2>
       <div class="row"><button id="lgref">Refresh</button><button id="lgdiag" title="Logs and versions, without secrets or the customer's object names">Download diagnostics</button></div></div>
@@ -207,13 +217,14 @@ function reportText(checks){return checks.map(c=>`[${c.status.toUpperCase()}] ${
 let S=null;
 async function load(){S=await api("/api/state");const c=S.current;
   $("#hver").textContent="POV kit "+S.version;
-  $("#hpov").innerHTML=c?`<b>${esc(c.customer)}</b> · ${esc(c.id)} · <span class="chip">${esc(c.state||"new")}</span>`:"No POV yet";
+  $("#hpov").innerHTML=c?`<b>${esc(c.customer)}</b> · ${esc(c.id)} · <span class="chip">${esc(c.state||"new")}</span>`+
+    (c.end&&(c.end.status=="warn"||c.end.status=="fail")?` <span class="badge b-${esc(c.end.status)}" title="${esc(c.end.fix)}">${esc(c.end.detail)}</span>`:""):"No POV yet";
   $("#povsel").innerHTML=S.povs.length?S.povs.map(p=>`<option value="${esc(p.id)}" ${c&&p.id==c.id?"selected":""}>${esc(p.customer)} (${esc(p.id)})</option>`).join(""):'<option>No POVs</option>';
   $("#povsel").disabled=!S.povs.length;return S}
 $("#povsel").onchange=async e=>{await api("/api/pov/use",{id:e.target.value});await load();W.step=firstOpen();W.checks=null;W.plan=null;wizard();refreshTab()};
 $$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".view").forEach(v=>v.classList.toggle("on",v.id=="v-"+b.dataset.t));refreshTab()});
 function tab(){return $("#tabs button.on").dataset.t}
-function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="criteria")criteria();if(t=="logs")logs();if(t=="usecases")usecases()}
+function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria")criteria();if(t=="logs")logs();if(t=="usecases")usecases()}
 
 /* ---------------- setup wizard ---------------- */
 const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Approval","Apply","Next steps"];
@@ -245,12 +256,13 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       `<div class="form"><span class="lbl">Customer</span><input type="text" id="wcust" placeholder="Acme Corp">
         <span class="lbl">Products in scope</span><div>${S.products.map(p=>`<label class="chk" style="margin:0 6px 6px 0"><input type="checkbox" value="${esc(p.name)}" ${["zia","zcc"].includes(p.name)?"checked":""}>${esc(p.title)}</label>`).join("")}</div>
         <span class="lbl">Prefix</span><input type="text" id="wprefix" value="ZPOV" maxlength="12">
+        <span class="lbl">Ends</span><div><input type="date" id="wends" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"> <span class="hint">You get a reminder in the last week, and status fails after it with POV objects still in the tenant.</span></div>
         <span class="lbl">API clients</span><div>
           <label class="opt" style="margin-top:0"><input type="radio" name="wmode" value="single" checked><span><b>One API client</b> (recommended)<br><span class="muted">The customer creates one client at kickoff. Discovery stays read-only in the kit's code, and nothing is written until they approve the change list.</span></span></label>
           <label class="opt"><input type="radio" name="wmode" value="separate"><span><b>Two clients</b>: view-only first, write access after approval<br><span class="muted">For security teams that want read-only access before anything else. Adds a second client at the approval step.</span></span></label></div></div>
       <div class="row" style="margin-top:16px"><button class="primary" id="wnew">Create the POV ›</button></div><div id="wmsg"></div>`;
     $("#wcont")&&($("#wcont").onclick=async()=>{const v=($$('input[name=wp]').find(x=>x.checked)||{}).value;if(!v)return;await api("/api/pov/use",{id:v});await load();W.checks=null;W.plan=null;W.step=firstOpen()||1;wizard()});
-    $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,
+    $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,
         products:$$('#wstage .form input[type=checkbox]').filter(x=>x.checked).map(x=>x.value),client_mode:($$('input[name=wmode]').find(x=>x.checked)||{}).value});
       await load();W.checks=null;W.plan=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}};
   }
@@ -332,10 +344,16 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       (ok?note(`Approved by ${c.approval.by} on ${c.approval.at.slice(0,10)}.`,"good"):
        `<div class="form"><span class="lbl">Approved by</span><input type="text" id="wby" placeholder="Jane Doe, CISO">
         <span class="lbl">Note <span class="muted">(optional)</span></span><textarea id="wnote" placeholder="e.g. approved on the kickoff call; email sign-off attached to the POV record"></textarea></div>
-        <label class="chk" style="margin-top:12px"><input type="checkbox" id="wrev">The customer reviewed this change list, including who it affects</label>`)+
+        <label class="chk" style="margin-top:12px"><input type="checkbox" id="wrev">The customer reviewed this change list, including who it affects</label>
+        <div class="group-h">Or: the customer approves on their own</div>
+        <p class="muted" style="margin:4px 0 8px">Send them the change-list page (it opens offline and has an approval form). It saves an approval file they send back; import it here. The kit checks it's for this exact change list.</p>
+        <div class="row"><button id="wplanpg">Open the change-list page</button><label class="chk"><input type="file" id="wapf" accept=".json" style="display:none">Import their approval file…</label></div>`)+
       (sep?`<div class="group-h">Apply client (two-client mode)</div>${ap.saved?note(`Saved: apply client ${ap.client_id}`,"good"):`<p class="muted">Now that it's approved, the customer creates the apply client from the role spec.</p>`}
         <div class="form"><span class="lbl">Apply client ID</span><input type="text" id="wacid" value="${esc(ap.client_id||"")}"><span class="lbl">Secret</span><input type="password" id="wasec" autocomplete="new-password"></div>`:"")+
       '<div id="wmsg"></div>'+nav(true,true,ok?"Continue ›":"Approve ›",!c.plan);
+    $("#wplanpg")&&($("#wplanpg").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank"));
+    $("#wapf")&&($("#wapf").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+      try{await api("/api/approve/file",{content:await f.text()});await load();wizard()}catch(err){$("#wmsg").innerHTML=note(err.message,"bad")}e.target.value=""});
     bindNav(async()=>{try{
       if(!ok)await api("/api/approve",{by:$("#wby").value,note:$("#wnote").value,reviewed:$("#wrev").checked});
       if(sep&&($("#wasec").value||!ap.saved))await api("/api/connect",{slot:"apply",client_id:$("#wacid").value,secret:$("#wasec").value});
@@ -364,13 +382,14 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       `<div class="cards">
         <div class="card"><h4>Customer actions</h4>${acts.length?`<ul style="padding-left:18px;margin:6px 0">${acts.map(a=>`<li>${esc(a.name)}</li>`).join("")}</ul><div class="hint">Record each one done in Success criteria (attest), and check Status.</div>`:'<p class="muted">None.</p>'}</div>
         <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The POV's own tests. On a pilot device signed in to Client Connector: <code>pov-kit probe --pack &lt;file&gt;</code>. No keys needed.</p><button id="npack">Download probe pack</button></div>
-        ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A CloudFormation template for two connectors in the customer's AWS account, plus the provisioning key to paste into the stack.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>Download template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button></div><div id="nkeyv"></div></div>`:""}
+        ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A template for two connectors in the customer's AWS account or Azure subscription, plus the provisioning key to paste into it.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>AWS template</button><button id="ntplaz" ${c.zpa_key?"":"disabled"}>Azure template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button></div><div id="nkeyv"></div></div>`:""}
         ${has("aiguard")?`<div class="card"><h4>AI Guard policy</h4><p class="muted" style="margin:4px 0 10px">What the POV's own policy blocks. Takes about 30 seconds to apply.</p><div class="seg" id="nag"><button data-p="monitor">Monitor</button><button data-p="attacks">Block attacks</button><button data-p="data">+ data leakage</button></div><div id="nagmsg" class="hint"></div></div>`:""}
         ${users.length?`<div class="card"><h4>Test users</h4>${users.map(u=>`<div class="row" style="gap:8px;margin:4px 0"><code>${esc(u.email)}</code><button data-n="${esc(u.n)}" class="nuser">Show password</button></div><div id="nuser${esc(u.n)}"></div>`).join("")}</div>`:""}
       </div>`+nav(true,true,"Go to Success criteria ›");
     bindNav(()=>{$$("#tabs button").find(b=>b.dataset.t=="criteria").click()});
     $("#npack").onclick=async()=>download(`pov-probe-pack-${c.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
     $("#ntpl")&&($("#ntpl").onclick=async()=>download(`pov-${c.id}-app-connectors.json`,JSON.stringify((await api("/api/zpa-template",{})).template,null,2),"application/json"));
+    $("#ntplaz")&&($("#ntplaz").onclick=async()=>download(`pov-${c.id}-app-connectors-azure.json`,JSON.stringify((await api("/api/zpa-template",{cloud:"azure"})).template,null,2),"application/json"));
     $("#nkey")&&($("#nkey").onclick=async()=>{const v=(await api("/api/reveal",{what:"zpa-key"})).value;$("#nkeyv").innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span><div class="hint">Paste it into the stack's ProvisioningKey field; don't save it anywhere else.</div>`});
     $$(".nuser").forEach(b=>b.onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:b.dataset.n})).value;$("#nuser"+b.dataset.n).innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span>`});
     $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});
@@ -391,19 +410,30 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   UC=await api("/api/usecases");const c=S.current;
   $("#ucsetup").innerHTML=`<h2>Claude through AI Guard</h2>
     <div class="row" style="gap:20px;align-items:flex-start">
-      <div style="flex:1;min-width:280px"><b>Customer agreement</b>
-        ${UC.consent?note(`${UC.consent.by} agreed on ${UC.consent.at.slice(0,10)}.`,"good"):`<p class="muted" style="margin:6px 0">Claude reads the full discovery snapshot of ${esc(c.customer)}'s tenant (their policy, group and user names). It travels through your AI Guard tenant to Anthropic. Ask the customer before the first use.</p>
+      <div style="flex:1;min-width:280px"><b>What Claude sees</b>
+        <div class="seg" id="ucshare" style="margin:6px 0"><button data-s="names_only" class="${UC.share=="names_only"?"on":""}">Names replaced</button><button data-s="full" class="${UC.share=="full"?"on":""}">Full snapshot</button></div>
+        <div class="hint" style="margin:0 0 8px">${UC.share=="names_only"?"The customer's names, emails and domains become placeholders on this computer; Claude sees the policy's shape. Replies are swapped back here.":"The snapshot as discovery read it, names included."}</div>
+        <b>Customer agreement</b>
+        ${UC.consent?note(`${UC.consent.by} agreed on ${UC.consent.at.slice(0,10)}${UC.consent.share=="full"?" (full snapshot)":" (names replaced)"}.`,"good"):`<p class="muted" style="margin:6px 0">Claude reads ${UC.share=="full"?"the full discovery snapshot":"the discovery snapshot, with names replaced,"} of ${esc(c.customer)}'s tenant. It travels through your AI Guard tenant to Anthropic. Ask the customer before the first use.</p>
         <div class="row" style="gap:8px"><input type="text" id="ucby" placeholder="Name, title" style="flex:1"><button id="ucagree">Record agreement</button></div>`}</div>
       <div style="flex:1;min-width:280px"><b>AI Guard proxy key</b>
         ${UC.key?note("Using "+UC.key_source+". Model: "+UC.model+".","good"):`<p class="muted" style="margin:6px 0">${esc(UC.key_source)}</p>
         <div class="row" style="gap:8px"><input type="password" id="uckey" placeholder="AI Guard app proxy key" style="flex:1" autocomplete="new-password"><button id="ucsavekey">Save to the keychain</button></div>`}</div>
     </div><div id="ucsetmsg"></div>`;
+  $$("#ucshare button").forEach(b=>b.onclick=async()=>{await api("/api/ai/share",{share:b.dataset.s});usecases()});
+  $("#uclib").innerHTML=UC.library.length?`<h2>From the library</h2><p class="muted" style="margin-top:0">Use cases that worked before, with the customer's names taken out. Using one checks it against this tenant; no AI call. Folder: <code>${esc(UC.library_folder)}</code></p>`+
+    UC.library.map(e=>`<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding:8px 0"><div><b>${esc(e.title)}</b> ${e.proved?'<span class="badge b-ok">proved</span>':""}<div class="muted" style="font-size:12.5px">${esc(e.summary||"")}</div></div><button class="ucuse" data-n="${esc(e.id)}">Use it</button></div>`).join(""):"";
+  $("#uclib").style.display=UC.library.length?"":"none";
+  $$(".ucuse").forEach(b=>b.onclick=async()=>{b.disabled=true;$("#uclog").style.display="block";try{await runJob((await api("/api/library/use",{name:b.dataset.n})).job,$("#uclog"));usecases()}catch(e){$("#ucmsg").innerHTML=note(e.message,"bad")}finally{b.disabled=false}});
   $("#ucagree")&&($("#ucagree").onclick=async()=>{try{await api("/api/ai/consent",{by:$("#ucby").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
   $("#ucsavekey")&&($("#ucsavekey").onclick=async()=>{try{await api("/api/ai/key",{key:$("#uckey").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
   const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").textContent=ready?"Takes about a minute: the kit reads the tenant first.":"Record the customer's agreement and a proxy key first.";
   $("#ucex").innerHTML=UC_EX.map(x=>`<button class="ucx" style="font-size:12.5px">${esc(x)}</button>`).join("");
   $$(".ucx").forEach(b=>b.onclick=()=>{$("#ucprompt").value=b.textContent});
   $("#uclist").innerHTML=UC.usecases.length?UC.usecases.map(ucCard).join(""):'<div class="panel empty">No use cases yet.</div>';
+  $$(".ucref").forEach(b=>b.onclick=async()=>{const id=b.dataset.id,box=$("#ucrf"+id),out=$("#ucrl"+id);b.disabled=true;out.style.display="block";
+    try{await runJob((await api("/api/usecase/refine",{id,feedback:box.value})).job,out);await load();usecases()}catch(e){out.insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
+  $$(".ucsave").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/library/save",{id:b.dataset.id});b.textContent="Saved as "+r.entry.id;b.disabled=true;usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
   $$(".ucact").forEach(b=>b.onclick=async()=>{try{await api("/api/usecase/status",{id:b.dataset.id,status:b.dataset.s});await load();usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
   $$(".ucdl").forEach(b=>b.onclick=async()=>{const r=await api(`/api/usecase/directions?id=${encodeURIComponent(b.dataset.id)}`);download(`${b.dataset.id}-directions.md`,r.text,"text/markdown")});
   $$(".ucplan").forEach(b=>b.onclick=()=>{W.step=4;$$("#tabs button").find(x=>x.dataset.t=="setup").click()})}
@@ -418,7 +448,11 @@ function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",dir
     ${t.probe.length?`<ul style="margin:4px 0 0 18px;padding:0">${t.probe.map(p=>`<li><code>${esc(p.type)}</code> ${esc(p.url||p.host||p.name||"")}${p.port?":"+esc(p.port):""} → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
     ${(t.aiguard||[]).length?`<div class="hint" style="margin-top:6px">AI Guard test prompts (scanned with the POV's key):</div><ul style="margin:4px 0 0 18px;padding:0">${t.aiguard.map(p=>`<li><code>${esc(p.direction)}</code> “${esc(p.text)}” → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
     ${t.attest?`<div class="hint">A person checks: ${esc(t.attest)}</div>`:""}
+    ${u.history&&u.history.length?`<div class="hint">Refined ${u.history.length} time${u.history.length>1?"s":""}; last: “${esc(u.history[u.history.length-1].feedback)}”</div>`:""}
+    ${u.from_library?`<div class="hint">From the library entry ${esc(u.from_library)}, checked against this tenant (no AI call).</div>`:""}
+    ${u.status=="proposed"||u.status=="accepted"?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="ucrf${esc(u.id)}" placeholder="Refine: e.g. make it Caution, not Block; only the Sales group's sites" style="flex:1;min-width:240px"><button class="ucref" data-id="${esc(u.id)}">Refine</button></div><div class="log" id="ucrl${esc(u.id)}" style="display:none"></div>`:""}
     <div class="row" style="margin-top:14px">
+      ${u.status=="accepted"||u.status=="directions"?`<button class="ucsave" data-id="${esc(u.id)}">Save to library</button>`:""}
       ${u.status=="proposed"?`${s.changes.length?`<button class="primary ucact" data-id="${esc(u.id)}" data-s="accepted">Add to the change list</button>`:""}<button class="ucact" data-id="${esc(u.id)}" data-s="directions">Keep as directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="discarded">Discard</button>`:""}
       ${u.status=="accepted"?`<span class="hint" style="margin:0">In the change list. Make the change list again and get the customer's approval, then Apply.</span><button class="ucplan">Open the change list ›</button><button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Take it out</button>`:""}
       ${u.status=="directions"?`<button class="ucdl" data-id="${esc(u.id)}">Download directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Back to proposed</button>`:""}
@@ -432,11 +466,25 @@ $("#ucask").onclick=async()=>{const b=$("#ucask");b.disabled=true;$("#uclog").st
 async function status(fix){const out=$("#stout");out.innerHTML='<div class="log" id="stlog"></div>';
   try{const checks=await runJob((await api("/api/status",{fix})).job,$("#stlog"));out.innerHTML=checksHTML(checks);await load()}
   catch(e){out.innerHTML=note(e.message,"bad")}}
+function safety(){const c=S&&S.current;if(!c){$("#stsafe").innerHTML="";return}
+  $("#stsafe").innerHTML=`<h2>Safety net</h2><p class="muted" style="margin-top:0">So no POV ends with its objects still in ${esc(c.customer)}'s tenant, even if this laptop is lost.</p>
+    <div class="cards">
+      <div class="card"><h4>End date</h4><p style="margin:4px 0"><span class="badge b-${esc(c.end.status)}">${esc(c.end.status)}</span> ${esc(c.end.detail)}</p>
+        <div class="row" style="gap:8px"><input type="date" id="sfend" value="${esc(c.settings.ends||"")}"><button id="sfendgo">Change</button></div></div>
+      <div class="card"><h4>Encrypted ledger backup</h4>${S.backup_folder?`<p class="muted" style="margin:4px 0">To <code>${esc(S.backup_folder)}</code>; this POV's last backup: ${esc(c.backup_at||"never")}.</p>`:`<p class="muted" style="margin:4px 0">A folder synced off this laptop (OneDrive, Google Drive, iCloud). The passphrase goes in your password manager: it's what restores on a new laptop.</p>
+        <input type="text" id="sfdir" placeholder="Folder, e.g. ~/OneDrive/pov-backups" style="width:100%;margin-bottom:6px"><input type="password" id="sfpw" placeholder="Passphrase (12+ characters)" style="width:100%;margin-bottom:6px" autocomplete="new-password"><button id="sfgo">Turn on backups</button>`}</div>
+      <div class="card"><h4>Daily reminder</h4><p class="muted" style="margin:4px 0 10px">A scheduled task on this computer checks every POV's end date and backup each morning (no tenant calls) and shows a notification when something needs doing.</p><button id="sfrem">Turn on reminders</button></div>
+    </div><div id="sfmsg"></div>`;
+  $("#sfendgo").onclick=async()=>{try{await api("/api/settings",{values:{ends:$("#sfend").value}});await load();safety()}catch(e){$("#sfmsg").innerHTML=note(e.message,"bad")}};
+  $("#sfgo")&&($("#sfgo").onclick=async()=>{try{await api("/api/backup",{folder:$("#sfdir").value,passphrase:$("#sfpw").value});await load();safety()}catch(e){$("#sfmsg").innerHTML=note(e.message,"bad")}});
+  $("#sfrem").onclick=async()=>{try{$("#sfmsg").innerHTML=note((await api("/api/remind/install",{})).message,"good")}catch(e){$("#sfmsg").innerHTML=note(e.message,"bad")}}}
 $("#stcheck").onclick=()=>status(false);$("#stfix").onclick=()=>status(true);
 
 /* ---------------- criteria ---------------- */
 let CR=[],open=null;
-async function criteria(){try{CR=(await api("/api/criteria")).rows}catch(e){$("#crrows").innerHTML=`<tr><td colspan="4">${esc(e.message)}</td></tr>`;return}
+async function criteria(){let R;try{R=await api("/api/criteria");CR=R.rows}catch(e){$("#crrows").innerHTML=`<tr><td colspan="4">${esc(e.message)}</td></tr>`;return}
+  const sm=R.summary,li=(t,xs)=>xs&&xs.length?`<div class="group-h">${t}</div><ul style="margin:4px 0 0 18px;padding:0">${xs.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
+  $("#crsum").innerHTML=sm?`<p><b>${esc(sm.headline)}</b></p>${li("Proved",sm.proved)}${li("Not proved yet",sm.open)}${li("What it means",sm.value)}${li("Next steps",sm.next_steps)}<div class="hint">Drafted ${esc(sm.at.slice(0,16).replace("T"," "))} UTC${R.summary_stale?" · the results have changed since: draft it again":""}. It opens the report.</div>`:'<div class="empty">Not drafted yet.</div>';
   const n=s=>CR.filter(r=>r.status==s).length;
   $("#crstat").innerHTML=`<div><b>${n("pass")}</b>passed</div><div><b>${n("fail")}</b>failed</div><div><b>${n("incomplete")}</b>still to prove</div><div><b>${CR.length}</b>criteria</div>`;
   $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span></td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
@@ -453,6 +501,8 @@ $("#crapi").onclick=async()=>{$("#crmsg").innerHTML='<div class="log" id="crlog"
 $("#crpack").onclick=async()=>download(`pov-probe-pack-${S.current.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
 $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
   try{const r=await api("/api/import-probe",{data:JSON.parse(await f.text())});$("#crmsg").innerHTML=note(`Imported probe run ${r.run_id}: ${r.results} results.`,"good");criteria()}catch(err){$("#crmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
+$("#crsumgo").onclick=async()=>{const b=$("#crsumgo");b.disabled=true;$("#crsumlog").style.display="block";
+  try{await runJob((await api("/api/summary",{note:$("#crsumnote").value})).job,$("#crsumlog"));criteria()}catch(e){$("#crsumlog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
 $("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
 
 /* ---------------- handover ---------------- */
@@ -464,7 +514,17 @@ $("#hotf").onclick=()=>{if(!$("#hotfok").checked){$("#hotfok").parentElement.sty
 $("#hotd").onclick=()=>handover({how:"teardown",confirm:$("#hoconfirm").value,include_adopted:$("#hoadopt").checked});
 
 /* ---------------- logs ---------------- */
-async function logs(){try{const r=await api("/api/logs");$("#lgrows").innerHTML=r.lines.map(l=>`<tr><td><code>${esc(l.t)}</code></td><td><span class="badge b-${l.level=="error"?"fail":esc(l.level)}">${esc(l.level)}</span></td><td>${esc(l.kind)}</td><td>${esc(l.summary)}${l.error?`<div class="muted" style="font-size:12px">${esc(l.error)}</div>`:""}</td></tr>`).join("")||'<tr><td colspan="4" class="empty">Nothing yet.</td></tr>'}
+function labTools(){const c=S&&S.current;if(!c){$("#lglab").innerHTML="";return}const st=c.selftest;
+  $("#lglab").innerHTML=`<h2>Lab tools</h2><p class="muted" style="margin-top:0">For your own lab tenant, before a customer POV.</p>
+    <div class="cards"><div class="card"><h4>Self-test</h4><p class="muted" style="margin:4px 0 8px">Reads each product, then creates, reads back and deletes one harmless object (a ZIA label, a disabled ZPA segment group, an AI Guard app).</p>
+      ${st?`<p style="margin:4px 0"><span class="badge b-${st.ok?"ok":"fail"}">${st.ok?"passed":"failed"}</span> <span class="muted">${esc(st.at.slice(0,16).replace("T"," "))} UTC</span></p>`:""}
+      <label class="chk"><input type="checkbox" id="lglabok">This is my own lab tenant</label><div class="row" style="margin-top:8px"><button id="lgself">Run the self-test</button></div><div class="log" id="lgselflog" style="display:none"></div></div>
+    <div class="card"><h4>Record API traffic</h4><p class="muted" style="margin:4px 0 8px">Saves every call and response, redacted, in this POV's folder. <code>pov-kit record export NAME</code> turns it into a test fixture with no customer data.</p>
+      <label class="chk"><input type="checkbox" id="lgrec" ${c.record?"checked":""}>Recording ${c.record?"on":"off"}</label></div></div>`;
+  $("#lgself").onclick=async()=>{const b=$("#lgself");b.disabled=true;$("#lgselflog").style.display="block";
+    try{const r=await runJob((await api("/api/selftest",{lab:$("#lglabok").checked})).job,$("#lgselflog"));await load();labTools();logs()}catch(e){$("#lgselflog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
+  $("#lgrec").onchange=async e=>{await api("/api/record",{on:e.target.checked});await load();labTools()}}
+async function logs(){labTools();try{const r=await api("/api/logs");$("#lgrows").innerHTML=r.lines.map(l=>`<tr><td><code>${esc(l.t)}</code></td><td><span class="badge b-${l.level=="error"?"fail":esc(l.level)}">${esc(l.level)}</span></td><td>${esc(l.kind)}</td><td>${esc(l.summary)}${l.error?`<div class="muted" style="font-size:12px">${esc(l.error)}</div>`:""}</td></tr>`).join("")||'<tr><td colspan="4" class="empty">Nothing yet.</td></tr>'}
   catch(e){$("#lgrows").innerHTML=`<tr><td colspan="4">${esc(e.message)}</td></tr>`}}
 $("#lgref").onclick=logs;
 $("#lgdiag").onclick=()=>window.open(`/diagnostics?t=${encodeURIComponent(TOKEN)}`,"_blank");

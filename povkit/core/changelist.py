@@ -69,6 +69,26 @@ class ChangeList:
         self.approval_file.write_text(json.dumps(rec, indent=2), encoding="utf-8")
         return rec
 
+    def approve_file(self, path) -> dict:
+        """An approval the customer made on the change-list page (plan.html): checked against this plan's hash."""
+        try:
+            rec = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            raise KitError(f"Couldn't read the approval file: {e}") from e
+        if rec.get("format") != "zpov-approval-1":
+            raise KitError("That isn't an approval file from the change-list page.")
+        p = self.plan()
+        if rec.get("hash") != p["hash"]:
+            raise KitError("This approval is for a different change list (the plan changed after the customer saw "
+                           "it). Send them the current plan.html and ask again.")
+        by = f"{str(rec.get('by') or '').strip()}, {str(rec.get('title') or '').strip()}".strip(", ")
+        if not rec.get("by") or not rec.get("title"):
+            raise KitError("The approval file has no name or title.")
+        out = self.approve(by, str(rec.get("note") or ""))
+        out.update(via="customer page", email=str(rec.get("email") or "")[:200], customer_at=str(rec.get("at") or "")[:40])
+        self.approval_file.write_text(json.dumps(out, indent=2), encoding="utf-8")
+        return out
+
     def approval(self) -> dict | None:
         if not self.approval_file.exists():
             return None

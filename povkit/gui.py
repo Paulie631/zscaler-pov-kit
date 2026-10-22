@@ -15,7 +15,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, evidence, handover, lifecycle, products, rolespec, settings
+from . import VERSION, evidence, handover, lifecycle, products, remind, rolespec, settings
 from .core import KitError, pov as povs, secrets
 from .core.changelist import ChangeList
 from .core.checks import exit_code
@@ -54,12 +54,15 @@ def pov_state(p):
                      "creates": sum(1 for i in plan["items"] if i["action"] != "customer_action")} if plan else None,
             "approval": appr, "ledger": states,
             "test_users": sum(1 for e in led.active("zia") if e["kind"] == "user"),
-            "zpa_key": bool(secrets.get(p.id, "zpa-provisioning-key"))}
+            "zpa_key": bool(secrets.get(p.id, "zpa-provisioning-key")),
+            "end": remind.end_check(p), "backup_at": (p.cfg.get("backup") or {}).get("at"),
+            "record": bool(p.cfg.get("record")), "selftest": p.read_json("selftest.json")}
 
 
 def state():
     cur = povs.CURRENT.read_text().strip() if povs.CURRENT.exists() else ""
-    out = {"version": VERSION, "povs": [], "current": None,
+    from . import backup
+    out = {"version": VERSION, "povs": [], "current": None, "backup_folder": str(backup.folder() or "") or None,
            "products": [{"name": n, "title": products.get(n).title, "phase": products.get(n).phase}
                         for n in products.ORDER]}
     for pid in povs.all_povs():
@@ -137,7 +140,9 @@ def api(method, path, body, q):
                 return 200, {"plan": None}
             return 200, {"plan": cl.plan(), "approval": cl.approval()}
         if path == "/api/criteria":
-            return 200, {"rows": evidence.evaluate(current())}
+            from . import summary
+            summ, stale = summary.current(current())
+            return 200, {"rows": evidence.evaluate(current()), "summary": summ, "summary_stale": stale}
         if path == "/api/logs":
             p = current()
             f = p.path("activity.jsonl")
@@ -147,9 +152,12 @@ def api(method, path, body, q):
             from . import ai, usecases
             p = current()
             key, where = ai.proxy_key()
+            from . import library
             return 200, {"usecases": [{k: v for k, v in u.items() if k != "raw"} for u in usecases.load(p)][::-1],
-                         "consent": ai.consent(p), "key": bool(key), "key_source": where,
-                         "model": (p.cfg.get("ai") or {}).get("model") or ai.DEFAULT_MODEL}
+                         "consent": ai.consent(p), "key": bool(key), "key_source": where, "share": ai.share(p),
+                         "model": (p.cfg.get("ai") or {}).get("model") or ai.DEFAULT_MODEL,
+                         "library": [{k: e.get(k) for k in ("id", "title", "summary", "products", "proved", "saved")}
+                                     for e in library.entries()], "library_folder": str(library.folder())}
         if path == "/api/usecase/directions":
             from . import usecases
             return 200, {"text": usecases.directions_md(usecases.get(current(), q.get("id")))}
@@ -168,7 +176,8 @@ def api(method, path, body, q):
             raise KitError("Enter the customer's name.")
         if not names:
             raise KitError("Choose at least one product.")
-        p = povs.new(body["customer"].strip(), names, (body.get("prefix") or "ZPOV").strip())
+        p = povs.new(body["customer"].strip(), names, (body.get("prefix") or "ZPOV").strip(),
+                     remind.parse_date(body["ends"]) if body.get("ends") else None)
         settings.set_value(p, "client_mode", body.get("client_mode") or "single")
         return 200, {"id": p.id}
     if path == "/api/pov/use":
@@ -220,12 +229,48 @@ def api(method, path, body, q):
         rec = ChangeList(p.dir).approve(body.get("by"), body.get("note") or "")
         p.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']}")
         return 200, {"approval": rec}
+    if path == "/api/approve/file":
+        p = current()
+        text = body.get("content") or ""
+        if len(text) > 20000:
+            raise KitError("That file is too large to be an approval file.")
+        f = p.path("approval-upload.json")
+        f.write_text(text, encoding="utf-8")
+        try:
+            rec = ChangeList(p.dir).approve_file(f)
+        finally:
+            f.unlink(missing_ok=True)
+        p.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']} on the change-list page")
+        return 200, {"approval": rec}
+    if path == "/api/summary":
+        from . import summary
+        p = current()
+
+        def work(log):
+            log("info", "Asking Claude through AI Guard for the executive summary (results only, names removed)")
+            s = summary.write(p, body.get("note") or "")
+            log("ok", s["headline"])
+            return s
+        return 200, {"job": start_job("summary", work)}
     if path == "/api/apply":
         p = current()
         return 200, {"job": start_job("apply", lambda log: len(lifecycle.apply(p, tf, log).active()))}
     if path == "/api/status":
         p = current()
         return 200, {"job": start_job("status", lambda log: lifecycle.status(p, tf, fix=bool(body.get("fix")), log=log))}
+    if path == "/api/remind/install":
+        return 200, {"message": remind.install()}
+    if path == "/api/record":
+        p = current()
+        p.cfg["record"] = bool(body.get("on"))
+        p.save()
+        return 200, {"record": p.cfg["record"]}
+    if path == "/api/selftest":
+        from . import selftest
+        p = current()
+        if body.get("lab") is not True:
+            raise KitError("Tick the box to confirm this is your own lab tenant.")
+        return 200, {"job": start_job("selftest", lambda log: selftest.run(p, tf, log, lab=True))}
     if path == "/api/test-api":
         p = current()
         return 200, {"job": start_job("proofs", lambda log: lifecycle.api_proofs(p, tf))}
@@ -247,6 +292,10 @@ def api(method, path, body, q):
         return 200, {"attestation": rec}
     if path == "/api/probe-pack":
         return 200, evidence.probe_pack(current())
+    if path == "/api/backup":
+        from . import backup
+        d = backup.setup(body.get("folder") or "", body.get("passphrase") or "")
+        return 200, {"folder": str(d)}
     if path == "/api/report":
         from .report import render_report
         p = current()
@@ -266,7 +315,9 @@ def api(method, path, body, q):
         p = current()
         if not lifecycle.ledger(p).find("zpa.provisioning_key"):
             raise KitError("No POV provisioning key yet: apply the change list with ZPA in scope first.")
-        return 200, {"template": connector_template.build(p.id, p.prefix)}
+        cloud = body.get("cloud") or "aws"
+        return 200, {"template": connector_template.build_azure(p.id, p.prefix) if cloud == "azure"
+                     else connector_template.build(p.id, p.prefix), "cloud": cloud}
     if path == "/api/reveal":   # a secret the SE asks for by name, shown once on their own screen
         p = current()
         what = body.get("what")
@@ -300,6 +351,41 @@ def api(method, path, body, q):
             uc = usecases.propose(p, snaps, text, by=body.get("by") or "SE")
             log("ok", f"{uc['id']}: {len(uc['spec']['changes'])} changes the kit can build, "
                       f"{len(uc['spec']['directions'])} directions")
+            return {k: v for k, v in uc.items() if k != "raw"}
+        return 200, {"job": start_job("usecase", work)}
+    if path == "/api/ai/share":
+        from . import ai
+        settings.set_value(current(), "ai.share", body.get("share"))
+        return 200, {"share": ai.share(current()), "consent": ai.consent(current())}
+    if path == "/api/usecase/refine":
+        from . import usecases
+        p, uid, text = current(), body.get("id"), (body.get("feedback") or "").strip()
+        if not text:
+            raise KitError("Say what to change.")
+
+        def work(log):
+            log("info", "Reading the tenant (read-only) for a fresh snapshot")
+            snaps, _ = lifecycle.discover(p, tf)
+            log("info", f"Asking Claude through AI Guard to rework {uid}")
+            uc = usecases.refine(p, snaps, uid, text, by=body.get("by") or "SE")
+            log("ok", f"{uid}: {len(uc['spec']['changes'])} changes the kit can build, "
+                      f"{len(uc['spec']['directions'])} directions")
+            return {k: v for k, v in uc.items() if k != "raw"}
+        return 200, {"job": start_job("usecase", work)}
+    if path == "/api/library/save":
+        from . import library, usecases
+        p = current()
+        e = library.save(p, usecases.get(p, body.get("id")), title=body.get("title"))
+        return 200, {"entry": e}
+    if path == "/api/library/use":
+        from . import library
+        p, name = current(), body.get("name")
+
+        def work(log):
+            log("info", "Reading the tenant (read-only) to check the library entry against it")
+            snaps, _ = lifecycle.discover(p, tf)
+            uc = library.use(p, snaps, name)
+            log("ok", f"{uc['id']} from the library (no AI call): {len(uc['spec']['changes'])} changes the kit can build")
             return {k: v for k, v in uc.items() if k != "raw"}
         return 200, {"job": start_job("usecase", work)}
     if path == "/api/usecase/status":

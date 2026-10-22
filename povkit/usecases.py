@@ -363,18 +363,74 @@ def validate(pov, snaps, proposal):
 
 
 # ---------------------------------------------------------------- lifecycle of a use case
+# the answer's shape, as a tool Claude must call: the API then returns it as structured input, not text to parse
+TOOL = {"name": "propose_use_case",
+        "description": "Propose how the POV proves the use case: changes the kit builds, directions, and a test.",
+        "input_schema": {"type": "object", "required": ["summary", "changes", "directions", "test"], "properties": {
+            "summary": {"type": "string"},
+            "already_covered_by": {"type": "array", "items": {"type": "string"}},
+            "changes": {"type": "array", "items": {"type": "object", "required": ["kind", "name"],
+                                                   "properties": {"kind": {"type": "string", "enum": sorted(KINDS)},
+                                                                  "name": {"type": "string"}, "why": {"type": "string"}}}},
+            "directions": {"type": "array", "items": {"type": "object", "properties": {
+                "product": {"type": "string"}, "console_page": {"type": "string"},
+                "steps": {"type": "array", "items": {"type": "string"}}}}},
+            "test": {"type": "object", "properties": {
+                "title": {"type": "string"}, "statement": {"type": "string"},
+                "probe": {"type": "array", "items": {"type": "object"}},
+                "aiguard": {"type": "array", "items": {"type": "object"}}, "attest": {"type": "string"}}}}}}
+
+
+def _ask(pov, snaps, message):
+    """Mask (names only), ask through AI Guard, unmask. -> (proposal dict, raw reply for the record)"""
+    from . import pseudo
+    m = pseudo.for_pov(pov, snaps, message) if ai.share(pov) == "names_only" else None
+    sent = m.mask(message) if m else message
+    used, text = ai.ask(pov, SYSTEM + ("\nNames are placeholders (NAME_1, EMAIL_2, DOMAIN_3...): use them as given."
+                                       if m else ""), sent, tool=TOOL)
+    proposal = used if used is not None else parse(text)
+    if m:
+        proposal = m.unmask(proposal)
+    raw = json.dumps(proposal) if used is not None else (m.unmask(text) if m else text)
+    return proposal, raw, (len(m) if m else 0)
+
+
 def propose(pov, snaps, request, by="SE"):
     if not (request or "").strip():
         raise KitError("Describe the use case first.")
-    raw = ai.ask(pov, SYSTEM, build_message(pov, snaps, request))
-    spec = validate(pov, snaps, parse(raw))
+    proposal, raw, masked = _ask(pov, snaps, build_message(pov, snaps, request))
+    spec = validate(pov, snaps, proposal)
     ucs = load(pov)
     uc = {"id": next_id(ucs), "prompt": request.strip()[:2000], "by": by,
           "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "status": "proposed", "spec": spec,
-          "raw": raw[:20000]}
+          "shared": ai.share(pov), "masked": masked, "raw": raw[:20000], "history": []}
     ucs.append(uc)
     save(pov, ucs)
     pov.log("usecase", f"{uc['id']} proposed: {len(spec['changes'])} changes, {len(spec['directions'])} directions")
+    return uc
+
+
+def refine(pov, snaps, uid, feedback, by="SE"):
+    """A follow-up on a proposal ("make it Caution, not Block"): Claude gets the earlier proposal and the feedback,
+    and the use case gets the new proposal. An accepted use case goes back to proposed, so it leaves the change
+    list until it's accepted again."""
+    if not (feedback or "").strip():
+        raise KitError("Say what to change.")
+    ucs = load(pov)
+    uc = next((u for u in ucs if u["id"] == uid), None)
+    if not uc:
+        raise KitError(f"No use case {uid}.")
+    earlier = {k: uc["spec"][k] for k in ("summary", "changes", "directions", "test")}
+    msg = (build_message(pov, snaps, uc["prompt"]) + "\n\nYour earlier proposal (as the kit validated it):\n"
+           + json.dumps(earlier) + "\n\nThe SE's feedback on it: " + feedback.strip()
+           + "\nPropose again, the whole answer, with the feedback applied.")
+    proposal, raw, masked = _ask(pov, snaps, msg)
+    uc.setdefault("history", []).append({"at": uc.get("refined_at") or uc["at"], "spec": uc["spec"],
+                                         "status": uc["status"], "feedback": feedback.strip()[:1000]})
+    uc.update(spec=validate(pov, snaps, proposal), status="proposed", raw=raw[:20000], masked=masked,
+              shared=ai.share(pov), refined_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), refined_by=by)
+    save(pov, ucs)
+    pov.log("usecase", f"{uid} refined: {len(uc['spec']['changes'])} changes")
     return uc
 
 

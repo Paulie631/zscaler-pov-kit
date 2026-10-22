@@ -7,9 +7,9 @@ from .core import KitError
 SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_emails", "placement", "criteria", "products",
             "zpa.app_name", "zpa.domains", "zpa.tcp_ports", "zpa.group", "zpa.location", "zpa.latitude", "zpa.longitude",
             "zpa.scope", "zpa.saml_attribute", "zpa.saml_value", "zdx.app", "casb.tenant", "aiguard.competitor",
-            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain", "ai.model"}
+            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain", "ai.model", "ai.share", "ends"}
 LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports", "identity.bypass_domains"}
-CHOICES = {"placement": ("top", "bottom"), "client_mode": ("single", "separate"), "zpa.scope": ("scim", "saml")}
+CHOICES = {"ai.share": ("full", "names_only"), "placement": ("top", "bottom"), "client_mode": ("single", "separate"), "zpa.scope": ("scim", "saml")}
 
 
 def parse(key, raw):
@@ -35,6 +35,9 @@ def parse(key, raw):
             raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.ORDER)}.")
         if not v:
             raise KitError("Choose at least one product.")
+    if key == "ends":
+        from .remind import parse_date
+        v = parse_date(v)
     if key == "pilot_emails":
         bad = [x for x in v if "@" not in x]
         if bad:

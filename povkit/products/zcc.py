@@ -1,9 +1,15 @@
 """Client Connector: a Windows app profile for the pilot group, with its own Z-Tunnel 2.0 forwarding profile.
 
-Both are copies of the tenant's default Windows profiles, never edits of them. Some tenants' Client Connector API
-refuses new forwarding profiles with a bare 400 (a demo-kit lesson), so both items are create-or-adopt: on a 400
-the kit prints the exact spec, a person builds it in the console, and `status --fix` adopts it by exact name.
-Client Connector profiles carry no description, so ownership rests on the ledger ID and the prefix.
+Both are copies of the tenant's default Windows profiles, never edits of them. Ported from the AI Guard SE Demo Kit's
+setup_zcc: the forwarding profile copies the ZIA settings of a Z-Tunnel 2.0 profile the customer already has, if
+any, and otherwise switches a copy of the default's to Tunnel + Z-Tunnel 2.0; when Client Connector answers a bare
+400, it tries plainer copies (no trusted-network conditions, no Unified Tunnel settings...) down to a minimal one.
+The Windows app profile copies the default, scoped to the pilot group, installs the Zscaler certificate, uses that
+forwarding profile, and goes first in the order; both are read back to show what Client Connector stored.
+
+Some tenants refuse even the minimal profile (a demo-kit lesson), so both items stay create-or-adopt: the kit prints
+the exact spec, a person builds it in the console, and `status --fix` adopts it by exact name. Client Connector
+profiles carry no description, so ownership rests on the ledger ID and the prefix.
 """
 from __future__ import annotations
 
@@ -15,10 +21,72 @@ from ..core.checks import FAIL, INFO, OK, WARN, check
 from ..tenant import g, items
 from .base import Product
 
-ZCC_TUNNEL = 1   # forwardingProfileActions.actionType for "Tunnel" (from the demo kit)
-FWD_DROP = {"id", "groups", "users", "deviceGroups", "groupNames", "userNames", "deviceGroupNames", "policyToken",
-            "trustedNetworkIds", "trustedNetworks", "trustedSubnets", "trustedGateways", "trustedDhcpServers",
-            "trustedDNSServers", "trustedEgressIps", "trustedDnsSearchDomains", "hostnameIpMapping"}
+ZCC_TUNNEL = 1   # forwardingProfileActions.actionType for "Tunnel"; Z-Tunnel 2.0 adds enablePacketTunnel = 1
+DROP = {"id", "groups", "users", "deviceGroups", "groupNames", "userNames", "deviceGroupNames", "policyToken",
+        "createdBy", "editedBy", "lastModification", "lastModifiedBy", "lastModifiedTime"}
+TRUSTED = {"trustedNetworkIds", "trustedNetworks", "trustedSubnets", "trustedGateways", "trustedDhcpServers",
+           "trustedEgressIps", "dnsServers", "dnsSearchDomains", "hostname", "resolvedIpsForHostname",
+           "conditionType", "predefinedTrustedNetworks", "predefinedTnAll", "skipTrustedCriteriaMatch",
+           "trustedDNSServers", "trustedDnsSearchDomains", "hostnameIpMapping"}
+CORE_ACTION = ("networkType", "actionType", "enablePacketTunnel", "primaryTransport", "allowTLSFallback",
+               "tunnel2FallbackType", "DTLSTimeout", "UDPTimeout", "TLSTimeout", "mtuForZadapter", "systemProxy",
+               "systemProxyData")
+FWD_DROP = DROP | TRUSTED
+
+
+def is_z2(a):
+    return int(a.get("actionType") or 0) == ZCC_TUNNEL and int(a.get("enablePacketTunnel") or 0) == 1
+
+
+def z2_actions(fwds, fwd_name, base_actions):
+    """Copy a Z-Tunnel 2.0 profile the customer already has (known to work in this tenant), else switch a copy of
+    the default's actions to Tunnel + Z-Tunnel 2.0. -> (actions, how)"""
+    ref = next((f for f in fwds if g(f, "name") != fwd_name and (f.get("forwardingProfileActions") or [])
+                and all(int(a.get("enablePacketTunnel") or 0) == 1 for a in f["forwardingProfileActions"])), None)
+    if ref:
+        return [dict(a) for a in ref["forwardingProfileActions"]], f"copied the tunnel settings of '{g(ref, 'name')}'"
+    acts = [dict(a) for a in base_actions]
+    for a in acts:
+        a.update(actionType=ZCC_TUNNEL, enablePacketTunnel=1)
+    return acts, "set every network type to Tunnel with Z-Tunnel 2.0"
+
+
+def clean_fwd(fwd):
+    out = {k: v for k, v in fwd.items() if k not in TRUSTED}
+    out["evaluateTrustedNetwork"] = 0
+    for key in ("forwardingProfileActions", "forwardingProfileZpaActions"):
+        if isinstance(out.get(key), list):
+            out[key] = [{k: v for k, v in dict(a).items() if k not in ("id", "forwardingProfileId")}
+                        for a in out[key] if isinstance(a, dict)]
+    return out
+
+
+def minimal_fwd(name, actions):
+    nets = sorted({int(a.get("networkType") or 0) for a in actions if isinstance(a, dict)}) or [0, 1, 2, 3]
+    by = {int(a.get("networkType") or 0): a for a in actions if isinstance(a, dict)}
+    acts = []
+    for n in nets:
+        a = {k: v for k, v in dict(by.get(n) or {}).items() if k in CORE_ACTION}
+        a.update(networkType=n, actionType=ZCC_TUNNEL, enablePacketTunnel=1)
+        a.setdefault("primaryTransport", 1)
+        acts.append(a)
+    return {"name": name, "active": 1, "evaluateTrustedNetwork": 0, "forwardingProfileActions": acts}
+
+
+def fwd_tries(fwd, src_fwd, name):
+    """Progressively plainer bodies for a forwarding profile, as the demo kit's _save_fwd tries them."""
+    plain = clean_fwd(fwd)
+    base = [dict(a) for a in (src_fwd or {}).get("forwardingProfileActions") or []]
+    for a in base:
+        a.update(actionType=ZCC_TUNNEL, enablePacketTunnel=1)
+    no_ut = {k: v for k, v in plain.items() if k not in ("unifiedTunnel", "enableUnifiedTunnel")}
+    no_zpa = {k: v for k, v in no_ut.items() if k not in ("forwardingProfileZpaActions", "enableLWFDriver")}
+    tries = [("as copied", fwd), ("without trusted-network conditions and copied ids", plain)]
+    if base:
+        tries.append(("from the default profile's actions", clean_fwd(dict(plain, forwardingProfileActions=base))))
+    return tries + [("without the Unified Tunnel settings", no_ut),
+                    ("without the Unified Tunnel and ZPA tunnel settings", no_zpa),
+                    ("as a minimal Z-Tunnel 2.0 profile", minimal_fwd(name, plain.get("forwardingProfileActions") or []))]
 BY_HAND = ("Build it by hand in the Client Connector portal, then run `pov-kit status --fix`, which finds it by exact "
            "name and adopts it: 1) Forwarding profile named exactly '{fwd}': a copy of '{src_fwd}' with ZIA action "
            "Tunnel and Z-Tunnel 2.0 on every network type. 2) Windows app profile named exactly '{app}': a copy of "
@@ -101,37 +169,96 @@ class ZCC(Product):
                  why="Installing software on the customer's devices is the customer's job."),
         ], ["Client Connector profiles are copies of the tenant's defaults; the defaults themselves aren't changed."]
 
-    # ---- apply: copy the source forwarding profile, switch it to Z-Tunnel 2.0, save under the POV name
+    # ---- apply: the forwarding profile (plainer copies on a bare 400), then the app profile that uses it
     def apply(self, t, pov, items_, log):
         by = {i["key"]: i for i in items_ if i["product"] == "zcc"}
-        fwd_it = by.get("zcc.fwd")
+        fwd_it, app_it = by.get("zcc.fwd"), by.get("zcc.app")
         if not fwd_it:
             return
         fwds = self._list(t, "zcc.forwarding_profile")
-        src = next((f for f in fwds if str(g(f, "id")) == str(fwd_it["body"]["copy_of"])), None)
-        if not src:
-            raise KitError("The forwarding profile the change list copies is gone. Run `pov-kit plan` again.")
-        body = {k: v for k, v in src.items() if k not in FWD_DROP}
-        body["name"] = fwd_it["name"]
-        for a in body.get("forwardingProfileActions") or []:
-            a.update(actionType=ZCC_TUNNEL, enablePacketTunnel=1)
+        if not t.ledger.find("zcc.fwd"):
+            src = next((f for f in fwds if str(g(f, "id")) == str(fwd_it["body"]["copy_of"])), None)
+            if not src:
+                raise KitError("The forwarding profile the change list copies is gone. Run `pov-kit plan` again.")
+            body = {k: v for k, v in src.items() if k not in DROP}
+            acts, how = z2_actions(fwds, fwd_it["name"], body.get("forwardingProfileActions") or [])
+            body.update(name=fwd_it["name"], forwardingProfileActions=acts)
 
-        def find_id(_):
-            return next((g(f, "id") for f in self._list(t, "zcc.forwarding_profile") if g(f, "name") == fwd_it["name"]), None)
+            def find_id(_):
+                return next((g(f, "id") for f in self._list(t, "zcc.forwarding_profile")
+                             if g(f, "name") == fwd_it["name"]), None)
+            last = None
+            for i, (how2, b) in enumerate(fwd_tries(body, src, fwd_it["name"])):
+                try:
+                    t.create("zcc.fwd", "zcc.forwarding_profile", "update_forwarding_profile", extract_id=find_id,
+                             stamped=False, **b)
+                    log("ok", f"Created {fwd_it['name']} ({how}" + (f"; saved {how2}" if i else "") + ")")
+                    last = None
+                    break
+                except GuardError:
+                    raise
+                except KitError as e:
+                    last = e
+                    if not bare_400(e):
+                        raise
+            if last is not None:
+                log("warn", "Client Connector refused every version of the forwarding profile, down to a minimal "
+                            "Z-Tunnel 2.0 one (bare 400). " + fwd_it["spec"])
+                return
+        if not app_it or t.ledger.find("zcc.app"):
+            return
+        gid = (app_it["body"].get("groups") or [None])[0]
+        if isinstance(gid, str) and gid.startswith("{ref:"):   # the kit's own pilot group (Hosted DB test users)
+            gid = t.ids.get(gid[5:-1])
+        apps = self._list(t, "zcc.web_policy", device_type="windows")
+        src = next((a for a in apps if str(g(a, "id")) == str(app_it["body"].get("copy_of"))), None)
+        fwd_id = t.ids.get("zcc.fwd")
+        if not (src and gid and fwd_id):
+            log("warn", "The Windows app profile wasn't made (no default profile to copy, no pilot group, or no "
+                        "forwarding profile). " + app_it["spec"])
+            return
+        app = {k: v for k, v in src.items() if k not in DROP}
+        win = dict(app.get("windowsPolicy") or {})
+        win["installSslCerts"] = 1
+        app.update(name=app_it["name"], active=1, groupAll=0, groupIds=[int(gid)], userIds=[], ruleOrder=1,
+                   forwardingProfileId=fwd_id, windowsPolicy=win, deviceType=app.get("deviceType") or "DEVICE_TYPE_WINDOWS")
+
+        def find_app(_):
+            return next((g(a, "id") for a in self._list(t, "zcc.web_policy", device_type="windows")
+                         if g(a, "name") == app_it["name"]), None)
         try:
-            t.create("zcc.fwd", "zcc.forwarding_profile", "update_forwarding_profile", extract_id=find_id,
-                     stamped=False, **body)
-            log("ok", f"Created {fwd_it['name']}")
+            t.create("zcc.app", "zcc.web_policy", "web_policy_edit", extract_id=find_app, stamped=False, **app)
         except GuardError:
             raise
         except KitError as e:
-            if not bare_400(e):
-                raise
-            log("warn", "Client Connector refused the new forwarding profile (bare 400). " + fwd_it["spec"])
+            log("warn", f"Client Connector refused the Windows app profile ({str(e)[:120]}). " + app_it["spec"])
             return
-        # The app profile write (web_policy_edit) is ported from the demo kit's setup_zcc in v0.2; until then
-        # it is built by hand from the spec and adopted.
-        log("warn", "The Windows app profile isn't automated yet (step 1 below is done). " + by["zcc.app"]["spec"])
+        log("ok", f"Created {app_it['name']} (pilot group only, installs the Zscaler certificate, Z-Tunnel 2.0)")
+        self.verify(t, app_it["name"], fwd_it["name"], gid, log)
+
+    def verify(self, t, app_name, fwd_name, gid, log):
+        """Read both back: Client Connector's API can accept fields it then ignores."""
+        f = next((x for x in self._list(t, "zcc.forwarding_profile") if g(x, "name") == fwd_name), None)
+        pols = self._list(t, "zcc.web_policy", device_type="windows")
+        a = next((x for x in pols if g(x, "name") == app_name), None)
+        acts = (f or {}).get("forwardingProfileActions") or []
+        z2 = [x for x in acts if is_z2(x)]
+        log("ok" if f and acts and len(z2) == len(acts) else "warn",
+            f"{fwd_name}: Z-Tunnel 2.0 on {len(z2)} of {len(acts)} network types" if f else f"{fwd_name}: not found")
+        if not a:
+            log("warn", f"{app_name}: not found after saving")
+            return False
+        groups = [int(g(x, "id")) for x in (a.get("groups") or []) if g(x, "id")] or \
+            [int(x) for x in (a.get("groupIds") or []) if x]
+        ahead = [g(x, "name") for x in pols if int(g(x, "ruleOrder") or 0) < int(g(a, "ruleOrder") or 0)
+                 and int(g(x, "active") or 0) == 1]
+        good = str(g(a, "forwardingProfileId")) == str(g(f or {}, "id")) and int(gid) in groups and \
+            int((a.get("windowsPolicy") or {}).get("installSslCerts") or 0) == 1
+        log("ok" if good and not ahead else "warn",
+            f"{app_name}: order {g(a, 'ruleOrder')}, pilot group {'yes' if int(gid) in groups else 'NO'}, "
+            f"forwarding profile {'yes' if str(g(a, 'forwardingProfileId')) == str(g(f or {}, 'id')) else 'NO'}"
+            + (f"; profiles ahead of it: {', '.join(map(str, ahead))}" if ahead else ""))
+        return good and not ahead
 
     def adopt_by_name(self, t, pov, items_, log):
         """status --fix: adopt hand-built profiles that match the change list's exact names."""
