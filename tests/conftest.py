@@ -109,8 +109,10 @@ class FakeTenant:
             if not self.zidentity:
                 raise KitError("401 not ZIdentity")
             if method == "list_groups":
-                n = (kw.get("query_params") or {}).get("name")
-                return copy.deepcopy([g for g in self.zid_groups if not n or g["name"] == n])
+                q = kw.get("query_params") or {}
+                assert "name" not in q, "ZIdentity filters groups with name[like]"
+                n = str(q.get("name[like]") or "").lower()
+                return copy.deepcopy([g for g in self.zid_groups if n in g["name"].lower()])
             if method == "add_group":
                 o = dict(kw, id=f"zg{self._id()}", members=[])
                 self.zid_groups.append(o)

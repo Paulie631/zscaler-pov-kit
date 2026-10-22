@@ -50,6 +50,11 @@ def parse(key, raw):
 
 def set_value(pov, key, raw, save=True):
     v = parse(key, raw)
+    if key == "identity.pilot" and v != (pov.cfg.get("identity") or {}).get("pilot", "existing"):
+        from .core.ledger import Ledger
+        if Ledger(pov.path("ledger.json"), pov.id, pov.prefix).active("zid"):
+            raise KitError("The POV's ZIdentity pilot group is in the tenant, so the pilot group can't change now. "
+                           "Remove the POV first (Handover), or keep this group.")
     if "." in key:
         sect, field = key.split(".", 1)
         pov.cfg.setdefault(sect, {})[field] = v

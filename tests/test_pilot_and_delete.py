@@ -157,3 +157,55 @@ def test_terraform_handover_keeps_the_zidentity_group_and_allows_delete(zpov, te
     assert tenant.zid_groups                                   # kept in the tenant, the customer's now
     v = delete_pov.verify(zpov, tenant_for)
     assert v["ok"] and v["notes"]
+
+
+# ---- review findings (0.9.1)
+def test_teardown_keeps_the_group_while_a_kept_rule_still_uses_it(zpov, tenant, tenant_for):
+    approve(zpov, tenant_for)
+    lifecycle.apply(zpov, tenant_for, log)
+    r = tenant.by_name("url_filtering", "ZPOV: Block gambling")
+    r["name"] = "Customer kept: gambling"                       # renamed, so ZIA teardown leaves it alone
+    checks = lifecycle.teardown(zpov, tenant_for, log)
+    assert tenant.zid_groups, "the group must stay while a rule applies to it"
+    assert any(c["id"] == "zid-left" and "Customer kept" in c["detail"] for c in checks)
+    r["groups"] = [78]                                          # the customer points it elsewhere
+    lifecycle.teardown(zpov, tenant_for, log)
+    assert not tenant.zid_groups
+
+
+def test_fix_drift_recreates_a_deleted_group_and_rescopes_the_rules(zpov, tenant, tenant_for):
+    approve(zpov, tenant_for)
+    lifecycle.apply(zpov, tenant_for, log)
+    old = tenant.zid_groups[0]["id"]
+    tenant.call("zid.groups", "delete_group", old)              # deleted in the ZIdentity console
+    lifecycle.status(zpov, tenant_for, fix=True)
+    new = next(g for g in tenant.groups if g.get("_zid") == tenant.zid_groups[0]["id"])
+    assert tenant.zid_groups[0]["id"] != old
+    assert tenant.by_name("url_filtering", "ZPOV: Block gambling")["groups"] == [new["id"]]
+    assert not [c for c in lifecycle.status(zpov, tenant_for) if c["status"] == "fail"]
+
+
+def test_pilot_mode_cant_change_while_the_group_is_in_the_tenant(zpov, tenant_for):
+    from povkit import settings
+    approve(zpov, tenant_for)
+    lifecycle.apply(zpov, tenant_for, log)
+    with pytest.raises(KitError, match="can't change"):
+        settings.set_value(zpov, "identity.pilot", "existing")
+
+
+def test_teardown_covers_products_left_in_the_ledger(zpov, tenant, tenant_for):
+    approve(zpov, tenant_for)
+    lifecycle.apply(zpov, tenant_for, log)
+    zpov.cfg["identity"]["pilot"] = "existing"                  # changed behind the kit's back
+    zpov.save()
+    lifecycle.teardown(zpov, tenant_for, log)
+    assert not tenant.zid_groups and not lifecycle.ledger(zpov).active()
+
+
+def test_delete_refused_while_a_job_runs_and_ids_are_checked(pov, monkeypatch):
+    monkeypatch.setitem(gui.JOBS, "j1", {"kind": "apply", "pov": pov.id, "done": False})
+    with pytest.raises(KitError, match="still running"):
+        gui.api("POST", "/api/pov/delete", {"id": pov.id, "confirm": pov.id}, {})
+    assert pov.dir.exists()
+    with pytest.raises(KitError, match="isn't a POV ID"):
+        povs.Pov("../../etc")

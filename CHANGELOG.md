@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.1
+
+From an independent review of 0.9.0's tenant writes, and the follow-ups:
+- **The pilot group outlives every rule that uses it.** Teardown keeps the POV's ZIdentity group while any ZIA rule
+  still applies to it (a POV rule the customer renamed and so kept, or one of theirs) or another product's POV object
+  is left, and says which; deleting it then would leave a rule pointing at a group that no longer exists.
+- **Fix drift after the group is deleted in ZIdentity** recreates it and re-scopes the POV's rules to the new group,
+  instead of re-pointing them at the deleted one.
+- **Nothing stranded by a settings change.** Teardown and status cover every product that still has objects in the
+  ledger, and the pilot group choice can't change while the POV's ZIdentity group is in the tenant.
+- **No delete while a job runs**, and one job at a time per POV. POV IDs are checked before they're used as folders.
+- ZIdentity lists use its documented filters and paging (`name[like]`, `limit`, `offset`).
+- **Terraform handover keeps everything in place as the customer's**, including objects Terraform can't import and
+  the POV's ZIdentity group (its README says what to do with it), so the POV can be deleted afterwards.
+- **Report a problem**: a link next to Download diagnostics opens the kit's GitHub issue form.
+- Builds use the Node 24 GitHub actions and Ubuntu 24.04.
+
 ## 0.9.0
 
 From the live lab test:

@@ -67,7 +67,7 @@ class ZID(Product):
         snap = {"group": gname, "members": [], "new": []}
         checks = []
         try:
-            t.call("zid.users", "list_users", query_params={"page_size": 1})
+            t.call("zid.users", "list_users", query_params={"limit": 1})
         except KitError as e:
             checks.append(check("zid-read", "ZIdentity readable", FAIL, str(e)[:160],
                                 "Give the API client view access to ZIdentity users and groups, or name an existing "
@@ -103,7 +103,14 @@ class ZID(Product):
         elif emails:
             checks.append(check("zid-members", "Pilot users are in ZIdentity", OK, f"all {len(emails)}"))
         # a group by the POV's name that isn't in this POV's ledger: someone else's, or another POV's
-        rows = items(t.call("zid.groups", "list_groups", query_params={"name": gname}))
+        rows, off = [], 0
+        while True:   # partial-match filter, paged: every group whose name contains the POV's
+            page = items(t.call("zid.groups", "list_groups", query_params={"name[like]": gname, "limit": 1000,
+                                                                           "offset": off}))
+            rows += page
+            if len(page) < 1000:
+                break
+            off += 1000
         clash = [r for r in rows if str(g(r, "name")) == gname]
         mine = led.find("zid.group")
         if clash and not (mine and any(str(g(r, "id")) == mine["id"] for r in clash)):
@@ -239,8 +246,32 @@ class ZID(Product):
             log("info", "The pilot group was deleted in ZIdentity; apply recreates it")
         return False   # apply (run by status --fix) re-adds members and recreates what's missing
 
+    def in_use(self, t, ledger):
+        """Why the pilot group can't go yet: other POV objects still in the ledger, or any ZIA rule (a POV rule
+        renamed and so kept, or one of the customer's) that still applies to ZIA's copy of it. Deleting the group
+        then would leave such a rule pointing at a group that no longer exists."""
+        # ZIA rules are checked live below (a renamed one stays in the ledger but is the customer's now); other
+        # products' objects that teardown couldn't remove may still use the group, so they keep it too
+        others = [e["name"] for e in ledger.active() if e["product"] not in ("zid", "zia")]
+        if others:
+            return f"{len(others)} other POV object{'s' * (len(others) != 1)} still in the tenant"
+        link = ledger.linked(ZIA_GROUP_KEY)
+        if link:
+            from .zia import rules_using_group
+            try:
+                users = rules_using_group(t, link["id"])
+            except KitError as e:
+                return f"couldn't check which ZIA rules use it ({str(e)[:100]})"
+            if users:
+                return f"ZIA rules still apply to it: {', '.join(users[:5])}{'…' if len(users) > 5 else ''}"
+        return ""
+
     def teardown(self, t, pov, ledger, log):
         out, deleted = [], 0
+        why = self.in_use(t, ledger)
+        if why and ledger.find("zid.group"):
+            return [check("zid-left", "Kept: the POV's ZIdentity pilot group", WARN, why,
+                          "Remove those first (or point the rules at another group), then run teardown again.")]
         for e in ledger.newest_first("zid"):   # users, then the group
             live = self.live_object(t, e)
             if live is None:

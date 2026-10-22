@@ -151,6 +151,19 @@ def list_kind(t, kind, rule_type=None, prefix=None):
     return items(t.call(k["res"], k["lst"], *args))
 
 
+def rules_using_group(t, group_id):
+    """Names of every ZIA rule (the customer's or a POV's) that applies to this group. Read-only."""
+    tpl, gid, out = template(), str(group_id), []
+    for kind in RULE_KINDS:
+        types_ = sorted({r["rule_type"] for r in tpl["cloud_app_control"]}) if KINDS[kind].get("typed") else [None]
+        for rt in types_:
+            for r in list_kind(t, kind, rt):
+                ids = {str(g(x, "id") if isinstance(x, dict) else x) for x in (g(r, "groups") or [])}
+                if gid in ids:
+                    out.append(obj_name(r))
+    return out
+
+
 # ---------------------------------------------------------------- discovery helpers (all reads)
 def auth_mode(t):
     """'hosted', 'saml' or 'directory' (the demo kit's auth_mode), or None if unreadable."""
@@ -661,6 +674,10 @@ class ZIA(Product):
                 log("info", f"{it['name']} was deleted in the console; apply will recreate it")
                 continue
             if not KINDS[e["kind"]]["rule"]:
+                continue
+            missing = [x for x in it["body"].get("groups", []) if str(x).startswith("{ref:") and str(x)[5:-1] not in t.ids]
+            if missing:   # the group it should apply to isn't there yet (apply recreates it, then this runs again)
+                log("info", f"{it['name']}: waiting for its pilot group before re-scoping it")
                 continue
             ids = {str(g(x, "id") if isinstance(x, dict) else x) for x in (g(live, "groups") or [])}
             if g(live, "state") not in (None, "ENABLED") or ids != want_groups(it, ledger):

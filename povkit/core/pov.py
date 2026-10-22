@@ -23,6 +23,8 @@ def slug(s: str) -> str:
 
 class Pov:
     def __init__(self, pov_id: str):
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]{1,39}", str(pov_id or "")):   # never a path: '..', '/', '\\'
+            raise KitError(f"'{pov_id}' isn't a POV ID (like acme-corp-3f2a).")
         self.id = pov_id
         self.dir = POVS / pov_id
         self.file = self.dir / "pov.json"

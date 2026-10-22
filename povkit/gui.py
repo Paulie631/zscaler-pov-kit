@@ -112,7 +112,7 @@ def pilot_options(p):
     except KitError as e:
         out["errors"].append(f"ZIA groups: {str(e)[:120]}")
     try:
-        rows = items(t.call("zid.users", "list_users", query_params={"page_size": 500}))
+        rows = items(t.call("zid.users", "list_users", query_params={"limit": 1000}))
         out["zidentity"] = True
         out["zid_users"] = sorted(({"login": str(g(u, "login_name") or ""), "name": str(g(u, "display_name") or "")}
                                    for u in rows if g(u, "login_name")), key=lambda u: u["login"])
@@ -129,9 +129,18 @@ def diagnostics_zip(q, token):
 
 
 # ---------------------------------------------------------------- jobs
+def running(pov_id):
+    """A job (apply, teardown, status fix...) still running for this POV."""
+    return next((j["kind"] for j in JOBS.values() if j.get("pov") == pov_id and not j["done"]), None)
+
+
 def start_job(kind, work):
+    pid = povs.CURRENT.read_text(encoding="utf-8").strip() if povs.CURRENT.exists() else None
+    busy = running(pid) if pid else None
+    if busy:
+        raise KitError(f"This POV's {busy} is still running. Wait for it to finish (the Logs tab shows it).")
     jid = uuid.uuid4().hex[:8]
-    job = JOBS[jid] = {"kind": kind, "done": False, "lines": [], "result": None, "error": None}
+    job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None}
 
     def log(level, msg):
         job["lines"].append({"level": level, "msg": str(msg), "t": time.strftime("%H:%M:%S")})
@@ -222,6 +231,9 @@ def api(method, path, body, q):
         return 200, delete_pov.verify(povs.Pov(body["id"]), tf)
     if path == "/api/pov/delete":
         from . import delete_pov
+        busy = running(body.get("id"))
+        if busy:
+            raise KitError(f"This POV's {busy} is still running, so it can't be deleted now. Nothing was deleted.")
         return 200, delete_pov.delete(povs.Pov(body["id"]), body.get("confirm"), tf)
     if path == "/api/pilot/options":
         return 200, pilot_options(current())

@@ -22,6 +22,13 @@ def ledger(pov):
     return Ledger(pov.path("ledger.json"), pov.id, pov.prefix)
 
 
+def in_play(pov, led=None):
+    """The products to check and tear down: the POV's, plus any that still have objects in its ledger (a setting
+    changed after apply must never strand objects in the tenant)."""
+    led = led or ledger(pov)
+    return products.selected(set(pov.products) | {e["product"] for e in led.active()})
+
+
 def discover(pov, tenant_for):
     t = ReadOnlyTenant(tenant_for(pov, "discovery"))
     snaps, checks = {}, []
@@ -112,7 +119,7 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
         checks.append(check("plan-approved", "Change list approved", WARN, "not yet", "Run `pov-kit approve`."))
     led = ledger(pov)
     ro = ReadOnlyTenant(tenant_for(pov, "discovery"))
-    for p in products.selected(pov.products):
+    for p in in_play(pov, led):
         if p.ready:
             checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}") for x in p.drift(ro, pov, led, items)]
     from . import backup, remind
@@ -128,13 +135,16 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
         if not a or digest(items) != a["hash"]:
             raise KitError("Fix drift needs the approved change list to still match the tenant. Run `pov-kit plan` "
                            "and get it approved again first.")
-        t = LedgerTenant(tenant_for(pov, "apply"), led, items)
-        for p in products.selected(pov.products):
-            if hasattr(p, "fix_drift"):
-                p.fix_drift(t, pov, led, items, log)
-            if hasattr(p, "adopt_by_name"):
-                p.adopt_by_name(t, pov, items, log)
+        def fix_pass():
+            for p in products.selected(pov.products):
+                t = LedgerTenant(tenant_for(pov, "apply"), ledger(pov), items)   # fresh IDs: a fix may change them
+                if hasattr(p, "fix_drift"):
+                    p.fix_drift(t, pov, t.ledger, items, log)
+                if hasattr(p, "adopt_by_name"):
+                    p.adopt_by_name(t, pov, items, log)
+        fix_pass()
         apply(pov, tenant_for, log)   # recreates anything missing, still bound to the approval
+        fix_pass()                    # then re-scope rules whose group apply just recreated
     return checks
 
 
@@ -147,7 +157,7 @@ def teardown(pov, tenant_for, log, include_adopted=False):
     out = []
     from . import backup
     try:
-        for p in reversed(products.selected(pov.products)):   # zcc before zia
+        for p in reversed(in_play(pov, led)):   # zcc before zia, zia before zid
             if p.ready and led.active(p.name):
                 out += p.teardown(t, pov, led, log)
     finally:
