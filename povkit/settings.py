@@ -7,7 +7,7 @@ from .core import KitError
 SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_emails", "placement", "criteria", "products",
             "zpa.app_name", "zpa.domains", "zpa.tcp_ports", "zpa.group", "zpa.location", "zpa.latitude", "zpa.longitude",
             "zpa.scope", "zpa.saml_attribute", "zpa.saml_value", "zdx.app", "casb.tenant", "aiguard.competitor",
-            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain"}
+            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain", "ai.model"}
 LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports", "identity.bypass_domains"}
 CHOICES = {"placement": ("top", "bottom"), "client_mode": ("single", "separate"), "zpa.scope": ("scim", "saml")}
 

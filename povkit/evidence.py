@@ -22,11 +22,12 @@ PASS, FAIL_, INCOMPLETE = "pass", "fail", "incomplete"
 def selected_criteria(pov, ids=None):
     """The criteria of the POV's products: all of them, or the ones agreed with the customer
     (`pov-kit set criteria ...`), or the ids asked for."""
-    out = [c for p in products.selected(pov.products) for c in p.criteria()]
+    from . import usecases
+    out = [c for p in products.selected(pov.products) for c in p.criteria()] + usecases.criteria(pov)
     if ids:
         return [c for c in out if c["id"] in ids]
     chosen = set(pov.cfg.get("criteria") or [])
-    return [c for c in out if not chosen or c["id"] in chosen]
+    return [c for c in out if not chosen or c["id"] in chosen or c.get("usecase")]
 
 
 def import_probe(pov, src: Path):

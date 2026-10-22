@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.4.0
+
+- **Use cases from a prompt** (console: Use cases tab; CLI: `pov-kit usecase ask|list|show|accept|directions|discard`).
+  Claude proposes changes, directions and a test; the kit validates every change against the tenant (allowed kinds
+  and fields only, tenant categories, engines and file types, pilot-group scope, kit naming) and turns anything it
+  won't build into directions with the reason. Accepted use cases join the change list, so the customer approves
+  again before Apply. Each use case gets its own success criterion and probe tests.
+- Claude is reached only through an AI Guard proxy (the demo kit's Anthropic app key, or `pov-kit ai connect`), so
+  every request and reply is scanned by AI Guard. A blocked request says so.
+- Nothing goes to Claude until the customer's agreement to share the discovery snapshot is recorded
+  (`pov-kit ai consent --by`, or the Use cases tab). Model: `claude-sonnet-5-5` by default (`set ai.model`).
+
 ## 0.3.0
 
 - **Browser console** (`pov-kit gui`) with the demo kit's look and its setup wizard pattern: start a POV, connect,

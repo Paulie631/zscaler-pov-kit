@@ -314,6 +314,11 @@ class ZIA(Product):
         for r in tpl["cloud_app_control"]:
             apps, actions, why = pick_actions(t, r["rule_type"], r["applications"], r["actions"])
             snap["cac"][r["name"]] = {"apps": apps, "actions": actions, "why": why}
+        from .. import usecases   # accepted use cases' Cloud App Control actions are checked the same way
+        snap["uc_cac"] = {}
+        for key, ch in usecases.cac_wanted(pov):
+            apps, actions, why = pick_actions(t, ch["rule_type"], ch["applications"], [[a] for a in ch["actions"]])
+            snap["uc_cac"][key] = {"apps": apps, "actions": actions, "why": why}
 
         planned = self._names(pov)
         snap["customer_names"], lookalikes, taken = [], [], []
@@ -480,6 +485,11 @@ class ZIA(Product):
                                      enable_full_logging=True))
         for r in tpl["dns"]:
             rule("dns", r, dict(action=r["action"], res_categories=r["res_categories"]))
+
+        from .. import usecases   # accepted use cases join the change list as ordinary, approved items
+        uc_items, uc_notes = usecases.zia_items(pov, snap, scope, affects, placement, snap.get("uc_cac") or {})
+        out += uc_items
+        notes += uc_notes
 
         for ca in tpl["customer_actions"]:
             out.append(item("zia", "customer_action", ca["key"], ca["name"], action="customer_action",

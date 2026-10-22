@@ -4,8 +4,8 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.3.0**: every product module, the identity step
-and the browser console are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.4.0**: every product module, the identity step,
+the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
 ## What it will and won't do in a customer tenant
@@ -86,6 +86,25 @@ pilot_emails jane@acme.com,raj@acme.com` (for ZDX and device checks).
 ```
 
 `./pov-kit diagnostics` writes a zip for the kit owner: no secrets, no customer object names.
+
+## Use cases from a prompt
+
+In the console's **Use cases** tab (or `pov-kit usecase ask "..."`), describe what the customer wants to see, for
+example "marketing can use ChatGPT but can't upload files to it". Claude, reached through your AI Guard proxy, reads
+the tenant snapshot and proposes:
+
+- **changes the kit can build**: ZIA URL filtering (categories or a list of sites), SSL inspection, Cloud App Control,
+  file type control, DLP and DNS control rules. The kit checks every value against the tenant, scopes each rule to the
+  pilot group and names it; Claude can't widen scope or touch the customer's objects. **Add to the change list** puts
+  them in the plan, so the customer approves again before Apply builds them.
+- **directions for a person**, for everything else (other products, tenant-wide settings) and for any change that
+  failed the kit's checks, with the reason.
+- **a test**: a success criterion (UC-01, UC-02...) with probe tests or an attestation, proved in the report like the
+  catalog's.
+
+Before the first use, record the customer's agreement: Claude reads the full discovery snapshot, which travels through
+your AI Guard tenant to Anthropic. The proxy key is your AI Guard demo kit's Anthropic app key if it's on this
+computer, or one you save with `pov-kit ai connect`; your Anthropic key stays in your own AI Guard tenant.
 
 ## Products and criteria
 

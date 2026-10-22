@@ -40,6 +40,12 @@ one Windows pilot device. Each item settles an open question in the design or br
 - [ ] **Console.** The wizard runs end to end on Windows and Mac; Copy report and downloads work in Chrome, Edge and
   Safari.
 
+- [ ] **Use cases.** Through a real AI Guard proxy key: five prompts from the console's examples each return valid
+  JSON; the kit builds what passes its checks; the accepted rules work on a pilot device; a prompt that asks for a
+  tenant-wide change comes back as directions. With the AI Guard policy blocking, the console says AI Guard blocked it.
+- [ ] **Model and size.** `claude-sonnet-5-5` answers within the proxy's timeout for a large tenant snapshot (the kit
+  cuts it at 150,000 characters).
+
 ## Safety rules, broken on purpose
 
 - [ ] Edit a POV rule's description to remove `zpov:<id>`: teardown leaves it and says why.
@@ -49,6 +55,8 @@ one Windows pilot device. Each item settles an open question in the design or br
 - [ ] Disable a POV rule and point it at another group: `status` reports both; `status --fix` restores both.
 - [ ] Revoke the apply client's write access: `apply` stops at the label with nothing else created.
 - [ ] Diagnostics zip: search it for the pilot group's name, a customer rule name and a user's email. None appear.
+- [ ] Ask a use case to "apply this rule to everyone" or "edit the customer's existing rule": the kit's change stays
+  pilot-only, and the rest comes back as directions.
 
 ## End to end
 

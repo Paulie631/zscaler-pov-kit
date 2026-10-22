@@ -143,6 +143,16 @@ def api(method, path, body, q):
             f = p.path("activity.jsonl")
             lines = f.read_text(encoding="utf-8").splitlines()[-500:] if f.exists() else []
             return 200, {"lines": [json.loads(x) for x in lines if x.strip()][::-1]}
+        if path == "/api/usecases":
+            from . import ai, usecases
+            p = current()
+            key, where = ai.proxy_key()
+            return 200, {"usecases": [{k: v for k, v in u.items() if k != "raw"} for u in usecases.load(p)][::-1],
+                         "consent": ai.consent(p), "key": bool(key), "key_source": where,
+                         "model": (p.cfg.get("ai") or {}).get("model") or ai.DEFAULT_MODEL}
+        if path == "/api/usecase/directions":
+            from . import usecases
+            return 200, {"text": usecases.directions_md(usecases.get(current(), q.get("id")))}
         if path == "/api/users":
             p = current()
             plan = {i["key"]: i for i in (ChangeList(p.dir).plan()["items"] if ChangeList(p.dir).plan_file.exists() else [])}
@@ -265,6 +275,37 @@ def api(method, path, body, q):
         if what == "test-user" and str(body.get("n", "")).isdigit():
             return 200, {"value": secrets.get(p.id, f"zia-test-user-{int(body['n'])}")}
         return 400, {"error": "unknown secret"}
+    if path == "/api/ai/consent":
+        from . import ai
+        ai.record_consent(current(), body.get("by"))
+        return 200, {"ok": True}
+    if path == "/api/ai/key":
+        from . import ai
+        k = (body.get("key") or "").strip()
+        if len(k) < 16:
+            raise KitError("Paste the AI Guard app's proxy key.")
+        secrets.put(*ai.OWN_KEY, k)
+        return 200, {"ok": True}
+    if path == "/api/usecase/propose":
+        from . import usecases
+        p = current()
+        text = (body.get("prompt") or "").strip()
+        if not text:
+            raise KitError("Describe the use case first.")
+
+        def work(log):
+            log("info", "Reading the tenant (read-only) for a fresh snapshot")
+            snaps, _ = lifecycle.discover(p, tf)
+            log("info", "Asking Claude through AI Guard")
+            uc = usecases.propose(p, snaps, text, by=body.get("by") or "SE")
+            log("ok", f"{uc['id']}: {len(uc['spec']['changes'])} changes the kit can build, "
+                      f"{len(uc['spec']['directions'])} directions")
+            return {k: v for k, v in uc.items() if k != "raw"}
+        return 200, {"job": start_job("usecase", work)}
+    if path == "/api/usecase/status":
+        from . import usecases
+        uc = usecases.set_status(current(), body.get("id"), body.get("status"))
+        return 200, {"usecase": {k: v for k, v in uc.items() if k != "raw"}}
     if path == "/api/handover":
         p = current()
         how = body.get("how")

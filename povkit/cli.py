@@ -312,6 +312,68 @@ def c_gui(a):
     gui.serve(port=a.port, open_browser=not a.no_browser)
 
 
+def c_ai(a):
+    from . import ai
+    p = _pov(a)
+    if a.what == "connect":
+        k = getpass.getpass("AI Guard app proxy key (hidden): ").strip()
+        if len(k) < 16:
+            raise KitError("Paste the AI Guard app's proxy key (PROXY mode, with an Anthropic provider key behind it).")
+        secrets.put(*ai.OWN_KEY, k)
+        print("Saved to the keychain. Every use-case request now goes to Claude through that AI Guard app.")
+    elif a.what == "consent":
+        if not a.by:
+            raise KitError("Say who agreed: `pov-kit ai consent --by \"Name, title\"`.")
+        ai.record_consent(p, a.by)
+        print(f"Recorded: {a.by} agreed to share {p.cfg['customer']}'s discovery snapshot with Claude through AI Guard.")
+    else:
+        key, where = ai.proxy_key()
+        c = ai.consent(p)
+        print(f"AI Guard proxy key: {where if key else 'none. ' + where}")
+        print(f"Customer agreement: {c['by'] + ' on ' + c['at'][:10] if c else 'not yet'}")
+
+
+def c_usecase(a):
+    from . import usecases
+    p = _pov(a)
+    if a.action == "ask":
+        text = " ".join(a.rest).strip()
+        snaps, _ = lifecycle.discover(p, tenant_for)
+        uc = usecases.propose(p, snaps, text)
+        show_usecase(uc)
+        print(f"\nNext: `pov-kit usecase accept {uc['id']}` (adds it to the change list; the customer approves again), "
+              f"`usecase directions {uc['id']}` or `usecase discard {uc['id']}`.")
+    elif a.action == "list":
+        for u in usecases.load(p):
+            print(f"  {u['id']}  {u['status']:10} {u['prompt'][:80]}")
+    elif a.action == "show":
+        uc = usecases.get(p, a.rest[0])
+        show_usecase(uc)
+        if uc["status"] == "directions":
+            print("\n" + usecases.directions_md(uc))
+    elif a.action in ("accept", "directions", "discard", "proposed"):
+        uc = usecases.set_status(p, a.rest[0], "accepted" if a.action == "accept" else a.action)
+        if uc["status"] == "accepted":
+            print(f"{uc['id']} joins the change list. Run `pov-kit plan`, get it approved again, then `pov-kit apply`.")
+        else:
+            print(f"{uc['id']}: {uc['status']}")
+
+
+def show_usecase(uc):
+    s = uc["spec"]
+    print(f"{uc['id']} ({uc['status']}): {s['summary']}")
+    if s["already_covered_by"]:
+        print(f"  already proved by: {', '.join(s['already_covered_by'])}")
+    for ch in s["changes"]:
+        print(f"  change: {ch['kind']} '{ch['name']}' {json.dumps({k: v for k, v in ch.items() if k not in ('kind', 'name', 'why')})}")
+    for d in s["dropped"]:
+        print(f"  not built: {d['why']}")
+    for d in s["directions"]:
+        print(f"  directions ({d['product']}{': ' + d['console_page'] if d['console_page'] else ''}): " + " / ".join(d["steps"]))
+    t = s["test"]
+    print(f"  test: {t['title']}: {len(t['probe'])} probe tests" + (f"; check: {t['attest']}" if t["attest"] else ""))
+
+
 def c_version(a):
     print(VERSION)
 
@@ -386,6 +448,12 @@ def parser():
     s = cmd("update", c_update, "self-update from GitHub releases")
     s.add_argument("--check", action="store_true")
     s.add_argument("--rollback", action="store_true")
+    s = cmd("ai", c_ai, "ai connect|consent|status: Claude through AI Guard for use cases")
+    s.add_argument("what", choices=["connect", "consent", "status"])
+    s.add_argument("--by")
+    s = cmd("usecase", c_usecase, "usecase ask \"...\" | list | show ID | accept ID | directions ID | discard ID")
+    s.add_argument("action", choices=["ask", "list", "show", "accept", "directions", "discard", "proposed"])
+    s.add_argument("rest", nargs="*")
     s = cmd("gui", c_gui, "the POV console in your browser (setup wizard, status, criteria, handover, logs)")
     s.add_argument("--port", type=int, default=8790)
     s.add_argument("--no-browser", action="store_true")

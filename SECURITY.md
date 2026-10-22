@@ -23,5 +23,9 @@
   API call; the change list, report and diagnostics pages need the token too. Secrets go to the keychain and only come
   back to the page when you ask for one by name (a test user's password, the ZPA provisioning key).
 - The identity step only reads users, groups and entitlements; it never changes them.
+- **Use cases send the customer's discovery snapshot to Claude** (their policy, group and user names; never secrets)
+  through the SE's AI Guard tenant to Anthropic, and only after the customer's agreement is recorded in the POV.
+  Proposals and Claude's raw answers stay in the POV folder (`usecases.json`). Claude never calls the tenant: what
+  it proposes is validated by the kit and built only through the approved change list.
 - Updates are verified against the SHA-256 published with each release before anything is replaced.
 - The kit's API clients can't delete themselves: at handover, remind the customer to delete both in the console.

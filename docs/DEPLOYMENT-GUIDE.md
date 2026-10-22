@@ -1,6 +1,6 @@
 # Zscaler POV Kit: SE deployment guide
 
-Version 0.3.0. This guide ships with the kit and changes in the same branch as the behavior it describes.
+Version 0.4.0. This guide ships with the kit and changes in the same branch as the behavior it describes.
 
 Run `pov-kit gui` and follow the console's Setup tab; every step below has a matching wizard step. The commands are
 the same steps on the command line.
@@ -39,6 +39,11 @@ the same steps on the command line.
 8. Work through the customer actions with the admin, then `pov-kit status`.
 
 ## During the POV
+
+- **New use cases.** When the customer asks "can you show...?", type it in the console's Use cases tab. Before the
+  first one, record their agreement to share the discovery snapshot with Claude (through your AI Guard tenant). Review
+  the proposal with them; **Add to the change list**, then make the change list again, get it approved and Apply.
+  Directions go to whoever owns that setting.
 
 - `pov-kit probe-pack`, then on each pilot device, signed in to Client Connector as a pilot user:
   `pov-kit probe --pack <file>`. Import each results file with `pov-kit import-probe`.
