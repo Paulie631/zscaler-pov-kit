@@ -1,0 +1,31 @@
+{
+  "about": "The Internet Security POV policy. Every rule gets the POV prefix, the POV rule label and the zpov:<pov-id> stamp, and applies only to the customer's pilot group. Categories, DLP engines and Cloud App Control actions are checked against the tenant during discovery; anything the tenant lacks is left out with a note in the change list. Names stay within ZIA's 31 characters including the prefix. Starting values come from the AI Guard SE Demo Kit's ZIA template (checked against a live tenant, Oct 2026).",
+  "label": {"name": "POV rules", "criteria": []},
+  "url_filtering": [
+    {"name": "Block gambling", "action": "BLOCK", "url_categories": ["GAMBLING"], "criteria": ["IS-URL-01"]},
+    {"name": "Block anonymizers", "action": "BLOCK", "url_categories": ["ANONYMIZER"], "criteria": ["IS-URL-01"]},
+    {"name": "Caution social", "action": "CAUTION", "url_categories": ["SOCIAL_NETWORKING"], "criteria": ["IS-URL-02"]}
+  ],
+  "ssl_inspection": [
+    {"name": "Bypass finance and health", "action": "DO_NOT_DECRYPT", "url_categories": ["FINANCE", "HEALTH"],
+     "criteria": ["IS-SSL-02"], "why": "Listed first so it sits above the inspect rule."},
+    {"name": "Inspect pilot group", "action": "DECRYPT", "criteria": ["IS-SSL-01", "IS-THR-01", "IS-DLP-01", "IS-CAC-01", "AI-GEN-02"],
+     "why": "EICAR over HTTPS, DLP and Cloud App Control only work on decrypted traffic."}
+  ],
+  "cloud_app_control": [
+    {"name": "Block file uploads", "rule_type": "FILE_SHARE", "applications": ["WETRANSFER", "MEGA", "SENDSPACE", "FILE_IO"],
+     "actions": [["BLOCK_FILE_SHARE_UPLOAD"]], "criteria": ["IS-CAC-01"]},
+    {"name": "Block risky GenAI", "rule_type": "AI_ML", "applications": ["DEEPSEEK", "CHARACTER_AI", "POE_AI"],
+     "actions": [["BLOCK_AI_ML_WEB_USE", "BLOCK_AI_ML_ACCESS"]], "criteria": ["AI-GEN-01"]},
+    {"name": "Allow GenAI", "rule_type": "AI_ML", "applications": ["CHATGPT_AI", "GOOGLE_GEMINI", "MICROSOFT_COPILOT", "CLAUDE_AI"],
+     "actions": [["ALLOW_AI_ML_WEB_USE", "ALLOW_AI_ML_ACCESS"]], "criteria": ["AI-GEN-01"]}
+  ],
+  "dlp": [
+    {"name": "Block card numbers", "action": "BLOCK", "engines": ["5 or more Credit Card Numbers"], "criteria": ["IS-DLP-01", "AI-GEN-02"]}
+  ],
+  "customer_actions": [
+    {"key": "zia.ca.malware", "name": "Malware Protection blocks viruses and unwanted apps",
+     "why": "Malware and Advanced Threat Protection are tenant-wide policies the customer owns, so the kit never changes them.",
+     "console": "zia.malware_protection", "criteria": ["IS-THR-01", "IS-THR-02"]}
+  ]
+}

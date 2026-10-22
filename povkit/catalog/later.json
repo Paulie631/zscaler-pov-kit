@@ -1,0 +1,19 @@
+{
+  "about": "Criteria for modules after v1. Each moves to its own catalog file when its module is built.",
+  "criteria": [
+    {"id": "AI-AIG-01", "product": "aiguard", "phase": "v2", "title": "Prompt injection is detected, then blocked",
+     "statement": "AI Guard flags prompt-injection attempts, and blocks them once the policy enforces.", "proofs": ["api"]},
+    {"id": "AI-AIG-02", "product": "aiguard", "phase": "v2", "title": "Secrets and regulated PII are caught",
+     "statement": "Secrets and regulated PII in prompts and replies are detected, or blocked when enforced.", "proofs": ["api"]},
+    {"id": "PA-APP-01", "product": "zpa", "phase": "v2", "title": "Pilot users reach the POV app",
+     "statement": "Pilot users open the POV application through the App Connector, with no VPN.", "proofs": ["probe", "api"]},
+    {"id": "PA-APP-02", "product": "zpa", "phase": "v2", "title": "Everyone else is denied",
+     "statement": "Users outside the pilot group can't reach the POV application.", "proofs": ["probe", "api"]},
+    {"id": "PA-CON-01", "product": "zpa", "phase": "v2", "title": "Connector group is healthy",
+     "statement": "The POV connector group has two healthy connectors for failover.", "proofs": ["api"]},
+    {"id": "DX-SCR-01", "product": "zdx", "phase": "v3", "title": "Pilot devices report a ZDX score",
+     "statement": "Pilot devices report a ZDX score and the POV probes run.", "proofs": ["api"]},
+    {"id": "CS-SAS-01", "product": "casb", "phase": "v3", "title": "SaaS posture findings appear",
+     "statement": "A connected SaaS tenant shows posture findings.", "proofs": ["api", "attested"]}
+  ]
+}
