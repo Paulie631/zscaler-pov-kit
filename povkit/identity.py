@@ -121,7 +121,8 @@ def discover(t, pov, snaps):
             names = zid_services(t, g(zu, "id")) if zu else None
             need = []
             if zu is None:
-                need.append("not in ZIdentity")
+                made = c.get("pilot") == "create" and c.get("create_users") == "yes"
+                need.append("new: the POV creates them" if made else "not in ZIdentity")
             elif names is not None:
                 if {"zia", "zcc", "casb"} & set(pov.products) and not any(ZIA_SERVICE.search(n) for n in names):
                     need.append("Internet & SaaS")
@@ -132,17 +133,30 @@ def discover(t, pov, snaps):
                 unentitled.append(f"{e} ({', '.join(need)})")
         snap["users"].append(u)
 
-    if "zia" in pov.products:
+    made_here = str(grp.get("id") or "").startswith("{ref:")   # the POV makes the group (and maybe the users)
+    if "zia" in pov.products and made_here and c.get("pilot") == "create":
+        checks.append(check("id-zia-users", "Pilot users are in ZIA", INFO if missing else OK,
+                            f"not yet: {', '.join(missing)}" if missing else f"all {len(emails)}",
+                            "ZIdentity provisions them to ZIA with the POV's group, once it's entitled."
+                            if missing else ""))
+    elif "zia" in pov.products:
         checks.append(check("id-zia-users", "Pilot users are in ZIA", WARN if missing else OK,
                             f"missing: {', '.join(missing)}" if missing else f"all {len(emails)}",
                             "With SAML or SCIM, users appear in ZIA after provisioning or their first sign-in. "
                             "Have each one sign in to Client Connector once." if missing else ""))
-        if grp.get("name"):
+        if grp.get("name") and not made_here:
             checks.append(check("id-zia-group", f"Pilot users are in '{grp['name']}'", WARN if outside else OK,
                                 f"not in the group: {', '.join(outside)}" if outside else "all found ones are",
                                 "Add them to the group in the customer's directory; the POV rules only apply to "
                                 "members." if outside else ""))
-    if zid:
+    from .products.zid import enabled as zid_pilot
+    if zid and zid_pilot(pov.cfg):   # the group is the POV's own: its entitlement is a customer action after apply
+        checks.append(check("id-entitlements", "ZIdentity entitlements", INFO if unentitled else OK,
+                            "; ".join(unentitled) if unentitled else "every pilot user is entitled",
+                            "After apply creates the POV's pilot group, give it its entitlements in ZIdentity (a "
+                            "customer action in the change list)." if unentitled else "",
+                            console="zid.entitlements"))
+    elif zid:
         checks.append(check("id-entitlements", "ZIdentity entitlements", FAIL if unentitled else OK,
                             "; ".join(unentitled) if unentitled else "every pilot user is entitled",
                             "ZIdentity's API can read entitlements but not grant them. In ZIdentity, assign the "

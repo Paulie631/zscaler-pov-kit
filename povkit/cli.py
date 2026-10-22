@@ -37,9 +37,9 @@ def _pov(args):
 # ---------------------------------------------------------------- commands
 def c_new(a):
     names = [x.strip() for x in a.products.split(",") if x.strip()]
-    bad = [x for x in names if x not in products.REGISTRY]
+    bad = [x for x in names if x not in products.CHOOSABLE]
     if bad:
-        raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.ORDER)}.")
+        raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.CHOOSABLE)}.")
     from .remind import parse_date
     p = povs.new(a.customer, names, a.prefix, parse_date(a.ends) if a.ends else None)
     if a.lab:
@@ -269,6 +269,33 @@ def c_report(a):
     out = p.path("report.html")
     out.write_text(render_report(p, rows, ChangeList(p.dir).approval()), encoding="utf-8")
     print(f"Report: {out} (print to PDF from the browser).")
+
+
+def c_delete(a):
+    from . import delete_pov
+    p = povs.Pov(a.id) if a.id else _pov(a)
+    v = delete_pov.verify(p, tenant_for)
+    print(f"{p.cfg['customer']} ({p.id}, {p.cfg.get('state') or 'new'})")
+    for b in v["blockers"]:
+        print(f"  ✗ {b}")
+    for n in v["still_there"]:
+        print(f"      still there: {n}")
+    for n in v["notes"]:
+        print(f"  · {n}")
+    if not v["ok"]:
+        print("Not deleted.")
+        return 1
+    print("  ✓ Nothing this POV created is left in the customer's tenant.")
+    print("Deleting removes, from this computer:")
+    for r in v["removes"]:
+        print(f"  - {r}")
+    confirm = a.confirm if a.confirm is not None else input(f"Type the POV's ID ({p.id}) to delete it: ")
+    try:
+        r = delete_pov.delete(p, confirm, tenant_for)
+    except KitError as e:
+        print(str(e))
+        return 1
+    print(f"Deleted POV {r['deleted']} ({r['secrets']} secrets removed from the keychain).")
 
 
 def c_handover(a):
@@ -644,6 +671,9 @@ def parser():
     s.add_argument("how", choices=["teardown", "terraform"])
     s.add_argument("--yes", action="store_true", help="don't ask (adopted objects are kept unless --include-adopted)")
     s.add_argument("--include-adopted", action="store_true")
+    s = cmd("delete", c_delete, "delete a POV from this computer, after checking nothing it made is left in the tenant")
+    s.add_argument("id", nargs="?", help="the POV's ID (default: the current POV)")
+    s.add_argument("--confirm", help="the POV's ID again, to skip the prompt")
     s = cmd("diagnostics", c_diagnostics, "a zip for the kit owner (no secrets, no customer data)")
     s.add_argument("--out")
     s = cmd("update", c_update, "install the latest release from GitHub (--check: only check, --rollback: go back one)")

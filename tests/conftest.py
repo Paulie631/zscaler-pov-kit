@@ -60,6 +60,8 @@ class FakeTenant:
         self.idps = [{"id": "idp1", "name": "Okta"}]
         self.departments = [{"id": 81, "name": "Sales"}]
         self.zid_users = [{"id": "z1", "loginName": "jane@acme.com"}, {"id": "z2", "loginName": "raj@acme.com"}]
+        self.zid_groups = []
+        self.zid_provisions = True    # ZIdentity provisions its groups to ZIA (once entitled, in a real tenant)
         self.entitlements = {"z1": ["Internet & SaaS", "Private Access"], "z2": ["Internet & SaaS"]}
         self.users = [{"id": 91, "name": "Jane Roe", "email": "jane@acme.com", "groups": [{"id": 77}]},
                       {"id": 92, "name": "Raj Patel", "email": "raj@acme.com", "groups": [{"id": 78}]}]
@@ -85,8 +87,48 @@ class FakeTenant:
         if resource == "zid.users":
             if not self.zidentity:
                 raise KitError("401 not ZIdentity")
+            if method == "add_user":
+                if any(u["loginName"] == kw["login_name"] for u in self.zid_users):
+                    raise KitError("409 user exists")
+                o = {"id": f"zu{self._id()}", "loginName": kw["login_name"], "displayName": kw.get("display_name")}
+                self.zid_users.append(o)
+                return copy.deepcopy(o)
+            if method in ("get_user", "delete_user"):
+                hit = next((u for u in self.zid_users if u["id"] == str(a[0])), None)
+                if hit is None:
+                    raise KitError("404 not found")
+                if method == "delete_user":
+                    self.zid_users.remove(hit)
+                    for g in self.zid_groups:
+                        g["members"] = [m for m in g["members"] if m != hit["id"]]
+                    return {}
+                return copy.deepcopy(hit)
             ln = str((kw.get("query_params") or {}).get("login_name", "")).lower()
             return [u for u in self.zid_users if not ln or u["loginName"] == ln]
+        if resource == "zid.groups":
+            if not self.zidentity:
+                raise KitError("401 not ZIdentity")
+            if method == "list_groups":
+                n = (kw.get("query_params") or {}).get("name")
+                return copy.deepcopy([g for g in self.zid_groups if not n or g["name"] == n])
+            if method == "add_group":
+                o = dict(kw, id=f"zg{self._id()}", members=[])
+                self.zid_groups.append(o)
+                return copy.deepcopy(o)
+            hit = next((g for g in self.zid_groups if g["id"] == str(a[0])), None)
+            if hit is None:
+                raise KitError("404 not found")
+            if method == "get_group":
+                return copy.deepcopy(hit)
+            if method == "list_group_users_details":
+                return [{"id": m} for m in hit["members"]]
+            if method == "add_users_to_group":
+                hit["members"] += [str(x) for x in kw["id"] if str(x) not in hit["members"]]
+                return {}
+            if method == "delete_group":
+                self.zid_groups.remove(hit)
+                self.groups = [g for g in self.groups if g.get("_zid") != hit["id"]]   # ZIdentity deprovisions it
+                return {}
         if resource == "zid.user_entitlement":
             return {"services": [{"serviceName": n} for n in self.entitlements.get(str(a[0]), [])]}
         if resource == "zpa.saml_attributes":
@@ -162,6 +204,10 @@ class FakeTenant:
     def _users(self, method, a, kw):
         kind = next(k for k in ("department", "group", "user") if k in method)
         rows = {"department": self.departments, "group": self.groups, "user": self.users}[kind]
+        if kind == "group" and self.zid_provisions:
+            for zg in self.zid_groups:
+                if not any(g.get("_zid") == zg["id"] for g in self.groups):
+                    self.groups.append({"id": self._id(), "name": zg["name"], "_zid": zg["id"]})
         if method.startswith("list"):
             q = str((kw.get("query_params") or {}).get("search", "")).lower()
             return copy.deepcopy([r for r in rows if q in r["name"].lower() or q in str(r.get("email", "")).lower()])

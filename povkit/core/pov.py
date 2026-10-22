@@ -36,7 +36,10 @@ class Pov:
 
     @property
     def products(self):
-        return self.cfg.get("products", [])
+        """The chosen products, plus ZIdentity first when the POV makes its own pilot group there."""
+        from ..products.zid import enabled
+        chosen = list(self.cfg.get("products", []))
+        return (["zid"] + chosen) if enabled(self.cfg) and "zid" not in chosen else chosen
 
     def save(self):
         self.file.write_text(json.dumps(self.cfg, indent=2), encoding="utf-8")

@@ -73,6 +73,16 @@
       "page": "AI Guard policies",
       "path": null,
       "verified": null
+    },
+    "zid.users": {
+      "page": "ZIdentity users (set or reset a user's password)",
+      "path": null,
+      "verified": null
+    },
+    "zid.groups": {
+      "page": "ZIdentity user groups",
+      "path": null,
+      "verified": null
     }
   }
 }

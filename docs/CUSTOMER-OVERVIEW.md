@@ -31,8 +31,11 @@ end it removes everything it created, or hands it to you as Terraform so you can
 - **It never applies to everyone.** POV rules apply to your pilot group (or a SAML attribute you choose) only.
 - **It never activates other administrators' work.** If ZIA has pending changes when it needs to activate, it stops
   until your admin activates or discards them.
-- **It never needs administration, role, user-management or authentication rights,** except an optional set of test
-  users when your users live in ZIA itself and you ask for them.
+- **It never needs administration, role, user-management or authentication rights,** except, only if you ask for
+  it, the POV's own pilot group in ZIdentity (`ZPOV - pilot users`, with the users you name added to it and, in a lab,
+  test users created), or test users when your users live in ZIA itself. Both are in the change list you approve and
+  removed at the end; your existing users are only added to the POV's group, never changed. Entitlements stay yours to
+  grant.
 - **It never writes before your approval,** and only through the approved change list.
 
 ## Access you grant

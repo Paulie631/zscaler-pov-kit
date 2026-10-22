@@ -71,7 +71,7 @@ def state():
     from . import backup
     out = {"version": VERSION, "povs": [], "current": None, "backup_folder": str(backup.folder() or "") or None,
            "products": [{"name": n, "title": products.get(n).title, "phase": products.get(n).phase}
-                        for n in products.ORDER]}
+                        for n in products.CHOOSABLE]}
     for pid in povs.all_povs():
         p = povs.Pov(pid)
         out["povs"].append({"id": pid, "customer": p.cfg["customer"], "state": p.cfg.get("state")})
@@ -87,7 +87,8 @@ def current():
 # one cheap read per product, to prove the client signs in and can see that product
 PING = {"zia": ("activate", "status"), "zcc": ("zcc.forwarding_profile", "list_by_company"),
         "zpa": ("zpa.idp", "list_idps"), "aiguard": ("aiguard.policies", "list_policies"),
-        "zdx": ("zdx.apps", "list_apps"), "casb": ("saas_security_api", "list_casb_tenant_lite")}
+        "zdx": ("zdx.apps", "list_apps"), "casb": ("saas_security_api", "list_casb_tenant_lite"),
+        "zid": ("zid.users", "list_users")}
 
 
 def sign_in_check(p, which):
@@ -95,6 +96,29 @@ def sign_in_check(p, which):
     t = ReadOnlyTenant(tf(p, which))
     first = next(n for n in products.ORDER if n in p.products)
     t.call(*PING[first])
+
+
+def pilot_options(p):
+    """What the Pilot users step offers to pick from: ZIA's groups and ZIdentity's users (read-only, discovery
+    client). Shown on this laptop only; nothing is saved."""
+    from .core.guard import ReadOnlyTenant
+    from .tenant import g, items
+    t = ReadOnlyTenant(tf(p, "discovery"))
+    out = {"zia_groups": [], "zid_users": [], "zidentity": False, "errors": []}
+    try:
+        out["zia_groups"] = sorted({str(g(x, "name")) for x in items(t.call("user_management", "list_groups",
+                                                                               query_params={"page_size": 1000}))
+                                    if g(x, "name") and not str(g(x, "name")).startswith(p.prefix)})
+    except KitError as e:
+        out["errors"].append(f"ZIA groups: {str(e)[:120]}")
+    try:
+        rows = items(t.call("zid.users", "list_users", query_params={"page_size": 500}))
+        out["zidentity"] = True
+        out["zid_users"] = sorted(({"login": str(g(u, "login_name") or ""), "name": str(g(u, "display_name") or "")}
+                                   for u in rows if g(u, "login_name")), key=lambda u: u["login"])
+    except KitError:
+        pass   # no ZIdentity (or no access): the step falls back to typing emails
+    return out
 
 
 def diagnostics_zip(q, token):
@@ -180,7 +204,7 @@ def api(method, path, body, q):
 
     # ---- POST
     if path == "/api/pov/new":
-        names = [x for x in body.get("products") or [] if x in products.REGISTRY]
+        names = [x for x in body.get("products") or [] if x in products.CHOOSABLE]
         if not (body.get("customer") or "").strip():
             raise KitError("Enter the customer's name.")
         if not names:
@@ -193,6 +217,14 @@ def api(method, path, body, q):
         povs.Pov(body["id"])
         povs.use(body["id"])
         return 200, {"ok": True}
+    if path == "/api/pov/delete/check":
+        from . import delete_pov
+        return 200, delete_pov.verify(povs.Pov(body["id"]), tf)
+    if path == "/api/pov/delete":
+        from . import delete_pov
+        return 200, delete_pov.delete(povs.Pov(body["id"]), body.get("confirm"), tf)
+    if path == "/api/pilot/options":
+        return 200, pilot_options(current())
     if path == "/api/settings":
         p = current()
         for k, v in (body.get("values") or {}).items():

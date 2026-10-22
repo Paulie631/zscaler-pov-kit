@@ -38,5 +38,7 @@ def render(pov) -> str:
         out += [f"| {area} | {access} |" for area, access in p.role_scopes(pov).get("discovery", [])]
     out.append("")
     out += ["Scope names above follow the design; confirm them against your console's role editor.",
-            "The kit never needs administration, role, user-management or authentication rights."]
+            "The kit never needs administration, role or authentication rights"
+            + (", and its only user-management rights are for the POV's own ZIdentity pilot group."
+               if "zid" in pov.products else ", or user-management rights.")]
     return "\n".join(out) + "\n"

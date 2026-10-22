@@ -4,10 +4,14 @@ from .casb import CASB
 from .zcc import ZCC
 from .zdx import ZDX
 from .zia import ZIA
+from .zid import ZID
 from .zpa import ZPA
 
-REGISTRY = {p.name: p for p in (ZIA(), ZCC(), ZPA(), AIGuard(), ZDX(), CASB())}
-ORDER = ["zia", "zcc", "zpa", "aiguard", "zdx", "casb"]   # zia first: its pilot group scopes zcc and casb
+REGISTRY = {p.name: p for p in (ZID(), ZIA(), ZCC(), ZPA(), AIGuard(), ZDX(), CASB())}
+# zid first: the POV's own pilot group (when it makes one) scopes everything; then zia, whose pilot group scopes zcc
+# and casb. zid isn't chosen like the others: the POV adds it when the Pilot users step asks for a new group.
+ORDER = ["zid", "zia", "zcc", "zpa", "aiguard", "zdx", "casb"]
+CHOOSABLE = [n for n in ORDER if n != "zid"]
 
 
 def get(name):

@@ -7,10 +7,10 @@ from .core import KitError
 SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_emails", "placement", "criteria", "products",
             "zpa.app_name", "zpa.domains", "zpa.tcp_ports", "zpa.group", "zpa.location", "zpa.latitude", "zpa.longitude",
             "zpa.scope", "zpa.saml_attribute", "zpa.saml_value", "zdx.app", "casb.tenant", "aiguard.competitor",
-            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain", "ai.model", "ai.share", "ends", "lab",
+            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain", "identity.pilot", "identity.create_users", "ai.model", "ai.share", "ends", "lab",
             "customer_id", "mcp.version"}
 LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports", "identity.bypass_domains"}
-CHOICES = {"lab": ("yes", "no"), "ai.share": ("full", "names_only"),
+CHOICES = {"lab": ("yes", "no"), "identity.pilot": ("existing", "create"), "identity.create_users": ("yes", "no"), "ai.share": ("full", "names_only"),
            "placement": ("top", "bottom"), "client_mode": ("single", "separate"), "zpa.scope": ("scim", "saml")}
 
 
@@ -32,9 +32,9 @@ def parse(key, raw):
             raise KitError("identity.test_users is a number from 0 to 10.")
         v = int(v)
     if key == "products":
-        bad = [x for x in v if x not in products.REGISTRY]
+        bad = [x for x in v if x not in products.CHOOSABLE]
         if bad:
-            raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.ORDER)}.")
+            raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.CHOOSABLE)}.")
         if not v:
             raise KitError("Choose at least one product.")
     if key == "ends":

@@ -50,6 +50,7 @@ class LedgerTenant:
         self.approved = {i["key"]: i for i in approved_items}
         # IDs keep their native type ({ref:...} fills ZIA bodies, whose IDs are integers); the ledger stores text
         self.ids = {e["key"]: native(e["id"], e["product"]) for e in ledger.active()}
+        self.ids.update({e["key"]: native(e["id"], e["product"]) for e in ledger.entries if e["state"] == "linked"})
 
     def call(self, resource, method, *a, **kw):
         if not is_read(method):
@@ -93,6 +94,15 @@ class LedgerTenant:
         e = self.ledger.record(key, it["product"], it["kind"], live["id"], it["name"], rule_type=it.get("rule_type"),
                                state="adopted", stamped=False)
         self.ids[key] = native(e["id"], it["product"])
+        return e
+
+    def link(self, key: str, product: str, kind: str, obj_id, name: str):
+        """Record an object another system made for the POV (never changed or deleted by the kit), so its ID can
+        fill {ref:...} placeholders. Only for keys an approved item references."""
+        if not any(f"{{ref:{key}}}" in str(i.get("body")) for i in self.approved.values()):
+            raise GuardError(f"'{key}' isn't referenced by the approved change list. Nothing was linked.")
+        e = self.ledger.record(key, product, kind, obj_id, name, state="linked", stamped=False)
+        self.ids[key] = native(e["id"], product)
         return e
 
     def delete(self, entry: dict, live: dict, resource: str, method: str, *a):

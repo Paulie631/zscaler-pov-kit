@@ -240,6 +240,11 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
   <p class="muted" style="font-size:12px;margin:12px 0 0">Updates come from the kit's GitHub releases and are checked against the release's SHA-256 checksum before installing. Your POVs, secrets and every tenant are untouched, and the previous version is kept so you can roll back.</p>
 </div></div>
 
+<div class="modal" id="delmodal"><div class="panel">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">Delete a POV</h2><button id="delclose">Close</button></div>
+  <div id="delbody" style="margin-top:12px"></div>
+</div></div>
+
 <script>
 const TOKEN="__POV_TOKEN__";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -321,7 +326,7 @@ const W={step:0,checks:null,plan:null,role:null};
 function done(i){const c=S&&S.current;if(!c)return false;
   const clients=Object.values(c.clients);const s=c.settings;
   return [true, clients.length&&clients[0].saved,
-    !!(s.pilot_group||s["identity.test_users"]), W.checks&&!W.checks.some(x=>x.status=="fail"),
+    !!(s.pilot_group||s["identity.test_users"]||s["identity.pilot"]=="create"), W.checks&&!W.checks.some(x=>x.status=="fail"),
     !!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), (c.ledger.owned||0)+(c.ledger.adopted||0)>0, false][i]}
 function firstOpen(){if(!S.current)return 0;for(let i=1;i<7;i++)if(!done(i))return i;return 7}
 function wsteps(){$("#wsteps").innerHTML=STEPS.map((t,i)=>`<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":i+1}</span><span>${esc(t)}</span></li>`).join("");
@@ -337,11 +342,48 @@ const KIND={label:"rule label",url_category:"custom URL category",network_servic
   segment_group:"segment group",app_segment:"application segment",access_rule:"access policy rule",policy:"detection policy",app:"AI app",
   key:"Detection API key",rule:"policy rule",deeptrace:"deep trace",casb_dlp_rule:"CASB DLP rule"};
 
+// Pilot users step: pick the group and users from the tenant (read-only), and show who exists where
+async function pilotPicker(s){
+  const mode=()=>($$("input[name='s_identity.pilot']").find(x=>x.checked)||{}).value||"existing";
+  const emails=()=>$("#s_pilot_emails").value.split(/[\s,;]+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
+  const show=()=>{const m=mode();$("#wexisting")&&($("#wexisting").style.display=m=="create"?"none":"");$("#wcreate")&&($("#wcreate").style.display=m=="create"?"":"none");
+    $$(".wtest").forEach(x=>x.style.display=m=="create"?"none":"");who()};
+  const who=()=>{const o=W.opts;if(!o||!o.zidentity){$("#wwho").textContent="";return}
+    const known=new Set(o.zid_users.map(u=>u.login.toLowerCase())),es=emails(),miss=es.filter(e=>!known.has(e));
+    const make=mode()=="create"&&$("#wnewusers")&&$("#wnewusers").checked;
+    $("#wwho").innerHTML=!es.length?"":miss.length?`<span style="color:var(${make?"--muted":"--bad"})">Not in ZIdentity: ${esc(miss.join(", "))}${make?" (the POV creates them)":""}</span>`:`<span style="color:var(--ok)">✓ All ${es.length} found in ZIdentity</span>`};
+  $$("input[name='s_identity.pilot']").forEach(r=>r.onchange=show);$("#wnewusers")&&($("#wnewusers").onchange=who);
+  $("#s_pilot_emails").oninput=who;
+  const add=()=>{const v=$("#wpick").value.trim();if(!v)return;const m=v.match(/[^\s<>()]+@[^\s<>()]+/);const e=(m?m[0]:v).toLowerCase();
+    if(!emails().includes(e))$("#s_pilot_emails").value=emails().concat(e).join(", ");$("#wpick").value="";who()};
+  $("#wadd").onclick=e=>{e.preventDefault();add()};$("#wpick").onkeydown=e=>{if(e.key=="Enter"){e.preventDefault();add()}};
+  show();
+  try{W.opts=W.opts||await api("/api/pilot/options",{})}catch(e){$("#wwho").innerHTML=note("Couldn't read the tenant's groups and users: "+e.message);return}
+  $("#wgroups")&&($("#wgroups").innerHTML=W.opts.zia_groups.map(g=>`<option value="${esc(g)}">`).join(""));
+  $("#wusers").innerHTML=W.opts.zid_users.map(u=>`<option value="${esc(u.login)}">${esc(u.name)}</option>`).join("");
+  who()}
+async function deletePov(id){
+  const m=$("#delmodal"),b=$("#delbody");m.classList.add("on");$("#delclose").onclick=()=>m.classList.remove("on");
+  b.innerHTML='<div class="notice">Checking it\'s safe: looking up every object this POV still lists in the customer\'s tenant (read-only)…</div>';
+  let v;try{v=await api("/api/pov/delete/check",{id})}catch(e){b.innerHTML=note(e.message,"bad");return}
+  const list=a=>`<ul style="margin:6px 0 0 18px">${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`;
+  b.innerHTML=`<p style="margin:0"><b>${esc(v.customer)}</b> <span class="muted">· ${esc(v.id)} · ${esc(v.state||"new")}</span></p>`+
+    (v.ok?note("Safe to delete: nothing this POV created is left in the customer's tenant.","good")
+         :note(v.blockers.join(" "),"bad")+(v.still_there.length?`<p class="muted" style="margin:8px 0 0">Still there:</p>${list(v.still_there)}`:""))+
+    (v.notes||[]).map(x=>note(x)).join("")+
+    `<p style="margin:12px 0 0">Deleting removes, from this computer:</p>${list(v.removes)}<p class="muted" style="font-size:12px">It can't be undone. The customer's tenant isn't touched.</p>`+
+    (v.ok?`<div class="form" style="margin-top:10px"><span class="lbl">Type <code>${esc(v.id)}</code> to confirm</span><input type="text" id="delconf" autocomplete="off"></div>
+      <div class="row" style="margin-top:12px"><button class="danger" id="delgo" disabled>Delete this POV</button></div><div id="delmsg"></div>`:"");
+  if(!v.ok)return;
+  $("#delconf").oninput=()=>{$("#delgo").disabled=$("#delconf").value.trim()!==v.id};
+  $("#delgo").onclick=async()=>{try{await api("/api/pov/delete",{id,confirm:$("#delconf").value});m.classList.remove("on");
+    S=null;await load();W.step=0;wizard()}catch(e){$("#delmsg").innerHTML=note(e.message,"bad")}};
+}
 async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.current;
   try{
   if(W.step==0){
     st.innerHTML=head(0,"Start a POV","One POV per customer. Its prefix goes on every object the kit creates in their tenant, so its objects are easy to see and can't be confused with theirs.")+
-      (S.povs.length?`<div class="group-h">Continue a POV</div>${S.povs.map(p=>`<label class="opt"><input type="radio" name="wp" value="${esc(p.id)}" ${c&&p.id==c.id?"checked":""}><span><b>${esc(p.customer)}</b> <span class="muted">· ${esc(p.id)} · ${esc(p.state||"new")}</span></span></label>`).join("")}<div class="row" style="margin:10px 0 18px"><button class="primary" id="wcont">Continue with this POV ›</button></div><div class="group-h">Or start a new one</div>`:"")+
+      (S.povs.length?`<div class="group-h">Continue a POV</div>${S.povs.map(p=>`<div class="row" style="gap:8px;align-items:stretch"><label class="opt" style="flex:1"><input type="radio" name="wp" value="${esc(p.id)}" ${c&&p.id==c.id?"checked":""}><span><b>${esc(p.customer)}</b> <span class="muted">· ${esc(p.id)} · ${esc(p.state||"new")}</span></span></label><button class="danger wdel" data-id="${esc(p.id)}" title="Check it's safe, then delete this POV from this computer" style="margin-top:8px">Delete…</button></div>`).join("")}<div class="row" style="margin:10px 0 18px"><button class="primary" id="wcont">Continue with this POV ›</button></div><div class="group-h">Or start a new one</div>`:"")+
       `<div class="form"><span class="lbl">Customer</span><input type="text" id="wcust" placeholder="Acme Corp">
         <span class="lbl">Products in scope</span><div>${S.products.map(p=>`<label class="chk" style="margin:0 6px 6px 0"><input type="checkbox" value="${esc(p.name)}" ${["zia","zcc"].includes(p.name)?"checked":""}>${esc(p.title)}</label>`).join("")}</div>
         <span class="lbl">Prefix</span><input type="text" id="wprefix" value="ZPOV" maxlength="12">
@@ -350,10 +392,11 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
           <label class="opt" style="margin-top:0"><input type="radio" name="wmode" value="single" checked><span><b>One API client</b> (recommended)<br><span class="muted">The customer creates one client at kickoff. Discovery stays read-only in the kit's code, and nothing is written until they approve the change list.</span></span></label>
           <label class="opt"><input type="radio" name="wmode" value="separate"><span><b>Two clients</b>: view-only first, write access after approval<br><span class="muted">For security teams that want read-only access before anything else. Adds a second client at the approval step.</span></span></label></div></div>
       <div class="row" style="margin-top:16px"><button class="primary" id="wnew">Create the POV ›</button></div><div id="wmsg"></div>`;
-    $("#wcont")&&($("#wcont").onclick=async()=>{const v=($$('input[name=wp]').find(x=>x.checked)||{}).value;if(!v)return;await api("/api/pov/use",{id:v});await load();W.checks=null;W.plan=null;W.step=firstOpen()||1;wizard()});
+    $$(".wdel").forEach(b=>b.onclick=()=>deletePov(b.dataset.id));
+    $("#wcont")&&($("#wcont").onclick=async()=>{const v=($$('input[name=wp]').find(x=>x.checked)||{}).value;if(!v)return;await api("/api/pov/use",{id:v});await load();W.checks=null;W.plan=null;W.opts=null;W.step=firstOpen()||1;wizard()});
     $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,
         products:$$('#wstage .form input[type=checkbox]').filter(x=>x.checked).map(x=>x.value),client_mode:($$('input[name=wmode]').find(x=>x.checked)||{}).value});
-      await load();W.checks=null;W.plan=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}};
+      await load();W.checks=null;W.plan=null;W.opts=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}};
   }
   else if(W.step==1){
     const single=c.settings.client_mode!="separate", slot=single?"main":"discovery", cl=c.clients[slot]||{};
@@ -377,15 +420,23 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         $("#wsec").value="";await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }
   else if(W.step==2){
-    const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), scope=s["zpa.scope"]||"scim";
+    const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), scope=s["zpa.scope"]||"scim", mk=s["identity.pilot"]||"existing";
     st.innerHTML=head(2,"Pilot users","Who the POV applies to. Every rule the kit creates is scoped to these users only. The next step checks each product can see them and that they're entitled.")+
       `<div class="form">
-        ${zia?`<span class="lbl">Pilot group <span class="muted">(as ZIA lists it)</span></span><input type="text" id="s_pilot_group" value="${esc(s.pilot_group||"")}" placeholder="POV Pilot">`:""}
-        <span class="lbl">Pilot users' emails</span><textarea id="s_pilot_emails" placeholder="jane@acme.com, raj@acme.com">${esc((s.pilot_emails||[]).join(", "))}</textarea>
+        ${zia||has("zpa")?`<span class="lbl">Pilot group</span><div>
+          <label class="opt" style="margin-top:0"><input type="radio" name="s_identity.pilot" value="existing" ${mk!="create"?"checked":""}><span><b>Use one of the customer's groups</b><br><span class="muted">Every POV rule applies to its members only.</span></span></label>
+          <div id="wexisting" style="margin:6px 0 0 26px;${mk=="create"?"display:none":""}">${zia?`<input type="text" id="s_pilot_group" list="wgroups" value="${esc(s.pilot_group||"")}" placeholder="pick or type the group's name as ZIA lists it"><datalist id="wgroups"></datalist>`:""}</div>
+          <label class="opt"><input type="radio" name="s_identity.pilot" value="create" ${mk=="create"?"checked":""}><span><b>Create one for the POV in ZIdentity</b><br><span class="muted"><code>${esc(c.prefix)} - pilot users</code>, with the users below in it. In the change list like everything else, so it's made only after approval, and removed at teardown. The customer then gives it its entitlements (ZIdentity's API can't).</span></span></label>
+          <div id="wcreate" style="margin:6px 0 0 26px;${mk=="create"?"":"display:none"}"><label class="chk"><input type="checkbox" id="wnewusers" ${s["identity.create_users"]=="yes"?"checked":""}>Also create the users who don't exist in ZIdentity yet <span class="muted">(lab tenants; you set their passwords in ZIdentity)</span></label></div>
+        </div>`:""}
+        <span class="lbl">Pilot users</span><div>
+          <div class="row" style="gap:8px"><input type="text" id="wpick" list="wusers" placeholder="add a user: start typing a name or email" style="flex:1"><datalist id="wusers"></datalist><button id="wadd">Add</button></div>
+          <textarea id="s_pilot_emails" placeholder="jane@acme.com, raj@acme.com" style="margin-top:8px">${esc((s.pilot_emails||[]).join(", "))}</textarea>
+          <div id="wwho" class="hint"></div></div>
         <span class="lbl">Identity provider</span><select id="s_identity.idp"><option value="">Detect it</option>${["okta","entra","ping","duo","google","onelogin"].map(x=>`<option ${s["identity.idp"]==x?"selected":""}>${x}</option>`).join("")}</select>
         ${has("zia")?`<span class="lbl">Sign-in sites not decrypted</span><input type="text" id="s_identity.bypass_domains" value="${esc((s["identity.bypass_domains"]||[]).join(", "))}" placeholder="leave empty to use the IdP's own sites">
         <span class="lbl">Rule placement</span><div><label class="chk"><input type="radio" name="s_placement" value="top" ${s.placement!="bottom"?"checked":""}>Above the customer's rules</label> <label class="chk"><input type="radio" name="s_placement" value="bottom" ${s.placement=="bottom"?"checked":""}>Below them</label></div>
-        <span class="lbl">No pilot group yet?</span><div><input type="number" id="s_identity.test_users" min="0" max="10" value="${esc(s["identity.test_users"]||0)}" style="width:80px"> test users created by the POV <div class="hint">Only where ZIA keeps its own users (Hosted DB). Not usable for ZPA, which takes users from the IdP.</div></div>`:""}
+        <span class="lbl wtest">No pilot group yet?</span><div class="wtest"><input type="number" id="s_identity.test_users" min="0" max="10" value="${esc(s["identity.test_users"]||0)}" style="width:80px"> test users created by the POV <div class="hint">Only where ZIA keeps its own users (Hosted DB). Not usable for ZPA, which takes users from the IdP.</div></div>`:""}
       </div>
       ${has("zpa")?`<div class="group-h">Private Access (ZPA)</div><div class="form">
         <span class="lbl">POV app name</span><input type="text" id="s_zpa.app_name" value="${esc(s["zpa.app_name"]||"")}" placeholder="HR portal">
@@ -396,9 +447,11 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         <span class="lbl">SAML attribute and value</span><div class="row" style="gap:8px"><input type="text" id="s_zpa.saml_attribute" value="${esc(s["zpa.saml_attribute"]||"")}" placeholder="memberOf" style="flex:1"><input type="text" id="s_zpa.saml_value" value="${esc(s["zpa.saml_value"]||"")}" placeholder="pov-pilots" style="flex:1"></div></div>`:""}
       ${has("casb")?`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`:""}
       <div id="wmsg"></div>`+nav(true,true,"Save ›");
+    pilotPicker(s);
     bindNav(async()=>{const vals={};
       $$("#wstage [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
-      ["placement","zpa.scope"].forEach(k=>{const r=$$(`input[name='s_${k}']`).find(x=>x.checked);if(r)vals[k]=r.value});
+      if($("#wnewusers"))vals["identity.create_users"]=$("#wnewusers").checked?"yes":"no";
+      ["placement","zpa.scope","identity.pilot"].forEach(k=>{const r=$$(`input[name='s_${k}']`).find(x=>x.checked);if(r)vals[k]=r.value});
       try{await api("/api/settings",{values:vals});await load();W.checks=null;W.step=3;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }
   else if(W.step==3){
@@ -504,7 +557,7 @@ const UC_EX=["Marketing can use ChatGPT but can't upload files to it","Block a l
   "Report credit card numbers in files shared in our Microsoft 365"];
 const KNAME={url_filtering:"ZIA · URL filtering rule",ssl:"ZIA · SSL inspection rule",cloud_app_control:"ZIA · Cloud App Control rule",file_type:"ZIA · file type control rule",dlp:"ZIA · DLP rule",dns:"ZIA · DNS control rule",
   zpa_app:"ZPA · app segment and its own access rule",aiguard_block:"AI Guard · its own app, key and blocking policy",zdx_deeptrace:"ZDX · deep trace on each pilot device",casb_dlp:"CASB · DLP rule, report only"};
-const PSHORT={zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard:"AI Guard",zdx:"ZDX",casb:"CASB"};
+const PSHORT={zid:"ZIdentity",zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard:"AI Guard",zdx:"ZDX",casb:"CASB"};
 let UC=null;
 async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a POV in Setup first.","bad");return}
   UC=await api("/api/usecases");const c=S.current;

@@ -35,8 +35,13 @@ class ZDX(Product):
         try:
             apps = items(t.call("zdx.apps", "list_apps"))
         except KitError as e:
-            return {"readable": False}, [check("zdx-read", "ZDX readable", FAIL, str(e)[:160],
-                                               "Give the discovery client view access to ZDX.")]
+            denied = bool(re.search(r"\b403\b|not authori", str(e), re.I))
+            return {"readable": False}, [check(
+                "zdx-read", "ZDX readable", FAIL, "the API client has no ZDX role" if denied else str(e)[:160],
+                "In ZIdentity → Integration → API Clients, edit this POV's client and add a ZDX role (view only is "
+                "enough for preflight), then run the checks again. The kit never changes its own client's roles. "
+                "Or take ZDX out of the POV's products (Start a POV)." if denied else
+                "Give the discovery client view access to ZDX.", console="oneapi.clients")]
         snap["readable"] = True
         want = c.get("app")
         app = next((a for a in apps if want and str(g(a, "name")) == want), None) or (apps[0] if apps else None)

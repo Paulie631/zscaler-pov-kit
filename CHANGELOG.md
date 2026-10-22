@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.0
+
+From the live lab test:
+- **The kit can make the pilot group.** Pilot users step → **Create one for the POV in ZIdentity**: `ZPOV - pilot
+  users`, with the users you name added to it (existing users are only added, never changed) and, in lab tenants,
+  the users who don't exist yet created. It's in the change list like everything else, so it's written only after
+  approval, scoped by the ledger, and deleted at teardown. ZIdentity's API can't grant entitlements, so granting
+  Internet & SaaS (and Private Access) to the group is a customer action; Apply waits for ZIdentity to provision the
+  group to ZIA, uses ZIA's copy for every POV rule (linked in the ledger, never changed or deleted by the kit), and if
+  the entitlement isn't granted yet it stops and carries on next time without creating anything twice.
+- **Pick instead of type.** The Pilot users step lists ZIA's groups and ZIdentity's users from the tenant (read-only),
+  adds users by name or email, and shows who isn't in ZIdentity.
+- **Delete a POV, after verifying.** Setup → Start a POV → **Delete…**, or `pov-kit delete`. It looks up every object
+  the ledger still lists in the tenant (read-only) and refuses while any is there (or can't be checked); then it needs
+  the POV's ID typed back, and removes the POV's folder, keychain secrets, Claude Desktop entry and backup from the
+  laptop. The tenant is never touched.
+- **Clearer ZDX 403.** Preflight says the API client has no ZDX role and where to add one (or to take ZDX out).
+
 ## 0.8.1
 
 From the first checks against a live tenant:

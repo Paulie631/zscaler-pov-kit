@@ -34,8 +34,9 @@ KIND = {"label": "rule label", "url_category": "custom URL category", "network_s
         "connector_group": "App Connector group", "provisioning_key": "provisioning key", "server_group": "server group",
         "segment_group": "segment group", "app_segment": "application segment", "access_rule": "access policy rule",
         "policy": "detection policy", "app": "AI app", "key": "Detection API key", "rule": "policy rule",
-        "deeptrace": "deep trace", "casb_dlp_rule": "CASB DLP rule"}
-PRODUCT = {"zia": "Internet Access", "zcc": "Client Connector", "zpa": "Private Access", "aiguard": "AI Guard",
+        "deeptrace": "deep trace", "casb_dlp_rule": "CASB DLP rule", "group": "pilot group", "user": "user",
+        "members": "group members", "user_group": "user group", "department": "department"}
+PRODUCT = {"zid": "ZIdentity", "zia": "Internet Access", "zcc": "Client Connector", "zpa": "Private Access", "aiguard": "AI Guard",
            "zdx": "Digital Experience", "casb": "SaaS security"}
 PROOF = {"probe": "Probe", "api": "API", "attested": "Attested"}
 

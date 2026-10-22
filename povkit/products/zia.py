@@ -123,7 +123,7 @@ def key_for(kind, n):
 
 def want_groups(it, ledger):
     """The groups a POV rule should apply to, with {ref:...} filled in from the ledger."""
-    ids = {e["key"]: e["id"] for e in ledger.active()}
+    ids = ledger.ids()
     out = set()
     for x in it["body"].get("groups", []):
         x = str(x)
@@ -271,7 +271,13 @@ class ZIA(Product):
         snap["pilot_group"] = None
         n_test = int((pov.cfg.get("identity") or {}).get("test_users") or 0)
         snap["test_users"] = None
-        if n_test and (mode != "hosted" or snap["zidentity"]):
+        from .zid import enabled as zid_pilot, group_name, ZIA_GROUP_KEY
+        if zid_pilot(pov.cfg):   # the POV makes its own pilot group in ZIdentity, which provisions it to ZIA
+            gname = group_name(pov.prefix)
+            snap["pilot_group"] = {"id": "{ref:%s}" % ZIA_GROUP_KEY, "name": gname}
+            checks.append(check("zia-pilot", "Pilot group", INFO, f"'{gname}', made by the POV in ZIdentity",
+                                "ZIdentity provisions it to ZIA once it has its entitlements; apply waits for it."))
+        elif n_test and (mode != "hosted" or snap["zidentity"]):
             checks.append(check("zia-testusers", "Hosted DB test users", FAIL,
                                 "this tenant's users come from " + ("ZIdentity" if snap["zidentity"] else "an IdP or directory"),
                                 "ZIA can only hold its own test users when it uses its Hosted DB. Use a pilot group from "
@@ -335,6 +341,10 @@ class ZIA(Product):
 
         planned = self._names(pov)
         snap["customer_names"], lookalikes, taken = [], [], []
+        # ZIA's copy of the POV's own ZIdentity pilot group: linked in the ledger, so it's the POV's, not a clash
+        linked_ids = {e["kind"]: e["id"] for e in ledger.entries if e["state"] == "linked" and e["product"] == "zia"}
+        from .zid import enabled as zid_pilot, group_name
+        ours_zid = group_name(pov.prefix) if zid_pilot(pov.cfg) and ledger.find("zid.group") else None
         for kind in KINDS:
             types_ = sorted({r["rule_type"] for r in tpl["cloud_app_control"]}) if KINDS[kind].get("typed") else [None]
             rows = []
@@ -347,7 +357,8 @@ class ZIA(Product):
             snap["kinds"][kind] = {"count": len(rows)}
             for r in rows:
                 n = obj_name(r)
-                mine = ledger.by_id("zia", kind, g(r, "id")) is not None
+                mine = (ledger.by_id("zia", kind, g(r, "id")) is not None or linked_ids.get(kind) == str(g(r, "id"))
+                        or (kind == "user_group" and n == ours_zid))   # provisioned from the POV's ZIdentity group
                 if not naming.has_prefix(n, pov.prefix):
                     if not g(r, "predefined"):
                         snap["customer_names"].append(n)

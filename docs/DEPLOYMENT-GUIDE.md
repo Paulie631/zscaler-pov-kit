@@ -108,8 +108,16 @@ checking its SHA-256, and **Roll back** goes back one version.
 ## Part 5: The kickoff (60 to 90 minutes, with the customer's admin)
 
 1. **Connect**: the vanity domain, the client ID and secret (straight to your keychain) and, with ZPA, the customer ID.
-2. **Pilot users**: the pilot group, its members' emails, their identity provider (so its sign-in and MFA sites stay out
-   of SSL inspection), and per-product details: the ZPA app, SCIM group or SAML attribute, the CASB tenant.
+2. **Pilot users**: the pilot group, its members, their identity provider (so its sign-in and MFA sites stay out of
+   SSL inspection), and per-product details: the ZPA app, SCIM group or SAML attribute, the CASB tenant.
+   - **Use one of the customer's groups:** pick it from the list the kit reads from ZIA (or type its name).
+   - **Create one for the POV in ZIdentity:** the kit makes `ZPOV - pilot users` and puts the users in it, once the
+     change list is approved, and removes it at teardown. Existing users are only added to the group. In a lab tenant,
+     tick **Also create the users who don't exist** and the kit creates them too (you set their passwords in
+     ZIdentity). ZIdentity's API can't grant entitlements, so the customer gives the group Internet & SaaS (and
+     Private Access with ZPA); Apply waits for ZIdentity to provision the group to ZIA, and if it stops to wait, click
+     **Apply** again once the entitlement is granted.
+   - Add users by typing a name or email: the list comes from ZIdentity, and the step shows who isn't there.
 3. **Preflight**: read-only checks of every product and of the pilot users across products. Fix every FAIL before
    going on; each one says how.
 4. **Change list**: walk the admin through every object, who it affects and where it sits, and the customer actions
@@ -147,6 +155,10 @@ checking its SHA-256, and **Roll back** goes back one version.
      connectors first; teardown keeps the connector group until they're gone.
 3. Either way, the kit removes the POV's secrets, discovery data, recordings and Claude Desktop entry from your laptop.
    Remind the customer to delete the POV's API clients.
+4. **Delete the POV** when you no longer need its record: Setup → Start a POV → **Delete…** next to it (or
+   `pov-kit delete <pov-id>`). The kit first checks, read-only, that nothing the POV created is still in the tenant;
+   if something is, it says what and stops. Then you type the POV's ID to confirm, and its folder, keychain secrets,
+   Claude Desktop entry and backup are deleted from your laptop. The customer's tenant isn't touched.
 
 ## Updating, rolling back and recovering
 
@@ -171,6 +183,10 @@ secrets or the customer's object names for the kit owner.
 | Preflight: ZPA calls fail | Set the ZPA customer ID in Connect (`pov-kit set customer_id`) |
 | Preflight: pilot users not in ZIA | With SAML or SCIM, users appear after provisioning or their first sign-in: have each one sign in to Client Connector once |
 | Preflight: ZIdentity entitlements FAIL | ZIdentity's API can't grant them: the customer assigns the missing service to the pilot group in ZIdentity |
+| Preflight: pilot group doesn't exist | Pick an existing group from the list, or choose **Create one for the POV in ZIdentity** |
+| Preflight: ZDX readable FAIL (403) | The API client has no ZDX role: in ZIdentity → API Clients, add one (view only is enough), or take ZDX out of the POV |
+| Apply stops: "ZIA doesn't have it yet" | Give the POV's ZIdentity group its entitlements, wait a minute, click **Apply** again: it carries on and creates nothing twice |
+| Delete: "still in the customer's tenant" | Remove the POV first (Handover → Remove the POV) or export it to Terraform, then delete |
 | Apply: "ZIA has changes waiting to be activated" | Another admin's changes are pending. The customer activates or discards them; the kit never does |
 | Apply: "the tenant changed since the customer approved" | Something the plan depends on changed. Make the change list again and get it approved again |
 | Client Connector refused the profiles (bare 400) | Build both from the printed spec with exactly those names, then Status → **Fix drift** adopts them |

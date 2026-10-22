@@ -215,7 +215,7 @@ def test_catalog_ids_unique_and_every_product_covered():
     cat = products.base.load_catalog()
     ids = [c["id"] for c in cat]
     assert len(ids) == len(set(ids))
-    assert {c["product"] for c in cat} == set(products.ORDER)
+    assert {c["product"] for c in cat} == set(products.CHOOSABLE)
     tpl = json.loads((products.base.CATALOG.parent / "products" / "zia_pov_template.json").read_text())
     used = {c for sect in tpl.values() if isinstance(sect, list) for r in sect for c in r.get("criteria", [])}
     assert used <= set(ids)
@@ -230,6 +230,6 @@ def test_every_product_has_the_full_lifecycle():
         assert p.ready, name
         for m in ("role_scopes", "discover", "plan", "apply", "live_object", "drift", "teardown"):
             assert getattr(type(p), m) is not getattr(products.base.Product, m), f"{name}.{m}"
-        assert p.criteria(), name                     # from its catalog file
+        assert p.criteria() or name == "zid", name    # from its catalog file (zid only serves the pilot group)
 
 

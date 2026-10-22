@@ -20,7 +20,8 @@
 
 1. **Setup → Start a POV:** customer, products, end date.
 2. **Connect:** copy the role spec to the customer's admin; enter the client ID and secret they create.
-3. **Pilot users:** the pilot group, members' emails, their identity provider, product details.
+3. **Pilot users:** pick the customer's group, or have the kit create one in ZIdentity; add the users; their identity
+   provider; product details.
 4. **Preflight:** fix every FAIL (each one says how).
 5. **Change list:** walk the admin through it, or send them the change-list page.
 6. **Approval:** record who approved it, or import the approval file they saved from the page.
@@ -28,7 +29,8 @@
 8. **Next steps:** customer actions, the probe pack for pilot devices, the ZPA connector template.
 9. **Success criteria:** import probe results, run the API proofs, record attestations, draft the summary, build the
    report.
-10. **Handover:** export to Terraform, or remove the POV, before its end date.
+10. **Handover:** export to Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
+    forgets it on your laptop, once it has checked nothing is left in the tenant.
 
 ## Every customer session
 
