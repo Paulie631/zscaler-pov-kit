@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.6.1
+
+Fixes from an independent review of 0.6.0's safety-critical code:
+- **Client Connector could edit the customer's default profile.** Its save is create-or-update, and the copied
+  forwarding-profile actions (and nested app-profile settings) kept their IDs. Every body is now stripped of copied
+  IDs, and the kit refuses to send one that still carries any. This was also true of 0.5's forwarding profile.
+- **Client Connector profile names are now per POV** (they carry the POV ID's last part), apply never creates over a
+  profile with the same name, and a new profile's ID is taken only from what appeared after the save.
+- **recover** records an object without a description only when something certain ties it to the POV; prefix-only
+  finds are listed, never recorded. It never reuses a key another active entry holds.
+- **Teardown with --yes keeps adopted objects**; delete them with `--include-adopted`.
+- **selftest** runs only on a POV marked as a lab POV (`new --lab`), does ZIA first, rechecks its pending state just
+  before writing, and activates only after its own create and delete succeeded.
+- **Names only** also covers accented names (no ASCII escaping before masking), upper- and lower-case variants, the
+  customer's own DLP engines and isolation profile, and no longer sends the POV ID in request metadata.
+- **Backups** run after each product during apply and even when apply or teardown fails; a restore refuses to
+  replace a local ledger that has objects the backup lacks.
+- **Recordings**: name-like fields are always replaced in exports (even in capitals), the POV ID is replaced,
+  errors are redacted, and recordings are deleted at handover.
+
 ## 0.6.0
 
 Nothing left behind:

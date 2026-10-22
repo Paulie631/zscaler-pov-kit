@@ -16,6 +16,7 @@ other way round.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import time
@@ -96,7 +97,7 @@ def ask(pov, system, user, max_tokens=4000, timeout=180, tool=None, needs_consen
     try:
         body = {"model": model, "max_tokens": max_tokens, "system": system,
                 "messages": [{"role": "user", "content": user}],
-                "metadata": {"user_id": re.sub(r"[^A-Za-z0-9_-]", "-", f"pov-kit-{pov.id}")}}
+                "metadata": {"user_id": "pov-kit-" + hashlib.sha256(pov.id.encode()).hexdigest()[:16]}}   # not the slug
         if tool:
             body.update(tools=[tool], tool_choice={"type": "tool", "name": tool["name"]})
         r = TRANSPORT(f"{PROXY_HOST}/v1/messages", json=body,

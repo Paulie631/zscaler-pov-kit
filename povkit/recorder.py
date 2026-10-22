@@ -69,7 +69,8 @@ def write(pov, resource, method, a, kw, out=None, error=None):
         red = _redactor(pov)
         rec = {"t": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "resource": resource, "method": method,
                "args": red(unsecret(_trim(list(a)))), "kwargs": red(unsecret(_trim(kw))),
-               "response": red(unsecret(_trim(out))) if error is None else None, "error": str(error)[:300] if error else None}
+               "response": red(unsecret(_trim(out))) if error is None else None,
+               "error": red.text(str(error))[:300] if error else None}
         d = pov.path("recordings")
         d.mkdir(exist_ok=True)
         with (d / f"{time.strftime('%Y-%m-%d', time.gmtime())}.jsonl").open("a", encoding="utf-8") as f:
@@ -78,16 +79,25 @@ def write(pov, resource, method, a, kw, out=None, error=None):
         pass
 
 
-def shape(o, prefix, key=None):
+# fields that hold names people chose: always replaced, even when they look like an enum ('ACMECORP')
+NAMEISH = re.compile(r"(name|description|comment|email|login|user|display|tenant|domain|url|host|title|label|"
+                     r"department|group|location|city|country|phone|address|ip)", re.I)
+
+
+def shape(o, prefix, key=None, pov_id=None):
     """Keep structure, field names, types and Zscaler's own values; replace every other string."""
     if isinstance(o, dict):
-        return {k: ("<secret>" if SECRET.search(str(k)) else shape(v, prefix, k)) for k, v in o.items()}
+        return {k: ("<secret>" if SECRET.search(str(k)) else shape(v, prefix, k, pov_id)) for k, v in o.items()}
     if isinstance(o, list):
-        return [shape(x, prefix, key) for x in o]
+        return [shape(x, prefix, key, pov_id) for x in o]
     if isinstance(o, str):
-        if ENUM.match(o) or o.startswith((prefix + ":", prefix + " -", "zpov:", "{ref:")) or o in ("", "…"):
+        if pov_id:
+            o = o.replace(pov_id, "<pov>")   # the POV ID carries the customer's name
+        if o.startswith((prefix + ":", prefix + " -", "zpov:", "{ref:")) or o in ("", "…"):
             return o
-        if re.fullmatch(r"\d+", o):
+        if key is not None and NAMEISH.search(str(key)):
+            return "<str>"
+        if (ENUM.match(o) and len(o) <= 64) or re.fullmatch(r"\d+", o):
             return o
         return "<str>"
     return o
@@ -107,13 +117,14 @@ def export(pov, name, out_dir=None):
         for src in files:
             for line in src.read_text(encoding="utf-8").splitlines():
                 rec = json.loads(line)
-                sig = (rec["resource"], rec["method"], json.dumps(shape(rec.get("response"), pov.prefix), sort_keys=True))
+                sh = lambda x: shape(x, pov.prefix, None, pov.id)  # noqa: E731
+                sig = (rec["resource"], rec["method"], json.dumps(sh(rec.get("response")), sort_keys=True))
                 if sig in seen:
                     continue
                 seen.add(sig)
                 f.write(json.dumps({"resource": rec["resource"], "method": rec["method"],
-                                    "args": shape(rec["args"], pov.prefix), "kwargs": shape(rec["kwargs"], pov.prefix),
-                                    "response": shape(rec.get("response"), pov.prefix),
+                                    "args": sh(rec["args"]), "kwargs": sh(rec["kwargs"]),
+                                    "response": sh(rec.get("response")),
                                     "error": "<error>" if rec.get("error") else None}) + "\n")
                 n += 1
     return out, n

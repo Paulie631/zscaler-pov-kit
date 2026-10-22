@@ -94,9 +94,38 @@ BY_HAND = ("Build it by hand in the Client Connector portal, then run `pov-kit s
            "no broader profile above it in the order.")
 
 
-def names(prefix):
-    return (naming.safe_name(naming.name(prefix, "Z-Tunnel 2.0"), prefix),
-            naming.safe_name(naming.name(prefix, "pilot devices"), prefix))
+def names(prefix, pov_id):
+    """Each POV's own profile names: the POV ID's last part keeps two POVs with the same prefix apart."""
+    tag = pov_id.rsplit("-", 1)[-1]
+    return (naming.safe_name(naming.name(prefix, f"Z-Tunnel 2.0 {tag}"), prefix),
+            naming.safe_name(naming.name(prefix, f"pilot devices {tag}"), prefix))
+
+
+NESTED_IDS = re.compile(r"^(id|.*ProfileId|.*PolicyId|.*_id)$")
+
+
+def strip_ids(o, top=True):
+    """Remove every ID copied from the source profile. Client Connector's save calls create or update, so an ID left
+    in a body (the profile's, or a nested action's) could edit the customer's own profile instead of making ours."""
+    if isinstance(o, dict):
+        return {k: strip_ids(v, False) for k, v in o.items() if not (k == "id" if top else NESTED_IDS.match(k))}
+    if isinstance(o, list):
+        return [strip_ids(x, False) for x in o]
+    return o
+
+
+def carries_ids(o, top=True):
+    if isinstance(o, dict):
+        return any((k == "id" if top else bool(NESTED_IDS.match(k))) or carries_ids(v, False) for k, v in o.items())
+    if isinstance(o, list):
+        return any(carries_ids(x, False) for x in o)
+    return False
+
+
+def new_id(before, rows, name):
+    """The ID of the one profile with this name that wasn't there before the save; None if that isn't exactly one."""
+    hits = [g(x, "id") for x in rows if g(x, "name") == name and str(g(x, "id")) not in before]
+    return hits[0] if len(hits) == 1 else None
 
 
 def bare_400(e):
@@ -134,7 +163,7 @@ class ZCC(Product):
                             "no default Windows app profile with a forwarding profile",
                             "" if src_fwd else "The POV profiles will be built by hand (the change list prints the "
                             "spec).", console="zcc.app_profiles"))
-        fwd_name, app_name = names(pov.prefix)
+        fwd_name, app_name = names(pov.prefix, pov.id)
         from ..core.ledger import Ledger
         led = Ledger(pov.path("ledger.json"), pov.id, pov.prefix)
         ours = {e["id"] for e in led.active("zcc")}
@@ -142,14 +171,15 @@ class ZCC(Product):
                  if any(g(x, "name") == n and str(g(x, "id")) not in ours for x in fwds + apps)]
         if clash:
             checks.append(check("zcc-names", "POV profile names", INFO, ", ".join(clash) + " already exist",
-                                "If someone built them for this POV, `status --fix` adopts them after apply."))
+                                "Apply won't create a profile over one with the same name. If someone built them "
+                                "by hand for this POV, `status --fix` adopts them; otherwise rename or delete them."))
         return snap, checks
 
     def plan(self, pov, snap, zia_snap=None):
         if not snap.get("readable"):
             return [], ["No Client Connector items: the portal wasn't readable in discovery."]
         grp = (zia_snap or {}).get("pilot_group") or {}
-        fwd_name, app_name = names(pov.prefix)
+        fwd_name, app_name = names(pov.prefix, pov.id)
         src_app, src_fwd = snap.get("source_app") or {}, snap.get("source_fwd") or {}
         spec = BY_HAND.format(fwd=fwd_name, app=app_name, src_fwd=src_fwd.get("name", "the default forwarding profile"),
                               src_app=src_app.get("name", "the default Windows app profile"),
@@ -177,18 +207,26 @@ class ZCC(Product):
             return
         fwds = self._list(t, "zcc.forwarding_profile")
         if not t.ledger.find("zcc.fwd"):
+            if any(g(f, "name") == fwd_it["name"] for f in fwds):
+                log("warn", f"A forwarding profile named '{fwd_it['name']}' already exists and isn't in this POV's "
+                            "ledger, so the kit won't create another. If it was built for this POV, `pov-kit status "
+                            "--fix` adopts it; otherwise rename or delete it.")
+                return
             src = next((f for f in fwds if str(g(f, "id")) == str(fwd_it["body"]["copy_of"])), None)
             if not src:
                 raise KitError("The forwarding profile the change list copies is gone. Run `pov-kit plan` again.")
             body = {k: v for k, v in src.items() if k not in DROP}
             acts, how = z2_actions(fwds, fwd_it["name"], body.get("forwardingProfileActions") or [])
             body.update(name=fwd_it["name"], forwardingProfileActions=acts)
+            before = {str(g(f, "id")) for f in fwds}
 
             def find_id(_):
-                return next((g(f, "id") for f in self._list(t, "zcc.forwarding_profile")
-                             if g(f, "name") == fwd_it["name"]), None)
+                return new_id(before, self._list(t, "zcc.forwarding_profile"), fwd_it["name"])
             last = None
             for i, (how2, b) in enumerate(fwd_tries(body, src, fwd_it["name"])):
+                b = strip_ids(b)
+                if carries_ids(b):   # belt and braces: never send a body that could name an existing profile
+                    raise GuardError("A forwarding-profile body still carries an ID; nothing was sent.")
                 try:
                     t.create("zcc.fwd", "zcc.forwarding_profile", "update_forwarding_profile", extract_id=find_id,
                              stamped=False, **b)
@@ -217,15 +255,22 @@ class ZCC(Product):
             log("warn", "The Windows app profile wasn't made (no default profile to copy, no pilot group, or no "
                         "forwarding profile). " + app_it["spec"])
             return
-        app = {k: v for k, v in src.items() if k not in DROP}
+        if any(g(a, "name") == app_it["name"] for a in apps):
+            log("warn", f"An app profile named '{app_it['name']}' already exists and isn't in this POV's ledger, so "
+                        "the kit won't create another. If it was built for this POV, `pov-kit status --fix` adopts it.")
+            return
+        app = strip_ids({k: v for k, v in src.items() if k not in DROP | {"forwardingProfileId"}})
         win = dict(app.get("windowsPolicy") or {})
         win["installSslCerts"] = 1
         app.update(name=app_it["name"], active=1, groupAll=0, groupIds=[int(gid)], userIds=[], ruleOrder=1,
-                   forwardingProfileId=fwd_id, windowsPolicy=win, deviceType=app.get("deviceType") or "DEVICE_TYPE_WINDOWS")
+                   windowsPolicy=win, deviceType=app.get("deviceType") or "DEVICE_TYPE_WINDOWS")
+        if carries_ids(app):
+            raise GuardError("The app-profile body still carries an ID; nothing was sent.")
+        app["forwardingProfileId"] = fwd_id   # ours, set after the check: the only ID the body may carry
+        before = {str(g(a, "id")) for a in apps}
 
         def find_app(_):
-            return next((g(a, "id") for a in self._list(t, "zcc.web_policy", device_type="windows")
-                         if g(a, "name") == app_it["name"]), None)
+            return new_id(before, self._list(t, "zcc.web_policy", device_type="windows"), app_it["name"])
         try:
             t.create("zcc.app", "zcc.web_policy", "web_policy_edit", extract_id=find_app, stamped=False, **app)
         except GuardError:

@@ -131,13 +131,13 @@ def next_id(ucs):
 # ---------------------------------------------------------------- the prompt
 def build_message(pov, snaps, request):
     from . import evidence
-    snap = json.dumps(snaps, default=str)
+    snap = json.dumps(snaps, default=str, ensure_ascii=False)   # as text, so masking sees 'Zürich', not 'Z\u00fcrich'
     if len(snap) > SNAPSHOT_MAX:
         snap = snap[:SNAPSHOT_MAX] + " ...(cut)"
     covered = [{"id": c["id"], "title": c["title"]} for c in evidence.selected_criteria(pov)]
     return (f"Use case: {request.strip()}\n\nPOV products: {', '.join(pov.products)}\n"
             f"Pilot group: {pov.cfg.get('pilot_group')}\n"
-            f"Criteria the POV already proves: {json.dumps(covered)}\n\n"
+            f"Criteria the POV already proves: {json.dumps(covered, ensure_ascii=False)}\n\n"
             f"Tenant snapshot (read-only discovery, JSON):\n{snap}")
 
 
@@ -422,7 +422,7 @@ def refine(pov, snaps, uid, feedback, by="SE"):
         raise KitError(f"No use case {uid}.")
     earlier = {k: uc["spec"][k] for k in ("summary", "changes", "directions", "test")}
     msg = (build_message(pov, snaps, uc["prompt"]) + "\n\nYour earlier proposal (as the kit validated it):\n"
-           + json.dumps(earlier) + "\n\nThe SE's feedback on it: " + feedback.strip()
+           + json.dumps(earlier, ensure_ascii=False) + "\n\nThe SE's feedback on it: " + feedback.strip()
            + "\nPropose again, the whole answer, with the feedback applied.")
     proposal, raw, masked = _ask(pov, snaps, msg)
     uc.setdefault("history", []).append({"at": uc.get("refined_at") or uc["at"], "spec": uc["spec"],

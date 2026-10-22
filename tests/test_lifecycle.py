@@ -6,6 +6,7 @@ import zipfile
 
 import pytest
 
+from povkit.products.zcc import names as zcc_names
 from povkit import evidence, handover, lifecycle, probe, products, updater
 from povkit.core import KitError
 from povkit.core.changelist import ChangeList
@@ -48,8 +49,9 @@ def test_zcc_bare_400_then_adopt_by_name(pov, tenant, tenant_for):
     led = applied(pov, tenant_for)
     assert not led.find("zcc.fwd")                      # nothing recorded for a refused create
     tenant.zcc_fwd_400 = False
-    tenant.fwds.append({"id": 40, "name": "ZPOV - Z-Tunnel 2.0"})          # built by hand to the spec
-    tenant.apps.append({"id": 41, "name": "ZPOV - pilot devices"})
+    fwd_name, app_name = zcc_names(pov.prefix, pov.id)
+    tenant.fwds.append({"id": 40, "name": fwd_name})                     # built by hand to the spec
+    tenant.apps.append({"id": 41, "name": app_name})
     lifecycle.status(pov, tenant_for, fix=True)
     led = lifecycle.ledger(pov)
     assert led.find("zcc.fwd")["state"] == "adopted" and led.find("zcc.app")["state"] == "adopted"
@@ -62,7 +64,7 @@ def test_zcc_bare_400_then_adopt_by_name(pov, tenant, tenant_for):
 
 def test_zcc_copies_default_and_switches_to_z_tunnel_2(pov, tenant, tenant_for):
     applied(pov, tenant_for)
-    fwd = next(f for f in tenant.fwds if f["name"] == "ZPOV - Z-Tunnel 2.0")
+    fwd = next(f for f in tenant.fwds if f["name"] == zcc_names(pov.prefix, pov.id)[0])
     assert all(a["actionType"] == 1 and a["enablePacketTunnel"] == 1 for a in fwd["forwardingProfileActions"])
     assert next(f for f in tenant.fwds if f["name"] == "Default")["forwardingProfileActions"][0]["actionType"] == 2
 
@@ -72,9 +74,9 @@ def test_zcc_plainer_copy_gets_through_then_app_profile_is_scoped(pov, tenant, t
     tenant.apps[0].update(windowsPolicy={"installSslCerts": 0, "logLevel": 1}, groupAll=1, active=1)
     tenant.zcc_fwd_refusals = 2                         # the full copy and the one without trusted networks are refused
     led = applied(pov, tenant_for)
-    fwd = next(f for f in tenant.fwds if f["name"] == "ZPOV - Z-Tunnel 2.0")
+    fwd = next(f for f in tenant.fwds if f["name"] == zcc_names(pov.prefix, pov.id)[0])
     assert "trustedNetworkIds" not in fwd and led.find("zcc.fwd")["state"] == "owned"
-    app = next(a for a in tenant.apps if a["name"] == "ZPOV - pilot devices")
+    app = next(a for a in tenant.apps if a["name"] == zcc_names(pov.prefix, pov.id)[1])
     assert app["groupIds"] == [77] and app["groupAll"] == 0 and app["ruleOrder"] == 1
     assert app["forwardingProfileId"] == fwd["id"] and app["windowsPolicy"] == {"installSslCerts": 1, "logLevel": 1}
     assert led.find("zcc.app")["state"] == "owned"
@@ -89,9 +91,40 @@ def test_zcc_app_profile_refused_falls_back_to_build_by_hand(pov, tenant, tenant
     led = applied(pov, tenant_for)
     assert led.find("zcc.fwd") and not led.find("zcc.app")
     tenant.zcc_app_400 = False
-    tenant.apps.append({"id": 41, "name": "ZPOV - pilot devices"})
+    tenant.apps.append({"id": 41, "name": zcc_names(pov.prefix, pov.id)[1]})
     lifecycle.status(pov, tenant_for, fix=True)
     assert lifecycle.ledger(pov).find("zcc.app")["state"] == "adopted"
+
+
+def test_zcc_never_sends_the_customers_ids(pov, tenant, tenant_for):
+    """Client Connector's save is create-or-update: an ID copied from the default could edit the customer's profile."""
+    tenant.fwds[0]["forwardingProfileActions"] = [{"id": 501, "forwardingProfileId": 5, "networkType": 0, "actionType": 2}]
+    tenant.fwds[0]["forwardingProfileZpaActions"] = [{"id": 502, "networkType": 0}]
+    tenant.apps[0].update(windowsPolicy={"id": 503, "installSslCerts": 0}, policyExtension={"id": 504, "x": 1})
+    applied(pov, tenant_for)
+    import json
+    sent = [w for w in tenant.writes if w[0].startswith("zcc.") and not w[1].startswith("delete")]
+    assert sent
+    for _res, _m, _a, kw in sent:
+        text = json.dumps(kw)
+        assert not any(f'"id": {x}' in text for x in (5, 9, 501, 502, 503, 504)), text
+        assert '"forwardingProfileId": 5' not in text
+    assert tenant.fwds[0]["forwardingProfileActions"][0]["actionType"] == 2      # the default is untouched
+
+
+def test_zcc_wont_create_over_a_profile_with_its_name(pov, tenant, tenant_for):
+    fwd_name, _ = zcc_names(pov.prefix, pov.id)
+    tenant.fwds.append({"id": 77, "name": fwd_name, "forwardingProfileActions": []})   # not in this POV's ledger
+    led = applied(pov, tenant_for)
+    assert not led.find("zcc.fwd") and len([f for f in tenant.fwds if f["name"] == fwd_name]) == 1
+    lifecycle.teardown(pov, tenant_for, log, include_adopted=True)
+    assert any(f["id"] == 77 for f in tenant.fwds)                              # never deleted
+
+
+def test_two_povs_with_the_same_prefix_get_their_own_profiles(pov, home):
+    from povkit.core import pov as povs
+    other = povs.new("Acme Corp", ["zia", "zcc"])
+    assert zcc_names(pov.prefix, pov.id) != zcc_names(other.prefix, other.id)
 
 
 # ---- handover

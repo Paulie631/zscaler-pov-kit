@@ -42,6 +42,8 @@ def c_new(a):
         raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.ORDER)}.")
     from .remind import parse_date
     p = povs.new(a.customer, names, a.prefix, parse_date(a.ends) if a.ends else None)
+    if a.lab:
+        settings.set_value(p, "lab", "yes")
     print(f"POV {p.id} for {a.customer}: {', '.join(names)}, prefix '{p.prefix}', ends {p.cfg['ends']}. Folder: {p.dir}")
     print("Next: `pov-kit set vanity_domain ACME`, `pov-kit set pilot_group \"POV Pilot\"`, then `pov-kit role-spec`.")
 
@@ -268,11 +270,14 @@ def c_handover(a):
         act = led.active()
         adopted = [e for e in act if e["state"] == "adopted"]
         for e in act:
-            print(f"  {e['product']:4} {e['kind']:20} {e['name']}{'  (built by hand, adopted)' if e['state'] == 'adopted' else ''}")
+            print(f"  {e['product']:4} {e['kind']:20} {e['name']}"
+                  f"{'  (adopted: built by hand, or found by recover)' if e['state'] == 'adopted' else ''}")
         if act and not yesno(f"Delete these {len(act)} POV objects from {p.cfg['customer']}'s tenant?", False, a.yes):
             print("Cancelled.")
             return 1
-        incl = bool(adopted) and yesno("Delete the adopted (hand-built) ones too?", False, a.yes)
+        # adopted objects are deleted only when asked for by name: --yes alone never includes them
+        incl = bool(adopted) and (a.include_adopted or (not a.yes and yesno(
+            f"Delete the {len(adopted)} adopted ones too (built by hand, or found by recover by name)?", False)))
         checks = lifecycle.teardown(p, tenant_for, say, include_adopted=incl)
         print(render(checks))
         if led.active():
@@ -521,6 +526,7 @@ def parser():
     s.add_argument("--products", default="zia,zcc", help="any of: zia,zcc,zpa,aiguard,zdx,casb")
     s.add_argument("--prefix", default="ZPOV")
     s.add_argument("--ends", help="end date, YYYY-MM-DD (default: 30 days from now)")
+    s.add_argument("--lab", action="store_true", help="a POV for your own lab tenant (allows selftest)")
     cmd("list", c_list, "list POVs on this laptop")
     s = cmd("use", c_use, "switch to another POV")
     s.add_argument("pov_id")
@@ -574,7 +580,8 @@ def parser():
     s.add_argument("--note", help="with --summary: what to emphasize")
     s = cmd("handover", c_handover, "the clean exit: teardown, or terraform")
     s.add_argument("how", choices=["teardown", "terraform"])
-    s.add_argument("--yes", action="store_true")
+    s.add_argument("--yes", action="store_true", help="don't ask (adopted objects are kept unless --include-adopted)")
+    s.add_argument("--include-adopted", action="store_true")
     s = cmd("diagnostics", c_diagnostics, "a zip for the kit owner (no secrets, no customer data)")
     s.add_argument("--out")
     s = cmd("update", c_update, "self-update from GitHub releases")

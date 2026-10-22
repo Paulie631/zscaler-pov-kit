@@ -66,6 +66,10 @@ class Pov:
             if p.exists():
                 p.unlink()
                 gone.append(name)
+        rec = self.path("recordings")   # API recordings hold redacted customer responses: they go too
+        if rec.exists():
+            shutil.rmtree(rec)
+            gone.append("recordings")
         return gone
 
 

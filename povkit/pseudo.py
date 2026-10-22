@@ -19,6 +19,7 @@ from . import products
 from .core.redact import EMAIL
 
 MIN = 3
+ENUMISH = re.compile(r"^[A-Z0-9_]+$")   # what Zscaler's own IDs look like (FINANCE, CHATGPT_AI)
 
 
 def values(pov, snaps, text=""):
@@ -43,6 +44,12 @@ def values(pov, snaps, text=""):
                     add(n, "DOMAIN" if "." in str(n) and " " not in str(n) else "NAME")
             except Exception:
                 pass
+    zia = (snaps or {}).get("zia") or {}
+    for e in zia.get("custom_engines") or []:   # the customer's own DLP engines; Zscaler's predefined ones stay
+        add(e, "ENGINE")
+    cbi = zia.get("cbi") or {}
+    add(cbi.get("name"))
+    add(cbi.get("url"), "DOMAIN")
     zpa = (snaps or {}).get("zpa") or {}
     for d in zpa.get("segment_domains") or []:
         add(d, "DOMAIN")
@@ -53,19 +60,38 @@ def values(pov, snaps, text=""):
     for e in list(out):   # an email's domain gives the customer away too
         if out[e] == "EMAIL":
             add(e.split("@", 1)[1], "DOMAIN")
+    for v, kind in list(out.items()):   # 'ACME CORP' and 'acme corp' too, but never an ID-like 'FINANCE'
+        for variant in (v.upper(), v.lower()):
+            if variant != v and len(variant) >= 4 and not ENUMISH.match(variant):
+                out.setdefault(variant, "~" + kind)   # '~': a variant, unmasked to its original
     return out
 
 
 class Masker:
     def __init__(self, vals: dict):
-        counters, self.fwd, self.back = {}, {}, {}
-        for v in sorted(vals, key=lambda x: (-len(x), x)):   # longest first: 'Sales EMEA' before 'Sales'
+        counters, self.fwd, self.back, first = {}, {}, {}, {}
+        originals = sorted((v for v, k in vals.items() if not k.startswith("~")), key=lambda x: (-len(x), x))
+        for v in originals:
+            if v.lower() in first:
+                self.fwd[v] = first[v.lower()]
+                continue
             k = vals[v]
             counters[k] = counters.get(k, 0) + 1
             tok = f"{k}_{counters[k]}"
             self.fwd[v], self.back[tok] = tok, v
+            first[v.lower()] = tok
+        for v, k in vals.items():   # case variants share their original's placeholder
+            if k.startswith("~") and v not in self.fwd:
+                tok = first.get(v.lower())
+                if not tok:
+                    k = k[1:]
+                    counters[k] = counters.get(k, 0) + 1
+                    tok = f"{k}_{counters[k]}"
+                    self.back[tok], first[v.lower()] = v, tok
+                self.fwd[v] = tok
         bound = r"(?<![A-Za-z0-9_@])({})(?![A-Za-z0-9_])"
-        self._f = re.compile(bound.format("|".join(re.escape(v) for v in self.fwd))) if self.fwd else None
+        alts = sorted(self.fwd, key=len, reverse=True)   # longest first: 'Sales EMEA' before 'Sales'
+        self._f = re.compile(bound.format("|".join(re.escape(v) for v in alts))) if alts else None
         self._b = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(self.back, key=len, reverse=True)) + r")\b") \
             if self.back else None
 

@@ -51,6 +51,17 @@ def test_masker_round_trips_and_leaves_zscaler_values(pov, snaps):
     assert m.unmask(masked) == text
 
 
+def test_names_only_covers_accents_case_engines_and_metadata(pov, tenant, snaps, claude):
+    sent, _ = claude
+    pov.cfg["customer"] = "Zürich Finanz AG"
+    pov.save()
+    usecases.propose(pov, snaps, "ZÜRICH FINANZ AG wants Acme Project Falcon data blocked for POV PILOT")
+    body = json.dumps(sent[-1], ensure_ascii=False)
+    for leak in ("Zürich", "ZÜRICH", "Acme Project Falcon", "POV PILOT", pov.id):
+        assert leak not in body, leak
+    assert "5 or more Credit Card Numbers" in body                            # Zscaler's own engine stays readable
+
+
 def test_structured_reply_is_unmasked_before_validation(pov, snaps, claude):
     sent, answers = claude
     tok = pseudo.for_pov(pov, snaps).fwd["POV Pilot"]

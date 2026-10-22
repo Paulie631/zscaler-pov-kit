@@ -82,13 +82,17 @@ def apply(pov, tenant_for, log):
     led = ledger(pov)
     t = LedgerTenant(tenant_for(pov, "apply"), led, items)
     pov.log("apply", f"apply start, approved {approval['hash'][:12]} by {approval['by']}")
-    for p in products.selected(pov.products):
-        if p.ready:
-            p.apply(t, pov, items, log)
+    from . import backup
+    try:
+        for p in products.selected(pov.products):
+            if p.ready:
+                p.apply(t, pov, items, log)
+                backup.save(pov)   # after each product, so an apply that stops halfway is still backed up
+    finally:
+        backup.save(pov)
     pov.cfg["state"] = "applied"
     pov.save()
     pov.log("apply", f"apply done: {len(led.active())} POV objects")
-    from . import backup
     backup.save(pov)
     return led
 
@@ -139,9 +143,13 @@ def teardown(pov, tenant_for, log, include_adopted=False):
     pov.include_adopted = include_adopted
     t = LedgerTenant(tenant_for(pov, "apply"), led, [])
     out = []
-    for p in reversed(products.selected(pov.products)):   # zcc before zia
-        if p.ready and led.active(p.name):
-            out += p.teardown(t, pov, led, log)
+    from . import backup
+    try:
+        for p in reversed(products.selected(pov.products)):   # zcc before zia
+            if p.ready and led.active(p.name):
+                out += p.teardown(t, pov, led, log)
+    finally:
+        backup.save(pov)
     pov.cfg["state"] = "torn_down" if not led.active() else "partly_torn_down"
     pov.save()
     pov.log("teardown", f"teardown: {len(led.active())} objects left")

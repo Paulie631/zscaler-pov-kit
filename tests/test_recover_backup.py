@@ -72,6 +72,25 @@ def test_backup_is_encrypted_and_restores(pov_all, tenant, tenant_for, tmp_path)
     assert not [o for o in tenant.store["zpa.policies"] if o["name"].startswith("ZPOV")]
 
 
+def test_backup_survives_a_failed_apply_and_restore_wont_lose_newer_objects(pov_all, tenant, tenant_for, tmp_path,
+                                                                            monkeypatch):
+    backup.setup(str(tmp_path / "bk"), "correct horse battery")
+    lifecycle.plan(pov_all, tenant_for)
+    ChangeList(pov_all.dir).approve("Jane Doe")
+    from povkit import products
+    monkeypatch.setattr(products.get("aiguard"), "apply", lambda *a, **k: (_ for _ in ()).throw(KitError("boom")))
+    with pytest.raises(KitError, match="boom"):
+        lifecycle.apply(pov_all, tenant_for, log)
+    data = backup.decrypt((tmp_path / "bk" / f"{pov_all.id}.zpovbak").read_bytes(), "correct horse battery")
+    import json
+    saved = json.loads(data["files"]["ledger.json"])["entries"]
+    assert any(e["product"] == "zpa" for e in saved)                       # what was made before the failure
+    led = Ledger(pov_all.path("ledger.json"), pov_all.id, pov_all.prefix)
+    led.record("zia.extra", "zia", "label", 99999, "ZPOV - extra")         # newer than the backup
+    with pytest.raises(KitError, match="doesn't know about"):
+        backup.restore(pov_all.id, "correct horse battery", overwrite=True)
+
+
 def test_status_warns_when_nothing_is_backed_up(pov_all, tenant_for):
     applied(pov_all, tenant_for)
     c = {x["id"]: x for x in lifecycle.status(pov_all, tenant_for)}["backup"]
@@ -108,3 +127,28 @@ def test_end_date_setting_is_validated(pov_all):
     assert settings.set_value(pov_all, "ends", "2026-12-15") == "2026-12-15"
     with pytest.raises(KitError, match="date like"):
         settings.set_value(pov_all, "ends", "next friday")
+
+
+def test_recover_ignores_prefix_only_objects_of_another_se(pov_all, tenant, tenant_for):
+    applied(pov_all, tenant_for)
+    st = tenant.store
+    st["aiguard.llm_applications"].append({"id": 990, "name": "ZPOV: POV app"})             # another SE's, no stamp
+    st["zpa.provisioning"].append({"id": "991", "name": "ZPOV: connector key", "component_id": "70001"})
+    tenant.fwds.append({"id": 992, "name": "ZPOV - Z-Tunnel 2.0 other"})
+    pov_all.path("ledger.json").unlink()
+    finds, _ = recover.run(pov_all, tenant_for, write=True)
+    by_id = {f["id"]: f for f in finds}
+    for x in ("990", "991", "992"):
+        assert by_id[x]["proof"] == "name only" and by_id[x]["status"].startswith("not recorded")
+    led = Ledger(pov_all.path("ledger.json"), pov_all.id, pov_all.prefix)
+    assert not {"990", "991", "992"} & {e["id"] for e in led.active()}
+
+
+def test_recover_never_takes_a_key_an_active_entry_holds(pov_all, tenant, tenant_for):
+    led = applied(pov_all, tenant_for)
+    label = led.find("zia.label")
+    tenant.rules["label"].append({"id": 4343, "name": label["name"], "description": f"zpov:{pov_all.id} POV kit: copy"})
+    recover.run(pov_all, tenant_for, write=True)
+    led = Ledger(pov_all.path("ledger.json"), pov_all.id, pov_all.prefix)
+    assert led.find("zia.label")["id"] == label["id"]                     # the owned entry stays
+    assert any(e["key"] == "recovered.zia.label.4343" for e in led.active())

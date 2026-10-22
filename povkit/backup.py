@@ -125,6 +125,15 @@ def restore(src: str, passphrase: str, overwrite=False):
     d = povs.POVS / data["pov_id"]
     if (d / "pov.json").exists() and not overwrite:
         raise KitError(f"POV {data['pov_id']} is already on this laptop. Use --overwrite to replace its files.")
+    if (d / "ledger.json").exists():   # never trade a newer local ledger for an older backup
+        local = {e["id"] for e in json.loads((d / "ledger.json").read_text(encoding="utf-8")).get("entries", [])
+                 if e.get("state") in ("owned", "adopted")}
+        theirs = {e["id"] for e in json.loads(data["files"].get("ledger.json") or '{"entries": []}').get("entries", [])}
+        missing = local - theirs
+        if missing:
+            raise KitError(f"This laptop's ledger has {len(missing)} POV objects the backup doesn't know about, so "
+                           "restoring it would lose track of them. Nothing was changed. Run `pov-kit backup now` "
+                           "here instead, or `pov-kit recover` to check the tenant.")
     d.mkdir(parents=True, exist_ok=True)
     for name, text in data["files"].items():
         if name in FILES:

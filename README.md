@@ -4,7 +4,7 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.6.0**: every product module, the identity step,
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.6.1**: every product module, the identity step,
 the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
@@ -100,12 +100,15 @@ pilot_emails jane@acme.com,raj@acme.com` (for ZDX and device checks).
   change list there, encrypted. On a new laptop: `./pov-kit backup restore <pov-id>`, then `connect`.
 - **Recover without a backup.** `./pov-kit recover <pov-id> --customer "Acme Corp" --products zia,zpa` makes an empty
   POV with the same ID; after `connect`, `./pov-kit recover <pov-id>` sweeps the tenant read-only for objects with the
-  prefix and that POV's stamp, and `--write` records them so teardown can remove them. Objects found by name only are
-  recorded as adopted; another POV's objects are never touched.
+  prefix and that POV's stamp, and `--write` records them so teardown can remove them. Objects without a description
+  are recorded (as adopted) only when something certain ties them to the POV: a Client Connector profile with the
+  POV's own name, a provisioning key for its stamped connector group, an AI Guard rule pointing at its stamped policy.
+  Prefix-only finds are listed for a person to check, never recorded; another POV's objects are never touched.
+  Teardown deletes adopted objects only with `--include-adopted` (or a yes in the console); `--yes` alone keeps them.
 
 ## Before a customer: the lab tools
 
-- `./pov-kit selftest --lab` in your own lab tenant: reads every product, then creates, reads back and deletes one
+- `./pov-kit selftest --lab` on a POV for your own lab tenant (start it with `./pov-kit new "Lab" --lab`): reads every product, then creates, reads back and deletes one
   harmless object per product (a ZIA label, a disabled ZPA segment group, an AI Guard app).
 - `./pov-kit record on` saves every API call and response, redacted, in the POV folder; `./pov-kit record export
   lab-1` turns them into `tests/fixtures/lab-1.jsonl` (field names, types and Zscaler's own values only). The offline

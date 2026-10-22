@@ -24,8 +24,10 @@ The ledger is the only record of what a POV created, so 0.6 keeps it safe off th
   to a folder the SE chose, encrypted with a passphrase-derived key. `backup restore` recreates the POV folder on a new
   laptop; the API client is saved again with `connect`.
 - **Recover** (recover.py): without a backup, a read-only sweep finds the POV's objects by prefix and stamp. Stamped
-  objects are recorded as owned, prefix-only ones as adopted (teardown keeps them unless told otherwise), and another
-  POV's stamp means "leave alone". Keys are matched to the saved change list where there is one.
+  objects are recorded as owned. Kinds without a description are recorded as adopted only when linked to the POV by
+  something certain (its per-POV Client Connector names, a stamped connector group, a stamped AI Guard policy);
+  the shared default prefix alone is never enough, and another POV's stamp means "leave alone". Keys are matched to
+  the saved change list where there is one, and never taken from an active entry.
 - **End dates and reminders** (remind.py): a status check and a daily, local-only notification.
 
 The AI use cases send less: names are placeholders by default (pseudo.py), and the masking is undone on the laptop

@@ -38,14 +38,18 @@
 - **Backups** hold pov.json, the ledger, the approval and the change list (no secrets; the change list names the
   pilot group and the POV app's domains), encrypted with a key derived from the SE's passphrase (scrypt, then Fernet).
   The passphrase is in this laptop's keychain and the SE's password manager, never in the backup folder.
-- **`recover`** only reads. `--write` records what it found in the ledger; objects carrying another POV's stamp are
-  never recorded, and objects found by name only are recorded as adopted, which teardown keeps unless told otherwise.
+- **`recover`** only reads. `--write` records what it found in the ledger: stamped objects as owned; objects without a
+  description only when something certain ties them to the POV (as adopted, which teardown keeps unless
+  `--include-adopted`); never prefix-only finds, and never another POV's stamped objects.
+- **Client Connector** saves are create-or-update, so the kit strips every ID copied from the customer's profiles out
+  of the bodies it sends, refuses to send one that still carries an ID, never creates over a profile with its name,
+  and names its profiles per POV.
 - **The customer's approval file** binds a name and title to the change list's full SHA-256. It isn't a signature:
   it proves which change list the customer saw, not who they are. The page makes no network calls.
 - **API recordings** stay in the POV folder, with secrets masked (any field named like a key, token, secret or
   password, including the provisioning key) and the customer's names and emails replaced. An export for the
   repository keeps only field names, types and Zscaler's own values.
-- **`selftest`** refuses to run without `--lab` (the console asks too), keeps its own ledger, and activates ZIA only if
-  nothing else was pending.
+- **`selftest`** runs only on a POV marked as a lab POV and with `--lab` (the console asks too), keeps its own ledger,
+  checks ZIA has nothing pending just before writing, and activates only after its own create and delete succeeded.
 - Updates are verified against the SHA-256 published with each release before anything is replaced.
 - The kit's API clients can't delete themselves: at handover, remind the customer to delete both in the console.

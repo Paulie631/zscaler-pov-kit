@@ -62,7 +62,9 @@ one Windows pilot device. Each item settles an open question in the design or br
 - [ ] **Recover.** Delete the POV folder after apply; `recover` finds every object (ZPA provisioning keys: check the
   list method's name), `--write` and teardown leave the tenant clean. Restore from a backup on a second computer.
 - [ ] **Reminders.** `remind install` on Windows and Mac: the notification shows, and `remind uninstall` removes it.
-- [ ] **Names only.** Read a real request's body in the AI Guard logs: no customer names, emails or domains. Claude's
+- [ ] **Names only.** Read a real request's body in the AI Guard logs: no customer names, emails or domains. Check
+  `list_dlp_engines_lite` really returns `customDlpEngine` / `predefinedEngineName`, so only the customer's own
+  engines are masked. Claude's
   proposals are as good as with `ai.share full` on the five console examples.
 - [ ] **Customer approval.** Open plan.html from an email attachment on Windows and Mac: the form saves the file and
   `approve --file` accepts it; a file for an older change list is refused.

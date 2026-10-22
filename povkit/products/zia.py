@@ -292,11 +292,15 @@ class ZIA(Product):
 
         snap["url_categories"] = sorted({str(g(c, "id")) for c in items(t.call("url_categories", "list_categories"))
                                          if g(c, "id")})
-        snap["dlp_engines"] = {}
+        snap["dlp_engines"], snap["custom_engines"] = {}, []
         for e in items(t.call("dlp_engine", "list_dlp_engines_lite")):
             for k in ("name", "predefined_engine_name"):
                 if g(e, k):
                     snap["dlp_engines"][str(g(e, k))] = g(e, "id")
+            # the customer's own engines (their names can identify them; names-only use cases hide them)
+            custom = g(e, "custom_dlp_engine")
+            if g(e, "name") and (custom is True or (custom is None and not g(e, "predefined_engine_name"))):
+                snap["custom_engines"].append(str(g(e, "name")))
         try:
             cats = t.call("file_type_control_rule", "list_file_type_categories",
                           query_params={"enums": "FILETYPECATEGORYFORFILETYPECONTROL"})

@@ -1,6 +1,6 @@
 # Zscaler POV Kit: SE deployment guide
 
-Version 0.6.0. This guide ships with the kit and changes in the same branch as the behavior it describes.
+Version 0.6.1. This guide ships with the kit and changes in the same branch as the behavior it describes.
 
 Run `pov-kit gui` and follow the console's Setup tab; every step below has a matching wizard step. The commands are
 the same steps on the command line.
@@ -10,7 +10,7 @@ the same steps on the command line.
 - `pov-kit backup setup <a folder synced off the laptop>` (OneDrive, Google Drive, iCloud), with a passphrase you keep
   in your password manager. Every POV is then backed up, encrypted, after every change.
 - `pov-kit remind install`: a daily notification when a POV is ending, overdue, or not backed up.
-- In your own lab tenant: `pov-kit selftest --lab`.
+- In your own lab tenant: `pov-kit new "Lab" --lab`, connect it, then `pov-kit selftest --lab`.
 
 ## Before the POV
 
