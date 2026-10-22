@@ -13,7 +13,8 @@ from povkit.core import KitError, secrets  # noqa: E402
 from povkit.core import pov as povs  # noqa: E402
 
 RULE_RES = {"url_filtering": "url_filtering", "ssl_inspection_rules": "ssl", "dlp_web_rules": "dlp",
-            "cloudappcontrol": "cloud_app_control"}
+            "cloudappcontrol": "cloud_app_control", "file_type_control_rule": "file_type",
+            "cloud_firewall_rules": "firewall", "cloud_firewall_dns": "dns"}
 
 
 class FakeTenant:
@@ -27,13 +28,33 @@ class FakeTenant:
         self.rules = {"url_filtering": [{"id": 1, "name": "Corp: Block adult", "order": 1, "state": "ENABLED",
                                          "groups": [{"id": 78}], "description": "customer rule"}],
                       "ssl": [{"id": 2, "name": "Corp: Inspect all", "order": 1, "state": "ENABLED"}],
-                      "dlp": [], "cloud_app_control": [], "label": []}
-        self.cats = ["GAMBLING", "ANONYMIZER", "SOCIAL_NETWORKING", "FINANCE", "HEALTH"]
+                      "dlp": [], "cloud_app_control": [], "label": [], "file_type": [], "firewall": [], "dns": [],
+                      "url_category": [], "network_service": []}
+        self.file_types = ["FTCATEGORY_WINDOWS_EXECUTABLES", "FTCATEGORY_MSI"]
+        self.cbi = [{"id": "cbi-1", "name": "Default isolation", "url": "https://cbi.example", "defaultProfile": True}]
+        self.cats = ["GAMBLING", "ANONYMIZER", "SOCIAL_NETWORKING", "FINANCE", "HEALTH", "OTHER_GAMES"]
         self.engines = [{"id": 61, "name": "5 or more Credit Card Numbers"}]
         self.actions = {"FILE_SHARE": ["BLOCK_FILE_SHARE_UPLOAD", "ALLOW_FILE_SHARE_UPLOAD"],
                         "AI_ML": ["BLOCK_AI_ML_WEB_USE", "ALLOW_AI_ML_WEB_USE"]}
         self.fwds = [{"id": 5, "name": "Default", "forwardingProfileActions": [{"networkType": 0, "actionType": 2}]}]
         self.apps = [{"id": 9, "name": "Default Windows", "forwardingProfileId": 5, "ruleOrder": 1}]
+        # ZPA, AI Guard, ZDX, CASB: one list per resource, with a customer object in each where it matters
+        self.store = {
+            "zpa.app_connector_groups": [{"id": "70001", "name": "Corp connectors", "connectors": []}],
+            "zpa.provisioning": [], "zpa.server_groups": [], "zpa.segment_groups": [],
+            "zpa.application_segment": [{"id": "70002", "name": "Corp intranet", "domainNames": ["intranet.acme.com"]}],
+            "zpa.policies": [{"id": "70003", "name": "Corp: engineering", "action": "ALLOW",
+                              "conditions": [{"operands": [{"objectType": "APP", "rhs": "70002"}]}]}],
+            "aiguard.policies": [{"id": 501, "name": "Corp AI policy", "inputDetectorPolicies": [], "outputDetectorPolicies": []}],
+            "aiguard.llm_applications": [{"id": 502, "name": "Corp chatbot"}],
+            "aiguard.llm_application_credentials": [],
+            "aiguard.policy_match_rules": [{"id": 503, "name": "Corp chatbot rule", "ruleOrder": 1}],
+            "zdx.troubleshooting": [], "casb_dlp_rules": [{"id": 601, "name": "Corp SaaS DLP", "order": 1}],
+        }
+        self.idps = [{"id": "idp1", "name": "Okta"}]
+        self.scim = [{"id": "sg1", "name": "POV Pilot"}, {"id": "sg2", "name": "Everyone"}]
+        self.zdx_devices = [{"id": "d1", "name": "PILOT-LAPTOP-1", "userEmail": "jane@acme.com"}]
+        self.saas_tenants = [{"tenantId": 55, "tenantName": "Acme M365"}]
 
     def _id(self):
         self.next_id += 1
@@ -58,7 +79,15 @@ class FakeTenant:
             q = (kw.get("query_params") or {}).get("search", "")
             return [g for g in self.groups if q.lower() in g["name"].lower()]
         if resource == "url_categories":
-            return [{"id": c} for c in self.cats]
+            if method == "list_categories" and not (kw.get("query_params") or {}).get("custom_only"):
+                return [{"id": c} for c in self.cats] + copy.deepcopy(self.rules["url_category"])
+            return self._crud("url_category", method, a, kw)
+        if resource == "cloud_firewall":
+            return self._crud("network_service", method, a, kw)
+        if resource == "file_type_control_rule" and method == "list_file_type_categories":
+            return [{"name": n} for n in self.file_types]
+        if resource == "cloud_browser_isolation":
+            return copy.deepcopy(self.cbi)
         if resource == "dlp_engine":
             return self.engines
         if resource == "cloudappcontrol" and method == "list_available_actions":
@@ -86,7 +115,74 @@ class FakeTenant:
             if method == "delete_web_policy":
                 self.apps = [x for x in self.apps if str(x["id"]) != str(a[0])]
                 return {}
+        if resource == "zpa.enrollment_certificates":
+            return [{"id": "c1", "name": "Connector"}, {"id": "c2", "name": "Root"}]
+        if resource == "zpa.idp":
+            return copy.deepcopy(self.idps)
+        if resource == "zpa.scim_groups":
+            q = (kw.get("query_params") or {}).get("search", "")
+            return [x for x in self.scim if q.lower() in x["name"].lower()]
+        if resource == "zdx.apps":
+            return [{"id": "app7", "name": "Microsoft 365"}]
+        if resource == "zdx.devices":
+            if method == "get_device_apps":
+                return [{"id": "app7", "score": 87}]
+            return copy.deepcopy(self.zdx_devices)
+        if resource == "zcc.devices":
+            return [{"userName": "jane@acme.com", "registrationState": "Registered"}]
+        if resource == "saas_security_api":
+            return copy.deepcopy(self.saas_tenants) if method == "list_casb_tenant_lite" else [{"tenantId": 55}]
+        if resource in self.store:
+            return self._generic(resource, method, a, kw)
         raise AssertionError(f"fake tenant has no {resource}.{method}")
+
+    def _generic(self, res, method, a, kw):
+        rows = self.store[res]
+        zpa = res.startswith("zpa.")
+        ids = {str(r["id"]) for r in rows}
+
+        def find():
+            want = next((str(x) for x in a if str(x) in ids), None)
+            hit = next((r for r in rows if str(r["id"]) == want), None)
+            if hit is None:
+                raise KitError("404 not found")
+            return hit
+        if method.startswith("list"):
+            return copy.deepcopy(rows)
+        if method.startswith(("add", "start")):
+            o = dict(kw)
+            if method == "add_access_rule_v2":   # positional name and action; conditions as the API returns them
+                o.update(name=a[0], action=a[1].upper(), conditions=[
+                    {"operands": [{"objectType": c[0].upper(), "rhs": v[1] if isinstance(v, (list, tuple)) else v}
+                                  for v in c[1]]} for c in kw.get("conditions", [])])
+            if method == "start_deeptrace":
+                o.update(device_id=a[0], name=kw.get("session_name"))
+            new_id = str(self._id()) if zpa else self._id()
+            o["id"] = new_id
+            rows.append(o)
+            out = copy.deepcopy(o)
+            if method == "add_provisioning_key":
+                out["provisioningKey"] = "3|fake-provisioning-secret"
+            if method == "add_credential":
+                out["key"] = "fake-detection-key"
+            if method == "start_deeptrace":
+                out = {"trace_id": new_id}
+            return out
+        if method.startswith("get"):
+            return copy.deepcopy(find())
+        if method.startswith(("update", "reorder")):
+            hit = find()
+            hit.update(kw)
+            if method == "reorder_rule":
+                hit["ruleOrder"] = a[-1]
+            return copy.deepcopy(hit)
+        if method.startswith("delete"):
+            hit = find()
+            if res == "zpa.app_connector_groups" and hit.get("connectors"):
+                raise KitError("400 connector group has connectors")
+            rows.remove(hit)
+            return {}
+        raise AssertionError(f"{res}.{method}")
 
     def _crud(self, kind, method, a, kw):
         rows = self.rules[kind]
@@ -98,7 +194,8 @@ class FakeTenant:
                 raise KitError("404 not found")
             return copy.deepcopy(hit)
         if method.startswith("add"):
-            if any(r["name"] == kw["name"] for r in rows):
+            nm = kw.get("name") or kw.get("configured_name")
+            if any((r.get("name") or r.get("configured_name")) == nm for r in rows):
                 raise KitError("400 duplicate name")
             o = dict(kw, id=self._id())
             if "order" in kw:   # insert: rules at or below shift down one
@@ -117,7 +214,7 @@ class FakeTenant:
         raise AssertionError(method)
 
     def by_name(self, kind, name):
-        return next((r for r in self.rules[kind] if r["name"] == name), None)
+        return next((r for r in self.rules[kind] if (r.get("name") or r.get("configured_name")) == name), None)
 
 
 @pytest.fixture
@@ -142,6 +239,15 @@ def pov(home):
     p = povs.new("Acme Corp", ["zia", "zcc"])
     p.cfg["pilot_group"] = "POV Pilot"
     p.cfg["vanity_domain"] = "acme"
+    p.save()
+    return p
+
+
+@pytest.fixture
+def pov_all(home):
+    p = povs.new("Acme Corp", ["zia", "zcc", "zpa", "aiguard", "zdx", "casb"])
+    p.cfg.update(pilot_group="POV Pilot", vanity_domain="acme", pilot_emails=["jane@acme.com"],
+                 zpa={"domains": ["pov-app.acme.internal"], "tcp_ports": ["443"], "app_name": "HR portal"})
     p.save()
     return p
 

@@ -1,9 +1,11 @@
-"""Internet Access (ZIA): the rules behind the Internet Security POV.
+"""Internet Access (ZIA): the policy behind the Internet Security POV.
 
-Reuses the AI Guard SE Demo Kit's ZIA know-how (resource names, the 31-character name limit, safe_name for labels,
-SSL action bodies, tenant-aware Cloud App Control actions, rules placed at the top), with the POV safety model on
-top: discovery is read-only, rules apply only to the customer's pilot group, and every write goes through the
-ledger guard.
+Reuses the AI Guard SE Demo Kit's ZIA know-how (resource names, the 31-character name limit, safe_name where ':' is
+refused, SSL action bodies, tenant-aware Cloud App Control actions, the tenant-check category, rules placed at the
+top), with the POV safety model on top: discovery is read-only, rules apply only to the customer's pilot group, and
+every write goes through the ledger guard.
+
+Every object kind is one row of KINDS, so adding a kind is data, not new code paths.
 """
 from __future__ import annotations
 
@@ -19,23 +21,35 @@ from ..tenant import g, items
 from .base import Product
 
 HERE = Path(__file__).resolve().parent
-KINDS = ("label", "url_filtering", "ssl", "cloud_app_control", "dlp")
-# resource, get, add, update, delete (cloud app control takes the rule type first)
-API = {"label": ("rule_labels", "get_label", "add_label", "update_label", "delete_label"),
-       "url_filtering": ("url_filtering", "get_rule", "add_rule", "update_rule", "delete_rule"),
-       "ssl": ("ssl_inspection_rules", "get_rule", "add_rule", "update_rule", "delete_rule"),
-       "cloud_app_control": ("cloudappcontrol", "get_rule", "add_rule", "update_rule", "delete_rule"),
-       "dlp": ("dlp_web_rules", "get_rule", "add_rule", "update_rule", "delete_rule")}
-LIST = {"label": ("rule_labels", "list_labels"), "url_filtering": ("url_filtering", "list_rules"),
-        "ssl": ("ssl_inspection_rules", "list_rules"), "dlp": ("dlp_web_rules", "list_rules"),
-        "cloud_app_control": ("cloudappcontrol", "list_rules")}
-KIND_LABEL = {"label": "Rule label", "url_filtering": "URL filtering", "ssl": "SSL inspection",
-              "cloud_app_control": "Cloud App Control", "dlp": "DLP"}
-# Terraform resources for the export. confirmed = resource name and import ID checked against provider docs.
-TF = {"url_filtering": ("zia_url_filtering_rules", True),
-      "ssl": ("zia_ssl_inspection_rules", False), "cloud_app_control": ("zia_cloud_app_control_rule", False),
-      "dlp": ("zia_dlp_web_rules", False), "label": ("zia_rule_labels", False)}
+
+# kind: SDK resource and methods, whether it is a policy rule (pilot-scoped, ordered), how it lists, and its
+# Terraform resource (name, confirmed against the provider docs). Supporting objects come first: rules use them.
+KINDS = {
+    "label": dict(res="rule_labels", get="get_label", add="add_label", upd="update_label", dele="delete_label",
+                  lst="list_labels", rule=False, title="Rule label", tf=("zia_rule_labels", True)),
+    "url_category": dict(res="url_categories", get="get_category", add="add_url_category", upd="update_url_category",
+                         dele="delete_category", lst="list_categories", q={"custom_only": True}, rule=False,
+                         title="URL category", tf=("zia_url_categories", False)),
+    "network_service": dict(res="cloud_firewall", get="get_network_service", add="add_network_service",
+                            upd="update_network_service", dele="delete_network_service", lst="list_network_services",
+                            rule=False, title="Network service", tf=("zia_fw_network_service", False)),
+    "url_filtering": dict(res="url_filtering", rule=True, title="URL filtering", tf=("zia_url_filtering_rules", True)),
+    "ssl": dict(res="ssl_inspection_rules", rule=True, title="SSL inspection", tf=("zia_ssl_inspection_rule", False)),
+    "cloud_app_control": dict(res="cloudappcontrol", rule=True, typed=True, title="Cloud App Control",
+                              tf=("zia_cloud_app_control_rule", False)),
+    "file_type": dict(res="file_type_control_rule", rule=True, title="File type control",
+                      tf=("zia_file_type_control_rules", True)),
+    "dlp": dict(res="dlp_web_rules", rule=True, title="DLP", tf=("zia_dlp_web_rules", False)),
+    "firewall": dict(res="cloud_firewall_rules", rule=True, title="Firewall", tf=("zia_firewall_filtering_rule", True)),
+    "dns": dict(res="cloud_firewall_dns", rule=True, title="DNS control", tf=("zia_firewall_dns_rule", False)),
+}
+for _k in KINDS.values():
+    if _k["rule"]:
+        _k.update(get="get_rule", add="add_rule", upd="update_rule", dele="delete_rule", lst="list_rules")
+RULE_KINDS = [k for k, v in KINDS.items() if v["rule"]]
+KIND_LABEL = {k: v["title"] for k, v in KINDS.items()}
 ALL_METHODS = ["CONNECT", "DELETE", "GET", "HEAD", "OPTIONS", "OTHER", "POST", "PUT", "TRACE"]
+BROWSERS = ["CHROME", "FIREFOX", "MSEDGE", "MSCHREDGE", "SAFARI", "OPERA"]   # ZIA isolates known browsers only
 SSL_ACTIONS = {   # from the demo kit, checked against a live tenant
     "DECRYPT": {"type": "DECRYPT",
                 "decrypt_sub_actions": {"server_certificates": "ALLOW", "ocsp_check": True,
@@ -60,6 +74,18 @@ def key_for(kind, n):
 
 def ledger_of(pov):
     return Ledger(pov.path("ledger.json"), pov.id, pov.prefix)
+
+
+def obj_name(o):
+    return str(g(o, "name") or g(o, "configured_name") or "")
+
+
+def list_kind(t, kind, rule_type=None):
+    k = KINDS[kind]
+    args = (rule_type,) if k.get("typed") else ()
+    if k.get("q"):
+        return items(t.call(k["res"], k["lst"], *args, query_params=k["q"]))
+    return items(t.call(k["res"], k["lst"], *args))
 
 
 # ---------------------------------------------------------------- discovery helpers (all reads)
@@ -128,10 +154,25 @@ class ZIA(Product):
     def role_scopes(self):
         # Placeholders: the exact ZIA role scope names are an open question in the design (confirm in a lab tenant).
         return {"discovery": [("ZIA: all policy and administration areas", "view only")],
-                "apply": [("ZIA policy: URL filtering, SSL inspection, Cloud App Control, DLP web rules, rule labels",
+                "apply": [("ZIA policy: URL filtering, SSL inspection, Cloud App Control, file type control, DLP web "
+                           "rules, firewall and DNS control, rule labels, custom URL categories, network services",
                            "full"),
                           ("ZIA: activation", "allowed"),
                           ("ZIA administration, roles, user management, authentication settings", "none")]}
+
+    # ---------------------------------------------------------------- names
+    def _names(self, pov):
+        """{kind: {planned names}} for every object the template can create."""
+        tpl, P = template(), pov.prefix
+        out = {k: set() for k in KINDS}
+        out["label"].add(naming.safe_name(naming.name(P, tpl["label"]["name"]), P))
+        out["url_category"].add(naming.safe_name(naming.name(P, tpl["url_category"]["name"]), P))
+        out["network_service"].add(naming.safe_name(naming.name(P, tpl["network_service"]["name"]), P))
+        for kind, sect in (("url_filtering", "url_filtering"), ("url_filtering", "isolation"), ("ssl", "ssl_inspection"),
+                           ("cloud_app_control", "cloud_app_control"), ("file_type", "file_type"), ("dlp", "dlp"),
+                           ("firewall", "firewall"), ("dns", "dns")):
+            out[kind] |= {naming.name(P, r["name"]) for r in tpl[sect]}
+        return out
 
     # ---------------------------------------------------------------- discover
     def discover(self, t, pov):
@@ -181,29 +222,45 @@ class ZIA(Product):
             for k in ("name", "predefined_engine_name"):
                 if g(e, k):
                     snap["dlp_engines"][str(g(e, k))] = g(e, "id")
+        try:
+            cats = t.call("file_type_control_rule", "list_file_type_categories",
+                          query_params={"enums": "FILETYPECATEGORYFORFILETYPECONTROL"})
+            names = {g(c, "name") if isinstance(c, dict) else c for c in items(cats)}
+            snap["file_types"] = sorted(n for n in names if n) or None
+        except Exception:
+            snap["file_types"] = None   # older tenants: no listing, so the template's names are sent as they are
+        try:
+            profiles = items(t.call("cloud_browser_isolation", "list_isolation_profiles"))
+            cbi = next((p for p in profiles if g(p, "default_profile")), None) or (profiles[0] if profiles else None)
+            snap["cbi"] = {"id": g(cbi, "id"), "name": g(cbi, "name"), "url": g(cbi, "url")} if cbi else None
+        except Exception:
+            snap["cbi"] = None
         snap["cac"] = {}
         for r in tpl["cloud_app_control"]:
             apps, actions, why = pick_actions(t, r["rule_type"], r["applications"], r["actions"])
             snap["cac"][r["name"]] = {"apps": apps, "actions": actions, "why": why}
 
-        planned = self._planned_names(pov)
+        planned = self._names(pov)
         snap["customer_names"], lookalikes, taken = [], [], []
         for kind in KINDS:
-            types_ = sorted({r["rule_type"] for r in tpl["cloud_app_control"]}) if kind == "cloud_app_control" else [None]
+            types_ = sorted({r["rule_type"] for r in tpl["cloud_app_control"]}) if KINDS[kind].get("typed") else [None]
             rows = []
             for rt in types_:
-                res, meth = LIST[kind]
-                rows += items(t.call(res, meth, rt) if rt else t.call(res, meth))
-            snap["kinds"][kind] = {"count": len(rows),
-                                   "orders": sorted(int(g(r, "order") or 0) for r in rows if int(g(r, "order") or 0) > 0)}
+                try:
+                    rows += list_kind(t, kind, rt)
+                except KitError as e:
+                    checks.append(check(f"zia-read-{kind}", f"{KIND_LABEL[kind]} readable", FAIL, str(e)[:160],
+                                        "Give the discovery client view access to this ZIA area."))
+            snap["kinds"][kind] = {"count": len(rows)}
             for r in rows:
-                n = str(g(r, "name") or "")
+                n = obj_name(r)
                 mine = ledger.by_id("zia", kind, g(r, "id")) is not None
                 if not naming.has_prefix(n, pov.prefix):
-                    snap["customer_names"].append(n)
+                    if not g(r, "predefined"):
+                        snap["customer_names"].append(n)
                 elif not mine:
                     lookalikes.append(f"'{n}' ({KIND_LABEL[kind]})")
-                if n in planned.get(kind, ()) and not mine:
+                if n in planned[kind] and not mine:
                     taken.append(f"'{n}' ({KIND_LABEL[kind]})")
         snap["taken"] = taken
         if lookalikes:
@@ -212,15 +269,10 @@ class ZIA(Product):
         checks.append(check("zia-names", "POV names are free", FAIL if taken else OK,
                             ", ".join(taken) if taken else f"{sum(len(v) for v in planned.values())} names checked",
                             "Start the POV with a different prefix (`pov-kit new --prefix NAME`)." if taken else ""))
+        if not snap["cbi"]:
+            checks.append(check("zia-cbi", "Cloud Browser Isolation profile", INFO, "none in this tenant",
+                                "The isolation rule (IS-CBI-01) is left out."))
         return snap, checks
-
-    def _planned_names(self, pov):
-        tpl, P = template(), pov.prefix
-        out = {"label": {naming.safe_name(naming.name(P, tpl["label"]["name"]), P)}}
-        for kind, sect in (("url_filtering", "url_filtering"), ("ssl", "ssl_inspection"),
-                           ("cloud_app_control", "cloud_app_control"), ("dlp", "dlp")):
-            out[kind] = {naming.name(P, r["name"]) for r in tpl[sect]}
-        return out
 
     # ---------------------------------------------------------------- plan (snapshot only, no tenant calls)
     def plan(self, pov, snap):
@@ -233,39 +285,65 @@ class ZIA(Product):
         affects = f"members of '{grp['name']}' only"
         scope = {"groups": [grp["id"]], "state": "ENABLED", "rank": 7, "labels": ["{ref:zia.label}"]}
         cats = set(snap.get("url_categories") or [])
+        refs = {"@" + tpl["url_category"]["key"]: f"{{ref:zia.url_category.{tpl['url_category']['key']}}}",
+                "@" + tpl["network_service"]["key"]: f"{{ref:zia.network_service.{tpl['network_service']['key']}}}"}
 
-        lname = naming.safe_name(naming.name(P, tpl["label"]["name"]), P)
-        out.append(item("zia", "label", "zia.label", lname, body={
-            "name": lname, "description": naming.describe(pid, "labels every rule this POV creates")},
-            affects="nobody (a label only)", why="Created first: if the apply client lacks write access, apply stops "
-            "here with nothing else changed."))
+        def rule(kind, r, body, rule_type=None, why=None):
+            n = naming.name(P, r["name"])
+            out.append(item("zia", kind, key_for(kind, r["name"]), n, rule_type=rule_type, placement=placement,
+                            affects=affects, criteria=r.get("criteria", []), why=why if why is not None else r.get("why", ""),
+                            body=dict(scope, name=n, description=naming.describe(pid, ", ".join(r.get("criteria", []))),
+                                      **body)))
 
         def keep_cats(r):
-            ok = [c for c in r.get("url_categories", []) if not cats or c in cats]
-            gone = [c for c in r.get("url_categories", []) if c not in ok]
+            ok = [refs.get(c, c) for c in r.get("url_categories", []) if c in refs or not cats or c in cats]
+            gone = [c for c in r.get("url_categories", []) if c not in refs and cats and c not in cats]
             if gone:
                 notes.append(f"'{naming.name(P, r['name'])}': categories not in this tenant, left out: {', '.join(gone)}")
             return ok
 
+        # supporting objects first: the label (the canary), the tenant-check category, the network service
+        lname = naming.safe_name(naming.name(P, tpl["label"]["name"]), P)
+        out.append(item("zia", "label", "zia.label", lname, affects="nobody (a label only)",
+                        body={"name": lname, "description": naming.describe(pid, "labels every rule this POV creates")},
+                        why="Created first: if the apply client lacks write access, apply stops here with nothing "
+                            "else changed."))
+        uc = tpl["url_category"]
+        ucname = naming.safe_name(naming.name(P, uc["name"]), P)
+        out.append(item("zia", "url_category", f"zia.url_category.{uc['key']}", ucname, criteria=uc["criteria"],
+                        affects="nobody until a rule uses it", why=uc["description"],
+                        body={"configured_name": ucname, "super_category": "USER_DEFINED", "urls": uc["urls"],
+                              "custom_category": True, "description": naming.describe(pid, uc["description"])}))
+        ns = tpl["network_service"]
+        nsname = naming.safe_name(naming.name(P, ns["name"]), P)
+        out.append(item("zia", "network_service", f"zia.network_service.{ns['key']}", nsname, criteria=ns["criteria"],
+                        affects="nobody until a rule uses it", why=ns["description"],
+                        body={"name": nsname, "ports": [["dest", "tcp", str(p)] for p in ns["dest_tcp"]],
+                              "description": naming.describe(pid, ns["description"])}))
+
         for r in tpl["url_filtering"]:
-            n = naming.name(P, r["name"])
             c = keep_cats(r)
-            if not c:
+            if c:
+                rule("url_filtering", r, dict(action=r["action"], url_categories=c, protocols=["ANY_RULE"],
+                                              request_methods=["CONNECT", "GET", "HEAD"] if r["action"] == "CAUTION"
+                                              else ALL_METHODS))
+        for r in tpl["isolation"]:
+            if not snap.get("cbi"):
+                notes.append(f"'{naming.name(P, r['name'])}' left out: no Cloud Browser Isolation profile in this tenant")
                 continue
-            out.append(item("zia", "url_filtering", key_for("url_filtering", r["name"]), n, placement=placement,
-                            affects=affects, criteria=r["criteria"], body=dict(
-                                scope, name=n, action=r["action"], url_categories=c, protocols=["ANY_RULE"],
-                                request_methods=["CONNECT", "GET", "HEAD"] if r["action"] == "CAUTION" else ALL_METHODS,
-                                description=naming.describe(pid, ", ".join(r["criteria"])))))
+            c = keep_cats(r)
+            if c:
+                rule("url_filtering", r, dict(action="ISOLATE", url_categories=c, protocols=["HTTPS_RULE", "HTTP_RULE"],
+                                              request_methods=["CONNECT", "GET", "HEAD"], user_agent_types=BROWSERS,
+                                              cbi_profile=snap["cbi"]),
+                     why=f"Opens these sites in the isolation profile '{snap['cbi']['name']}'.")
         for r in tpl["ssl_inspection"]:
-            n = naming.name(P, r["name"])
-            body = dict(scope, name=n, action=SSL_ACTIONS[r["action"]], description=naming.describe(pid, r["why"]))
+            body = {"action": SSL_ACTIONS[r["action"]]}
             if r.get("url_categories"):
                 body["url_categories"] = keep_cats(r)
                 if not body["url_categories"]:
                     continue
-            out.append(item("zia", "ssl", key_for("ssl", r["name"]), n, placement=placement, affects=affects,
-                            criteria=r["criteria"], why=r.get("why", ""), body=body))
+            rule("ssl", r, body)
         for r in tpl["cloud_app_control"]:
             n = naming.name(P, r["name"])
             got = (snap.get("cac") or {}).get(r["name"]) or {}
@@ -274,24 +352,31 @@ class ZIA(Product):
                 continue
             if got.get("why"):
                 notes.append(f"'{n}': {got['why']}")
-            out.append(item("zia", "cloud_app_control", key_for("cloud_app_control", r["name"]), n,
-                            rule_type=r["rule_type"], placement=placement, affects=affects, criteria=r["criteria"],
-                            body=dict(scope, name=n, applications=got["apps"], actions=got["actions"],
-                                      description=naming.describe(pid, ", ".join(r["criteria"])))))
+            rule("cloud_app_control", r, dict(applications=got["apps"], actions=got["actions"]), rule_type=r["rule_type"])
+        for r in tpl["file_type"]:
+            types_ = r["file_types"]
+            if snap.get("file_types"):
+                gone = [x for x in types_ if x not in snap["file_types"]]
+                types_ = [x for x in types_ if x in snap["file_types"]]
+                if gone:
+                    notes.append(f"'{naming.name(P, r['name'])}': file types not in this tenant, left out: {', '.join(gone)}")
+            if types_:
+                rule("file_type", r, dict(filtering_action=r["filtering_action"], operation=r["operation"],
+                                          file_types=types_, protocols=["FOHTTP_RULE", "FTP_RULE", "HTTPS_RULE", "HTTP_RULE"]))
         for r in tpl["dlp"]:
-            n = naming.name(P, r["name"])
             ids = [snap["dlp_engines"][e] for e in r["engines"] if e in (snap.get("dlp_engines") or {})]
             missing = [e for e in r["engines"] if e not in (snap.get("dlp_engines") or {})]
             if missing:
-                notes.append(f"'{n}': DLP engines not found, left out: {', '.join(missing)}")
-            if not ids:
-                continue
-            out.append(item("zia", "dlp", key_for("dlp", r["name"]), n, placement=placement, affects=affects,
-                            criteria=r["criteria"], body=dict(
-                                scope, name=n, action=r["action"], dlp_engines=ids,
-                                protocols=["FTP_RULE", "HTTPS_RULE", "HTTP_RULE"],
-                                severity="RULE_SEVERITY_HIGH" if r["action"] == "BLOCK" else "RULE_SEVERITY_MEDIUM",
-                                description=naming.describe(pid, ", ".join(r["criteria"])))))
+                notes.append(f"'{naming.name(P, r['name'])}': DLP engines not found, left out: {', '.join(missing)}")
+            if ids:
+                rule("dlp", r, dict(action=r["action"], dlp_engines=ids, protocols=["FTP_RULE", "HTTPS_RULE", "HTTP_RULE"],
+                                    severity="RULE_SEVERITY_HIGH" if r["action"] == "BLOCK" else "RULE_SEVERITY_MEDIUM"))
+        for r in tpl["firewall"]:
+            rule("firewall", r, dict(action=r["action"], nw_services=[refs.get(x, x) for x in r["nw_services"]],
+                                     enable_full_logging=True))
+        for r in tpl["dns"]:
+            rule("dns", r, dict(action=r["action"], res_categories=r["res_categories"]))
+
         for ca in tpl["customer_actions"]:
             out.append(item("zia", "customer_action", ca["key"], ca["name"], action="customer_action",
                             criteria=ca["criteria"], why=ca["why"], console=ca["console"]))
@@ -317,18 +402,19 @@ class ZIA(Product):
             raise KitError(f"ZIA has changes waiting to be activated (status {st}). Nothing was {verb}. Ask the admin "
                            "to activate or discard them, then rerun; the kit never activates someone else's work.")
 
-    def _place(self, t, it, body):
+    def _place(self, t, it):
         """Order 1 upward for 'top' (some tenants pin predefined rules first; the next slot is tried), last+1 for
         'bottom'. As the demo kit's _add_at_top."""
-        res, meth = LIST[it["kind"]]
-        rows = items(t.call(res, meth, it["rule_type"]) if it.get("rule_type") else t.call(res, meth))
+        k = KINDS[it["kind"]]
+        rows = list_kind(t, it["kind"], it.get("rule_type"))
         taken = sorted(int(g(r, "order") or 0) for r in rows if int(g(r, "order") or 0) > 0)
-        tries = range(1, (taken[-1] if taken else 0) + 2) if it.get("placement") != "bottom" else [(taken[-1] if taken else 0) + 1]
+        tries = (range(1, (taken[-1] if taken else 0) + 2) if it.get("placement") != "bottom"
+                 else [(taken[-1] if taken else 0) + 1])
+        args = (it["rule_type"],) if k.get("typed") else ()
         last = None
         for order in tries:
             try:
-                args = (it["rule_type"],) if it.get("rule_type") else ()
-                return t.create(it["key"], API[it["kind"]][0], API[it["kind"]][2], *args, **dict(body, order=order))
+                return t.create(it["key"], k["res"], k["add"], *args, **dict(it["body"], order=order))
             except GuardError:
                 raise
             except KitError as e:
@@ -340,24 +426,31 @@ class ZIA(Product):
     def apply(self, t, pov, items_, log):
         self.guard_activation(t, "applied")
         mine = [i for i in items_ if i["product"] == "zia" and i["action"] == "create"]
-        for it in [i for i in mine if i["kind"] == "label"]:
-            t.create(it["key"], "rule_labels", "add_label", **it["body"])
-            log("ok", f"Created {it['name']}")
-        for kind in ("url_filtering", "ssl", "cloud_app_control", "dlp"):
+        for kind in [k for k in KINDS if not KINDS[k]["rule"]]:
+            for it in [i for i in mine if i["kind"] == kind]:
+                k = KINDS[kind]
+                if kind == "url_category":
+                    t.create(it["key"], k["res"], k["add"], extract_id=lambda r: r.get("id"), **it["body"])
+                else:
+                    t.create(it["key"], k["res"], k["add"], **it["body"])
+                log("ok", f"Created {it['name']}")
+        for kind in RULE_KINDS:
             group = [i for i in mine if i["kind"] == kind]
             # placed one by one at the top, so the last created ends up first: go in reverse to keep template order
             for it in (reversed(group) if pov.cfg.get("placement", "top") == "top" else group):
-                self._place(t, it, it["body"])
+                self._place(t, it)
                 log("ok", f"Created {it['name']}")
         t.activate()
         log("ok", "ZIA changes activated")
 
     # ---------------------------------------------------------------- live objects, drift, teardown
+    def _args(self, entry):
+        return (entry["rule_type"], entry["id"]) if KINDS[entry["kind"]].get("typed") else (entry["id"],)
+
     def live_object(self, t, entry):
-        res, get = API[entry["kind"]][:2]
-        args = (entry["rule_type"], entry["id"]) if entry.get("rule_type") else (entry["id"],)
+        k = KINDS[entry["kind"]]
         try:
-            o = t.call(res, get, *args)
+            o = t.call(k["res"], k["get"], *self._args(entry))
         except Exception as e:
             if re.search(r"\b404\b|not found|does not exist", str(e), re.I):
                 return None
@@ -366,11 +459,8 @@ class ZIA(Product):
 
     def drift(self, t, pov, ledger, items_):
         out, missing, gone, foreign, disabled, unscoped = [], [], [], [], [], []
-        grp_id = None
-        for it in items_:
-            if it["product"] != "zia" or it["action"] != "create":
-                continue
-            grp_id = grp_id or (it["body"].get("groups") or [None])[0]
+        mine = [i for i in items_ if i["product"] == "zia" and i["action"] == "create"]
+        for it in mine:
             e = ledger.find(it["key"])
             if not e:
                 missing.append(it["name"])
@@ -383,17 +473,16 @@ class ZIA(Product):
             if not ok:
                 foreign.append(f"{it['name']}: {why}")
                 continue
-            if e["kind"] != "label":
+            if KINDS[e["kind"]]["rule"]:
                 if g(live, "state") not in (None, "ENABLED"):
                     disabled.append(it["name"])
                 ids = {str(g(x, "id") if isinstance(x, dict) else x) for x in (g(live, "groups") or [])}
-                if grp_id is not None and ids != {str(grp_id)}:
+                if ids != {str(x) for x in it["body"].get("groups", [])}:
                     unscoped.append(it["name"])
-        total = sum(1 for i in items_ if i["product"] == "zia" and i["action"] == "create")
         out.append(check("zia-present", "POV objects present", WARN if (missing or gone) else OK,
                          "; ".join(filter(None, [f"not created yet: {', '.join(missing)}" if missing else "",
                                                  f"deleted in the console: {', '.join(gone)}" if gone else ""]))
-                         or f"all {total}", "Run `pov-kit status --fix`." if (missing or gone) else "",
+                         or f"all {len(mine)}", "Run `pov-kit status --fix`." if (missing or gone) else "",
                          fixable=bool(missing or gone)))
         if disabled:
             out.append(check("zia-disabled", "POV rules enabled", WARN, ", ".join(disabled), "Run `pov-kit status --fix`.",
@@ -430,15 +519,13 @@ class ZIA(Product):
                 ledger.mark(e, "deleted")
                 log("info", f"{it['name']} was deleted in the console; apply will recreate it")
                 continue
-            if e["kind"] == "label":
+            if not KINDS[e["kind"]]["rule"]:
                 continue
             ids = {str(g(x, "id") if isinstance(x, dict) else x) for x in (g(live, "groups") or [])}
             want = {str(x) for x in it["body"].get("groups", [])}
             if g(live, "state") not in (None, "ENABLED") or ids != want:
-                res, _, _, upd, _ = API[e["kind"]]
-                args = (e["rule_type"], e["id"]) if e.get("rule_type") else (e["id"],)
-                body = dict(it["body"], order=g(live, "order"))
-                t.update(e, live, res, upd, *args, **body)
+                k = KINDS[e["kind"]]
+                t.update(e, live, k["res"], k["upd"], *self._args(e), **dict(it["body"], order=g(live, "order")))
                 log("ok", f"Restored {it['name']}")
                 changed = True
         if changed:
@@ -448,20 +535,19 @@ class ZIA(Product):
     def teardown(self, t, pov, ledger, log):
         self.guard_activation(t, "deleted")
         out, deleted = [], 0
-        for e in ledger.newest_first("zia"):   # rules before the label they carry
+        for e in ledger.newest_first("zia"):   # rules before the label, category and service they use
             live = self.live_object(t, e)
             if live is None:
                 ledger.mark(e, "deleted")
                 log("info", f"{e['name']} was already gone")
                 continue
-            res, _, _, _, dele = API[e["kind"]]
-            args = (e["rule_type"], e["id"]) if e.get("rule_type") else (e["id"],)
             if e["state"] == "adopted" and not getattr(pov, "include_adopted", False):
                 out.append(check("zia-adopted", f"Kept: {e['name']}", INFO, "built by hand and adopted",
                                  "Run teardown again and answer yes to delete adopted objects too."))
                 continue
+            k = KINDS[e["kind"]]
             try:
-                t.delete(e, live, res, dele, *args)
+                t.delete(e, dict(live, name=obj_name(live)), k["res"], k["dele"], *self._args(e))
                 deleted += 1
                 log("ok", f"Deleted {e['name']}")
             except GuardError as err:
@@ -469,17 +555,13 @@ class ZIA(Product):
         if deleted:
             t.activate()
             log("ok", "ZIA changes activated")
-        for e in [x for x in ledger.entries if x["product"] == "zia" and x["state"] == "deleted"]:
-            if self.live_object(t, e) is not None and e.get("deleted_at"):
-                out.append(check("zia-still", f"Still in the tenant: {e['name']}", FAIL, "deleted, but still listed",
-                                 "Wait a minute and rerun teardown; then delete it in the console."))
         out.append(check("zia-teardown", "ZIA POV objects removed", OK if not out else WARN, f"{deleted} deleted"))
         return out
 
     def terraform(self, entry, live):
-        if entry["kind"] not in TF:
+        if entry["kind"] not in KINDS:
             return None
-        rtype, confirmed = TF[entry["kind"]]
+        rtype, confirmed = KINDS[entry["kind"]]["tf"]
         return {"type": rtype, "confirmed": confirmed, "id": entry["id"], "name": entry["name"]}
 
     def customer_names(self, snap):

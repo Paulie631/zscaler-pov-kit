@@ -1,0 +1,43 @@
+{
+ "product": "zpa",
+ "criteria": [
+  {
+   "id": "PA-APP-01",
+   "phase": "v2",
+   "title": "Pilot users reach the POV app",
+   "statement": "Pilot users open the POV application through the App Connector, with no VPN.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "tcp",
+     "host": "{zpa.domain}",
+     "port": "{zpa.port}",
+     "expect": "open"
+    }
+   ]
+  },
+  {
+   "id": "PA-APP-02",
+   "phase": "v2",
+   "title": "Everyone else is denied",
+   "statement": "Users outside the pilot group can't reach the POV application.",
+   "proofs": [
+    "api",
+    "attested"
+   ],
+   "attest": "From a device signed in as a user outside the pilot group, the POV app doesn't open."
+  },
+  {
+   "id": "PA-CON-01",
+   "phase": "v2",
+   "title": "Connector group is healthy",
+   "statement": "The POV connector group has two healthy connectors for failover.",
+   "proofs": [
+    "api"
+   ]
+  }
+ ]
+}

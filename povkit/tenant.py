@@ -37,8 +37,10 @@ class Tenant:
 
     def call(self, resource, method, *a, **kw):
         prefix, _, area = resource.partition(".") if "." in resource else ("zia", "", resource)
-        svc = getattr(self.c, prefix if prefix in ("zid", "zcc", "zpa", "zdx", "zins") else "zia")
+        svc = getattr(self.c, prefix if prefix in ("zid", "zcc", "zpa", "zdx", "zins", "aiguard") else "zia")
         api = getattr(svc, area or resource)
+        if resource == "zpa.policies" and "conditions" in kw:
+            kw = dict(kw, conditions=tuplify(kw["conditions"]))   # the SDK reads rule conditions as tuples
         t0 = time.time()
         try:
             out = getattr(api, method)(*a, **kw)
@@ -58,6 +60,18 @@ class Tenant:
             raise KitError(f"{resource}.{method} failed: {err}")
         body = resp.get_body() if resp is not None and hasattr(resp, "get_body") else None
         return body if body is not None else _plain(result)
+
+
+def tuplify(conditions):
+    """JSON has no tuples, so the change list stores ZPA rule conditions as lists. The SDK wants a list of tuples:
+    ("app", ["id"]) and ("scim_group", [("idp id", "group id")]), as in its add_access_rule_v2 examples."""
+    out = []
+    for c in conditions:
+        kind, value = c[0], c[1]
+        if isinstance(value, list) and value and isinstance(value[0], list):
+            value = [tuple(v) for v in value]
+        out.append((kind, value))
+    return out
 
 
 def items(body):

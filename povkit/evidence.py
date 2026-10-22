@@ -1,8 +1,9 @@
 """Proving success criteria. A criterion passes only when every proof it lists agrees.
 
   probe     the newest imported probe run that covers it: every probe spec got its expected outcome
-  api       0.1: not automated yet. An attestation stands in for it ("event seen in Web Insights"), marked so
-            in the report, until the API proofs land
+  api       the product's automated API proof (`pov-kit test --api`: connector health, Detection API scans,
+            device scores, rule scoping...). Where a product has none yet (ZIA's log checks), an attestation stands
+            in for it ("event seen in Web Insights"), marked so in the report
   attested  a person's note (and optional screenshot) recorded with `pov-kit attest`
 """
 from __future__ import annotations
@@ -19,13 +20,13 @@ PASS, FAIL_, INCOMPLETE = "pass", "fail", "incomplete"
 
 
 def selected_criteria(pov, ids=None):
-    out = []
-    for p in products.selected(pov.products):
-        for c in p.criteria():
-            if (ids and c["id"] in ids) or (not ids and c.get("phase") == "v1" and p.ready):
-                out.append(c)
+    """The criteria of the POV's products: all of them, or the ones agreed with the customer
+    (`pov-kit set criteria ...`), or the ids asked for."""
+    out = [c for p in products.selected(pov.products) for c in p.criteria()]
+    if ids:
+        return [c for c in out if c["id"] in ids]
     chosen = set(pov.cfg.get("criteria") or [])
-    return [c for c in out if not chosen or c["id"] in chosen or ids]
+    return [c for c in out if not chosen or c["id"] in chosen]
 
 
 def import_probe(pov, src: Path):
@@ -64,6 +65,7 @@ def attest(pov, cid, note, by, file=None):
 
 def evaluate(pov, ids=None):
     runs, atts = probe_runs(pov), pov.read_json("attestations.json", [])
+    apis = pov.read_json("api_proofs.json", {}) or {}
     rows = []
     for c in selected_criteria(pov, ids):
         proofs, overall = {}, PASS
@@ -79,8 +81,15 @@ def evaluate(pov, ids=None):
                                    "device": run.get("device"), "results": res}
         mine = [a for a in atts if a["criterion"] == c["id"]]
         if "api" in c["proofs"]:
-            proofs["api"] = ({"status": PASS, "detail": "attested (API proof not automated in 0.1)", "attestation": mine[-1]}
-                             if mine else {"status": INCOMPLETE, "detail": "API proof not automated in 0.1; attest it"})
+            auto = apis.get(c["id"])
+            if auto and auto["status"] in (PASS, FAIL_):
+                proofs["api"] = dict(auto, automated=True)
+            elif mine:
+                proofs["api"] = {"status": PASS, "detail": "attested (no automated API proof for this one)",
+                                 "attestation": mine[-1]}
+            else:
+                proofs["api"] = {"status": INCOMPLETE, "detail": (auto or {}).get("detail")
+                                 or "run `pov-kit test --api`, or attest it if there's no automated proof"}
         if "attested" in c["proofs"] or c.get("attest"):
             proofs["attested"] = ({"status": PASS, "attestation": mine[-1]} if mine else
                                   {"status": INCOMPLETE, "detail": c.get("attest") or "needs an attestation"})
@@ -88,3 +97,26 @@ def evaluate(pov, ids=None):
         overall = FAIL_ if FAIL_ in sts else INCOMPLETE if INCOMPLETE in sts else PASS
         rows.append({"criterion": c, "status": overall, "proofs": proofs})
     return rows
+
+
+def probe_pack(pov, ids=None):
+    """The probe tests for this POV, with its values filled in ({zpa.domain}...), for `pov-kit probe --pack`."""
+    zpa = pov.cfg.get("zpa") or {}
+    port = str((zpa.get("tcp_ports") or ["443"])[0]).split("-")[0]
+    values = {"{zpa.domain}": (zpa.get("domains") or [""])[0], "{zpa.port}": port}
+    crit = []
+    for c in selected_criteria(pov, ids):
+        if not c.get("probe"):
+            continue
+        specs = []
+        for sp in c["probe"]:
+            sp = {k: (values.get(v, v) if isinstance(v, str) else v) for k, v in sp.items()}
+            if sp.get("port") is not None and str(sp["port"]).isdigit():
+                sp["port"] = int(sp["port"])
+            if any(isinstance(v, str) and v.startswith("{") and v.endswith("}") for v in sp.values()) or \
+                    any(v == "" for v in sp.values()):
+                continue   # a value this POV hasn't set
+            specs.append(sp)
+        if specs:
+            crit.append({"id": c["id"], "title": c["title"], "probe": specs})
+    return {"pov": pov.id, "customer": pov.cfg["customer"], "criteria": crit}

@@ -180,5 +180,24 @@ class ZCC(Product):
                 out.append(check("zcc-left", f"Left in place: {e['name']}", WARN, str(err)))
         return out
 
+    def api_proof(self, t, pov, ledger, criterion):
+        if criterion["id"] == "IS-ZCC-02":
+            have = [e for e in (ledger.find("zcc.fwd"), ledger.find("zcc.app")) if e]
+            live = [e for e in have if self.live_object(t, e) is not None]
+            return {"status": "pass" if len(live) == 2 else "fail",
+                    "detail": f"{len(live)} of 2 POV profiles in the Client Connector portal"}
+        if criterion["id"] == "IS-ZCC-01":
+            try:
+                devs = items(t.call("zcc.devices", "list_devices", query_params={"page_size": 500}))
+            except KitError as e:
+                return {"status": "incomplete", "detail": f"device list unreadable: {str(e)[:100]}"}
+            emails = {x.lower() for x in pov.cfg.get("pilot_emails") or []}
+            mine = [d for d in devs if str(g(d, "user_name") or g(d, "user") or "").lower() in emails] if emails else []
+            on = [d for d in mine if re.search(r"registered|^1$", str(g(d, "registration_state") or ""), re.I)]
+            if not emails:
+                return {"status": "incomplete", "detail": "name the pilot users: `pov-kit set pilot_emails a@acme.com,b@acme.com`"}
+            return {"status": "pass" if on else "fail", "detail": f"{len(on)} of {len(mine)} pilot devices registered"}
+        return None
+
     def customer_names(self, snap):
         return set(snap.get("customer_names") or [])

@@ -19,9 +19,13 @@ def is_read(method: str) -> bool:
     return bool(READ.match(method))
 
 
-def native(v):
+# Products whose API takes integer IDs in request bodies. ZPA and the others take IDs as strings.
+INT_IDS = {"zia", "aiguard"}
+
+
+def native(v, product="zia"):
     s = str(v)
-    return int(s) if s.isdigit() else v
+    return int(s) if product in INT_IDS and s.isdigit() else s
 
 
 class ReadOnlyTenant:
@@ -44,7 +48,7 @@ class LedgerTenant:
         self.ledger = ledger
         self.approved = {i["key"]: i for i in approved_items}
         # IDs keep their native type ({ref:...} fills ZIA bodies, whose IDs are integers); the ledger stores text
-        self.ids = {e["key"]: native(e["id"]) for e in ledger.active()}
+        self.ids = {e["key"]: native(e["id"], e["product"]) for e in ledger.active()}
 
     def call(self, resource, method, *a, **kw):
         if not is_read(method):
@@ -67,7 +71,7 @@ class LedgerTenant:
                              "rerunning apply.")
         self.ledger.record(key, it["product"], it["kind"], obj_id, body.get("name") or it["name"],
                            rule_type=it.get("rule_type"), stamped=stamped)
-        self.ids[key] = native(obj_id)
+        self.ids[key] = native(obj_id, it["product"])
         return str(obj_id)
 
     # tenant-wide writes the kit may make: only activation, and only after the product's activation guard passed
@@ -87,7 +91,7 @@ class LedgerTenant:
             raise GuardError(f"Won't adopt '{live.get('name')}': the change list names it exactly '{it['name']}'.")
         e = self.ledger.record(key, it["product"], it["kind"], live["id"], it["name"], rule_type=it.get("rule_type"),
                                state="adopted", stamped=False)
-        self.ids[key] = native(e["id"])
+        self.ids[key] = native(e["id"], it["product"])
         return e
 
     def delete(self, entry: dict, live: dict, resource: str, method: str, *a):

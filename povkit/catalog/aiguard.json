@@ -1,0 +1,23 @@
+{
+ "product": "aiguard",
+ "criteria": [
+  {
+   "id": "AI-AIG-01",
+   "phase": "v2",
+   "title": "Prompt injection is detected, then blocked",
+   "statement": "AI Guard flags prompt-injection attempts, and blocks them once the policy enforces.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "AI-AIG-02",
+   "phase": "v2",
+   "title": "Secrets and regulated PII are caught",
+   "statement": "Secrets and regulated PII in prompts and replies are detected, or blocked when enforced.",
+   "proofs": [
+    "api"
+   ]
+  }
+ ]
+}

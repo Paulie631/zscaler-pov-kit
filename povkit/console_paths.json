@@ -1,15 +1,78 @@
 {
   "about": "Every console path the kit prints, in one place: console menus move between versions, so fix them here once. 'page' names the destination so a step still reads clearly after a menu moves; 'verified' is when a path was last checked in a live tenant (null = not yet).",
   "paths": {
-    "oneapi.clients": {"page": "API Clients", "path": "Administration > API > OneAPI > API Clients", "verified": "2026-10", "source": "aiguard-se-kit README"},
-    "zia.users": {"page": "Internet & SaaS Users", "path": "Administration > Internet & SaaS Authentication > Internet & SaaS Users", "verified": "2026-10", "source": "aiguard-se-kit zia_module.py"},
-    "zia.auth": {"page": "Internet Authentication Settings", "path": "Administration > Internet & SaaS Authentication > Internet Authentication Settings", "verified": "2026-10", "source": "aiguard-se-kit zia_module.py"},
-    "zia.groups": {"page": "Groups (Internet & SaaS users)", "path": null, "verified": null},
-    "zia.activation": {"page": "Activation (pending changes)", "path": null, "verified": null},
-    "zia.malware_protection": {"page": "Malware Protection policy", "path": null, "verified": null},
-    "zid.entitlements": {"page": "ZIdentity user entitlements (Internet & SaaS service)", "path": null, "verified": null},
-    "zcc.app_profiles": {"page": "Client Connector app profiles (Windows)", "path": null, "verified": null},
-    "zcc.forwarding_profiles": {"page": "Client Connector forwarding profiles", "path": null, "verified": null},
-    "zcc.enrolled_devices": {"page": "Client Connector enrolled devices", "path": null, "verified": null}
+    "oneapi.clients": {
+      "page": "API Clients",
+      "path": "Administration > API > OneAPI > API Clients",
+      "verified": "2026-10",
+      "source": "aiguard-se-kit README"
+    },
+    "zia.users": {
+      "page": "Internet & SaaS Users",
+      "path": "Administration > Internet & SaaS Authentication > Internet & SaaS Users",
+      "verified": "2026-10",
+      "source": "aiguard-se-kit zia_module.py"
+    },
+    "zia.auth": {
+      "page": "Internet Authentication Settings",
+      "path": "Administration > Internet & SaaS Authentication > Internet Authentication Settings",
+      "verified": "2026-10",
+      "source": "aiguard-se-kit zia_module.py"
+    },
+    "zia.groups": {
+      "page": "Groups (Internet & SaaS users)",
+      "path": null,
+      "verified": null
+    },
+    "zia.activation": {
+      "page": "Activation (pending changes)",
+      "path": null,
+      "verified": null
+    },
+    "zia.malware_protection": {
+      "page": "Malware Protection policy",
+      "path": null,
+      "verified": null
+    },
+    "zid.entitlements": {
+      "page": "ZIdentity user entitlements (Internet & SaaS service)",
+      "path": null,
+      "verified": null
+    },
+    "zcc.app_profiles": {
+      "page": "Client Connector app profiles (Windows)",
+      "path": null,
+      "verified": null
+    },
+    "zcc.forwarding_profiles": {
+      "page": "Client Connector forwarding profiles",
+      "path": null,
+      "verified": null
+    },
+    "zcc.enrolled_devices": {
+      "page": "Client Connector enrolled devices",
+      "path": null,
+      "verified": null
+    },
+    "zpa.app_connectors": {
+      "page": "ZPA App Connectors",
+      "path": null,
+      "verified": null
+    },
+    "zia.saas_tenants": {
+      "page": "SaaS application tenants (SaaS security)",
+      "path": null,
+      "verified": null
+    },
+    "zpa.access_policy": {
+      "page": "ZPA access policy",
+      "path": null,
+      "verified": null
+    },
+    "aiguard.policies": {
+      "page": "AI Guard policies",
+      "path": null,
+      "verified": null
+    }
   }
 }

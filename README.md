@@ -4,8 +4,9 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.1.0, scaffold**. Run it in a lab tenant first
-([TESTPLAN.md](TESTPLAN.md)); not yet for customer tenants.
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.2.0**: every product module is built and
+tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
+tenants.
 
 ## What it will and won't do in a customer tenant
 
@@ -18,7 +19,8 @@ safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.1.0, 
   Client Connector) are *customer actions* in the change list: the kit checks them, a person makes them.
 - **Rules apply to the customer's pilot group only**, placed at the top (or bottom) of each rule type, as the change
   list says.
-- **It never activates someone else's work.** If ZIA has pending changes, apply and teardown stop.
+- **It never activates someone else's work.** If ZIA has pending changes, apply and teardown stop (CASB DLP rules
+  are ZIA policy, so they follow the same rule).
 - **It leaves cleanly.** `handover teardown` deletes the ledger objects; `handover terraform` exports them with
   `import` blocks so the customer adopts them in place. Both delete the POV's secrets and discovery data.
 
@@ -38,10 +40,16 @@ safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.1.0, 
 ./pov-kit status                                   # --fix repairs drift on POV objects only
 ```
 
-On a pilot device with Client Connector signed in: `./pov-kit probe` (no keys), then send the results file to the SE:
+Product extras: `./pov-kit set zpa.domains hr.acme.internal` (the POV app) and `./pov-kit zpa template` (its App
+Connectors on AWS); `./pov-kit aiguard policy attacks` (what the POV's AI Guard policy blocks); `./pov-kit set
+pilot_emails jane@acme.com,raj@acme.com` (for ZDX and device checks).
+
+`./pov-kit probe-pack` writes this POV's probe tests. On a pilot device with Client Connector signed in:
+`./pov-kit probe --pack pov-probe-pack-<id>.json` (no keys), then send the results file to the SE:
 
 ```
 ./pov-kit import-probe pov-probe-ab12cd34.json
+./pov-kit test --api                               # automated API proofs
 ./pov-kit attest IS-URL-01 --note "Blocks seen in Web Insights for the pilot user"
 ./pov-kit test
 ./pov-kit report                                   # report.html, print to PDF
@@ -52,16 +60,20 @@ On a pilot device with Client Connector signed in: `./pov-kit probe` (no keys), 
 
 ## Products and criteria
 
-| Module | Phase | In this version |
-| --- | --- | --- |
-| ZIA (Internet Security) | v1 | discover, plan, apply, drift and Fix drift, teardown, Terraform export |
-| Client Connector | v1 | forwarding profile copy (Z-Tunnel 2.0) with build-by-hand-and-adopt; app profile by hand and adopt |
-| ZPA, AI Guard | v2 | criteria and role scopes only |
-| ZDX, CASB/SSPM | v3 | criteria and role scopes only |
+Choose products with `pov-kit new "<customer>" --products zia,zcc,zpa,aiguard,zdx,casb` (or `pov-kit set products`).
+Every module has the full lifecycle: read-only discovery, a plan in the change list, apply, drift, teardown.
 
-Criteria live in `povkit/catalog/*.json`: 12 for v1 (URL filtering, SSL inspection, threats, Cloud App Control, DLP,
-Client Connector, GenAI control and GenAI DLP) and 7 more for later phases. API proofs aren't automated in 0.1; an
-attestation stands in for them and the report says so.
+| Module | What the POV creates (pilot group only) | Criteria | Automated API proofs |
+| --- | --- | --- | --- |
+| ZIA | Rule label, tenant-check URL category, network service; URL filtering, isolation, SSL inspection, Cloud App Control, file type control, DLP, firewall and DNS rules | 15 | none yet (attest log checks) |
+| Client Connector | Z-Tunnel 2.0 forwarding profile (copy of the default); Windows app profile, built by hand and adopted | 2 | profiles present, pilot devices registered |
+| ZPA | App Connector group, provisioning key, server and segment groups, the POV app segment, an access rule for the pilot SCIM group; AWS template for 2 connectors | 3 | connectors connected, rule scoped, no broad allow rules |
+| AI Guard | The demo kit's detection policy (starts in Monitor), a POV app, a Detection API key, a rule for that app | 2 | Detection API scans of the kit's attack and data-leak prompts |
+| ZDX | A 15-minute deep trace on each pilot device | 1 | pilot devices report ZDX scores |
+| CASB/SSPM | A report-only CASB DLP rule on a SaaS tenant the customer connected | 1 | SaaS scan configured for that tenant |
+
+Criteria live in `povkit/catalog/<product>.json` (24 in all). `pov-kit test --api` runs the automated proofs; where a
+product has none, an attestation stands in and the report says so.
 
 ## For maintainers
 

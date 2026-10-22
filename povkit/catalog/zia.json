@@ -1,50 +1,282 @@
 {
-  "product": "zia",
-  "criteria": [
-    {"id": "IS-URL-01", "phase": "v1", "title": "Blocked categories are blocked for pilot users",
-     "statement": "Pilot users can't reach gambling or anonymizer sites; each attempt is blocked and logged.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "http", "url": "https://www.bet365.com/", "expect": "block"},
-               {"type": "http", "url": "https://www.pokerstars.com/", "expect": "block"}]},
-    {"id": "IS-URL-02", "phase": "v1", "title": "Caution categories show the caution page",
-     "statement": "Social networking shows Zscaler's caution page first, and the user's choice is logged.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "http", "url": "https://www.reddit.com/", "expect": "caution"}]},
-    {"id": "IS-SSL-01", "phase": "v1", "title": "HTTPS from pilot devices is inspected",
-     "statement": "A test site's certificate on a pilot device is issued by Zscaler.",
-     "proofs": ["probe"],
-     "probe": [{"type": "tls_issuer", "host": "www.wikipedia.org", "expect": "Zscaler"}]},
-    {"id": "IS-SSL-02", "phase": "v1", "title": "Bypassed categories are not decrypted",
-     "statement": "Finance and health sites keep their own certificate.",
-     "proofs": ["probe"],
-     "probe": [{"type": "tls_issuer", "host": "www.chase.com", "expect": "not-Zscaler"}]},
-    {"id": "IS-THR-01", "phase": "v1", "title": "EICAR over HTTPS is blocked as malware",
-     "statement": "The EICAR antivirus test string downloaded over HTTPS is blocked and logged as a virus.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "eicar", "url": "https://httpbin.org/base64/{b64}", "expect": "block"}]},
-    {"id": "IS-THR-02", "phase": "v1", "title": "Known-malicious test pages are blocked",
-     "statement": "Google Safe Browsing's phishing and malware test pages are blocked.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "http", "url": "https://testsafebrowsing.appspot.com/s/phishing.html", "expect": "block"},
-               {"type": "http", "url": "https://testsafebrowsing.appspot.com/s/malware.html", "expect": "block"}]},
-    {"id": "IS-CAC-01", "phase": "v1", "title": "Cloud app control blocks unsanctioned file sharing",
-     "statement": "Uploads to unsanctioned file-sharing apps are blocked; a sanctioned app still works.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "http", "url": "https://www.box.com/", "expect": "allow"}],
-     "attest": "Upload a small file to WeTransfer from a pilot device and confirm the block page."},
-    {"id": "IS-DLP-01", "phase": "v1", "title": "DLP blocks uploads of card numbers",
-     "statement": "An upload containing fake card numbers is blocked and logged with the DLP engine that matched.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "dlp_post", "url": "https://httpbin.org/post", "expect": "block"}]},
-    {"id": "AI-GEN-01", "phase": "v1", "title": "GenAI: approved apps allowed, risky ones blocked",
-     "statement": "ChatGPT and the other approved assistants open; DeepSeek and Character.AI are blocked.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "http", "url": "https://chatgpt.com/", "expect": "allow"},
-               {"type": "http", "url": "https://chat.deepseek.com/", "expect": "block"}]},
-    {"id": "AI-GEN-02", "phase": "v1", "title": "Sensitive data sent to GenAI is blocked by DLP",
-     "statement": "Fake card numbers posted from a pilot device are blocked before they leave, whatever the app.",
-     "proofs": ["probe", "api"],
-     "probe": [{"type": "dlp_post", "url": "https://httpbin.org/post", "expect": "block"}],
-     "attest": "Paste the probe's fake card numbers into ChatGPT on a pilot device and confirm the DLP block."}
-  ]
+ "product": "zia",
+ "criteria": [
+  {
+   "id": "IS-URL-01",
+   "phase": "v1",
+   "title": "Blocked categories are blocked for pilot users",
+   "statement": "Pilot users can't reach gambling or anonymizer sites; each attempt is blocked and logged.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://www.bet365.com/",
+     "expect": "block"
+    },
+    {
+     "type": "http",
+     "url": "https://www.pokerstars.com/",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "IS-TEN-01",
+   "phase": "v1",
+   "title": "Pilot devices are in the customer's tenant",
+   "statement": "A site blocked only for the POV pilot group is blocked on the pilot device, so its traffic reaches this tenant's policy.",
+   "proofs": [
+    "probe"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://www.example.com/",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "IS-URL-02",
+   "phase": "v1",
+   "title": "Caution categories show the caution page",
+   "statement": "Social networking shows Zscaler's caution page first, and the user's choice is logged.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://www.reddit.com/",
+     "expect": "caution"
+    }
+   ]
+  },
+  {
+   "id": "IS-SSL-01",
+   "phase": "v1",
+   "title": "HTTPS from pilot devices is inspected",
+   "statement": "A test site's certificate on a pilot device is issued by Zscaler.",
+   "proofs": [
+    "probe"
+   ],
+   "probe": [
+    {
+     "type": "tls_issuer",
+     "host": "www.wikipedia.org",
+     "expect": "Zscaler"
+    }
+   ]
+  },
+  {
+   "id": "IS-SSL-02",
+   "phase": "v1",
+   "title": "Bypassed categories are not decrypted",
+   "statement": "Finance and health sites keep their own certificate.",
+   "proofs": [
+    "probe"
+   ],
+   "probe": [
+    {
+     "type": "tls_issuer",
+     "host": "www.chase.com",
+     "expect": "not-Zscaler"
+    }
+   ]
+  },
+  {
+   "id": "IS-THR-01",
+   "phase": "v1",
+   "title": "EICAR over HTTPS is blocked as malware",
+   "statement": "The EICAR antivirus test string downloaded over HTTPS is blocked and logged as a virus.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "eicar",
+     "url": "https://httpbin.org/base64/{b64}",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "IS-THR-02",
+   "phase": "v1",
+   "title": "Known-malicious test pages are blocked",
+   "statement": "Google Safe Browsing's phishing and malware test pages are blocked.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://testsafebrowsing.appspot.com/s/phishing.html",
+     "expect": "block"
+    },
+    {
+     "type": "http",
+     "url": "https://testsafebrowsing.appspot.com/s/malware.html",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "IS-CAC-01",
+   "phase": "v1",
+   "title": "Cloud app control blocks unsanctioned file sharing",
+   "statement": "Uploads to unsanctioned file-sharing apps are blocked; a sanctioned app still works.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://www.box.com/",
+     "expect": "allow"
+    }
+   ],
+   "attest": "Upload a small file to WeTransfer from a pilot device and confirm the block page."
+  },
+  {
+   "id": "IS-DLP-01",
+   "phase": "v1",
+   "title": "DLP blocks uploads of card numbers",
+   "statement": "An upload containing fake card numbers is blocked and logged with the DLP engine that matched.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "dlp_post",
+     "url": "https://httpbin.org/post",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "AI-GEN-01",
+   "phase": "v1",
+   "title": "GenAI: approved apps allowed, risky ones blocked",
+   "statement": "ChatGPT and the other approved assistants open; DeepSeek and Character.AI are blocked.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://chatgpt.com/",
+     "expect": "allow"
+    },
+    {
+     "type": "http",
+     "url": "https://chat.deepseek.com/",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "AI-GEN-02",
+   "phase": "v1",
+   "title": "Sensitive data sent to GenAI is blocked by DLP",
+   "statement": "Fake card numbers posted from a pilot device are blocked before they leave, whatever the app.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "dlp_post",
+     "url": "https://httpbin.org/post",
+     "expect": "block"
+    }
+   ],
+   "attest": "Paste the probe's fake card numbers into ChatGPT on a pilot device and confirm the DLP block."
+  },
+  {
+   "id": "IS-CBI-01",
+   "phase": "v1",
+   "title": "Risky categories open in browser isolation",
+   "statement": "Gaming sites open in Cloud Browser Isolation instead of directly.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://store.steampowered.com/",
+     "expect": "isolate"
+    }
+   ]
+  },
+  {
+   "id": "IS-FTC-01",
+   "phase": "v1",
+   "title": "Executable downloads are blocked",
+   "statement": "Downloading a Windows executable is blocked by file type control.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://www.7-zip.org/a/7zr.exe",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "IS-FW-01",
+   "phase": "v1",
+   "title": "The cloud firewall blocks unusual ports",
+   "statement": "Outbound connections to unusual ports are reset by the cloud firewall; ordinary web traffic is not.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "tcp",
+     "host": "portquiz.net",
+     "port": 2222,
+     "expect": "block"
+    },
+    {
+     "type": "tcp",
+     "host": "portquiz.net",
+     "port": 8080,
+     "expect": "open"
+    }
+   ]
+  },
+  {
+   "id": "IS-DNS-01",
+   "phase": "v1",
+   "title": "DNS control blocks a category",
+   "statement": "DNS lookups for a blocked category are stopped by DNS control.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "dns",
+     "server": "8.8.8.8",
+     "name": "www.leafly.com",
+     "expect": "block"
+    }
+   ]
+  }
+ ]
 }

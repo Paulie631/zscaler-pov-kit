@@ -58,7 +58,10 @@ def c_use(a):
     print(f"Using POV {a.pov_id}.")
 
 
-SETTABLE = {"vanity_domain", "cloud", "pilot_group", "placement", "criteria"}
+SETTABLE = {"vanity_domain", "cloud", "pilot_group", "pilot_emails", "placement", "criteria", "products",
+            "zpa.app_name", "zpa.domains", "zpa.tcp_ports", "zpa.group", "zpa.location", "zpa.latitude", "zpa.longitude",
+            "zdx.app", "casb.tenant", "aiguard.competitor"}
+LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports"}
 
 
 def c_set(a):
@@ -68,9 +71,17 @@ def c_set(a):
     v = a.value
     if a.key == "placement" and v not in ("top", "bottom"):
         raise KitError("placement is 'top' or 'bottom'.")
-    if a.key == "criteria":
+    if a.key in LISTS:
         v = [x.strip() for x in v.split(",") if x.strip()]
-    p.cfg[a.key] = v
+    if a.key == "products":
+        bad = [x for x in v if x not in products.REGISTRY]
+        if bad:
+            raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.ORDER)}.")
+    if "." in a.key:
+        sect, field = a.key.split(".", 1)
+        p.cfg.setdefault(sect, {})[field] = v
+    else:
+        p.cfg[a.key] = v
     p.save()
     print(f"{a.key} = {v}")
 
@@ -159,14 +170,28 @@ def c_status(a):
     return exit_code(checks)
 
 
+def c_probe_pack(a):
+    p = _pov(a)
+    pack = evidence.probe_pack(p, set(a.criteria.split(",")) if a.criteria else None)
+    out = Path(a.out or f"pov-probe-pack-{p.id}.json")
+    out.write_text(json.dumps(pack, indent=2), encoding="utf-8")
+    n = sum(len(c["probe"]) for c in pack["criteria"])
+    print(f"Probe pack: {out} ({len(pack['criteria'])} criteria, {n} tests). Copy it to the pilot device with the kit "
+          f"and run `pov-kit probe --pack {out.name}`.")
+
+
 def c_probe(a):
     from . import probe
-    crit = [c for c in products.base.load_catalog() if c.get("probe")]
+    if a.pack:
+        crit = json.loads(Path(a.pack).read_text(encoding="utf-8"))["criteria"]
+    else:   # no pack: the catalog's tests that need no POV values
+        crit = [c for c in products.base.load_catalog() if c.get("probe")]
+        crit = [dict(c, probe=[s for s in c["probe"] if not any("{" in str(v) and "{b64}" not in str(v) for v in s.values())])
+                for c in crit]
+        crit = [c for c in crit if c["probe"]]
     if a.criteria:
         want = set(a.criteria.split(","))
         crit = [c for c in crit if c["id"] in want]
-    else:
-        crit = [c for c in crit if c.get("phase") == "v1"]
     res = probe.run(crit)
     out = Path(a.out or f"pov-probe-{res['run_id']}.json")
     probe.save(res, out)
@@ -190,10 +215,38 @@ def c_attest(a):
 
 def c_test(a):
     p = _pov(a)
-    rows = evidence.evaluate(p, set(a.criteria.split(",")) if a.criteria else None)
+    ids = set(a.criteria.split(",")) if a.criteria else None
+    if a.api:
+        for cid, r in lifecycle.api_proofs(p, tenant_for, ids).items():
+            say({"pass": "ok", "fail": "fail"}.get(r["status"], "warn"), f"{cid} API proof: {r['status']} ({r.get('detail', '')})")
+    rows = evidence.evaluate(p, ids)
     for r in rows:
         say({"pass": "ok", "fail": "fail"}.get(r["status"], "warn"), f"{r['criterion']['id']} {r['criterion']['title']}: {r['status']}")
     return 1 if any(r["status"] == "fail" for r in rows) else 2 if any(r["status"] != "pass" for r in rows) else 0
+
+
+def c_zpa_template(a):
+    from . import connector_template
+    p = _pov(a)
+    if not lifecycle.ledger(p).find("zpa.provisioning_key"):
+        raise KitError("No POV provisioning key yet. Run `pov-kit apply` with ZPA in the POV first.")
+    out = Path(a.out or f"pov-{p.id}-app-connectors.json")
+    connector_template.write(out, p.id, p.prefix)
+    print(f"CloudFormation template: {out}. In the customer's AWS account: CloudFormation > Create stack > upload it, "
+          "then enter the provisioning key, the App Connector AMI (from the AWS Marketplace), the VPC and subnet.")
+    if a.show_key:
+        key = secrets.get(p.id, "zpa-provisioning-key")
+        print(f"Provisioning key (paste into the stack, don't save it anywhere else): {key or '(not in the keychain)'}")
+    else:
+        print("Add --show-key to print the provisioning key for the stack.")
+
+
+def c_aiguard_policy(a):
+    from .core.guard import LedgerTenant
+    p = _pov(a)
+    led = lifecycle.ledger(p)
+    t = LedgerTenant(tenant_for(p, "apply"), led, [])
+    products.get("aiguard").set_profile(t, p, led, a.profile, say)
 
 
 def c_report(a):
@@ -270,7 +323,7 @@ def parser():
 
     s = cmd("new", c_new, "start a POV for a customer")
     s.add_argument("customer")
-    s.add_argument("--products", default="zia,zcc")
+    s.add_argument("--products", default="zia,zcc", help="any of: zia,zcc,zpa,aiguard,zdx,casb")
     s.add_argument("--prefix", default="ZPOV")
     cmd("list", c_list, "list POVs on this laptop")
     s = cmd("use", c_use, "switch to another POV")
@@ -294,7 +347,11 @@ def parser():
     cmd("apply", c_apply, "create the approved objects")
     s = cmd("status", c_status, "drift on POV objects; --fix repairs only those")
     s.add_argument("--fix", action="store_true")
+    s = cmd("probe-pack", c_probe_pack, "write this POV's probe tests for the pilot devices")
+    s.add_argument("--criteria")
+    s.add_argument("--out")
     s = cmd("probe", c_probe, "on a pilot device: run the probe tests (no keys)")
+    s.add_argument("--pack")
     s.add_argument("--criteria")
     s.add_argument("--out")
     s = cmd("import-probe", c_import_probe, "import a probe results file")
@@ -304,8 +361,16 @@ def parser():
     s.add_argument("--note", required=True)
     s.add_argument("--by")
     s.add_argument("--file")
-    s = cmd("test", c_test, "evaluate the success criteria")
+    s = cmd("test", c_test, "evaluate the success criteria (--api runs the automated API proofs first)")
     s.add_argument("--criteria")
+    s.add_argument("--api", action="store_true")
+    s = cmd("zpa", c_zpa_template, "zpa template: the App Connector CloudFormation template")
+    s.add_argument("what", choices=["template"])
+    s.add_argument("--out")
+    s.add_argument("--show-key", action="store_true")
+    s = cmd("aiguard", c_aiguard_policy, "aiguard policy monitor|attacks|data: what the POV's AI Guard policy blocks")
+    s.add_argument("what", choices=["policy"])
+    s.add_argument("profile", choices=["monitor", "attacks", "data"])
     cmd("report", c_report, "write the evidence report")
     s = cmd("handover", c_handover, "the clean exit: teardown, or terraform")
     s.add_argument("how", choices=["teardown", "terraform"])

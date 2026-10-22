@@ -154,20 +154,26 @@ def test_report_renders(pov):
 
 
 # ---- catalog
-def test_catalog_ids_unique_and_template_criteria_exist():
+def test_catalog_ids_unique_and_every_product_covered():
     cat = products.base.load_catalog()
     ids = [c["id"] for c in cat]
     assert len(ids) == len(set(ids))
-    assert {c["product"] for c in cat} >= {"zia", "zcc", "zpa", "aiguard", "zdx", "casb"}
+    assert {c["product"] for c in cat} == set(products.ORDER)
     tpl = json.loads((products.base.CATALOG.parent / "products" / "zia_pov_template.json").read_text())
     used = {c for sect in tpl.values() if isinstance(sect, list) for r in sect for c in r.get("criteria", [])}
     assert used <= set(ids)
-    assert sum(1 for c in cat if c["phase"] == "v1") == 12
+    for c in cat:
+        assert c["proofs"] and c["phase"] in ("v1", "v2", "v3")
+        assert "probe" not in c["proofs"] or c.get("probe"), c["id"]
 
 
-def test_later_products_say_when_they_arrive(pov):
-    with pytest.raises(KitError, match="v2"):
-        products.get("zpa").discover(None, pov)
+def test_every_product_has_the_full_lifecycle():
+    for name in products.ORDER:
+        p = products.get(name)
+        assert p.ready, name
+        for m in ("role_scopes", "discover", "plan", "apply", "live_object", "drift", "teardown"):
+            assert getattr(type(p), m) is not getattr(products.base.Product, m), f"{name}.{m}"
+        assert p.criteria(), name                     # from its catalog file
 
 
 # ---- updater

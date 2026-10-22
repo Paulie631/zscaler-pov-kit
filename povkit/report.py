@@ -25,10 +25,16 @@ code,pre{font:12.5px ui-monospace,Menlo,Consolas,monospace}pre{background:var(--
 tr.head{display:none}}
 """
 ACTION = {"create": "Create", "create_or_adopt": "Create (or build by hand and adopt)", "customer_action": "Customer action"}
-KIND = {"label": "rule label", "url_filtering": "URL filtering rule", "ssl": "SSL inspection rule",
-        "cloud_app_control": "Cloud App Control rule", "dlp": "DLP rule", "forwarding_profile": "forwarding profile",
-        "app_profile": "app profile"}
-PRODUCT = {"zia": "Internet Access", "zcc": "Client Connector", "zpa": "Private Access", "aiguard": "AI Guard"}
+KIND = {"label": "rule label", "url_category": "custom URL category", "network_service": "network service",
+        "url_filtering": "URL filtering rule", "ssl": "SSL inspection rule", "cloud_app_control": "Cloud App Control rule",
+        "file_type": "file type control rule", "dlp": "DLP rule", "firewall": "firewall rule", "dns": "DNS control rule",
+        "forwarding_profile": "forwarding profile", "app_profile": "app profile",
+        "connector_group": "App Connector group", "provisioning_key": "provisioning key", "server_group": "server group",
+        "segment_group": "segment group", "app_segment": "application segment", "access_rule": "access policy rule",
+        "policy": "detection policy", "app": "AI app", "key": "Detection API key", "rule": "policy rule",
+        "deeptrace": "deep trace", "casb_dlp_rule": "CASB DLP rule"}
+PRODUCT = {"zia": "Internet Access", "zcc": "Client Connector", "zpa": "Private Access", "aiguard": "AI Guard",
+           "zdx": "Digital Experience", "casb": "SaaS security"}
 PROOF = {"probe": "Probe", "api": "API", "attested": "Attested"}
 
 

@@ -15,6 +15,9 @@ from .core.guard import LedgerTenant, ReadOnlyTenant
 from .core.ledger import Ledger
 
 
+SHORT = {"zia": "ZIA", "zcc": "ZCC", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB"}
+
+
 def ledger(pov):
     return Ledger(pov.path("ledger.json"), pov.id, pov.prefix)
 
@@ -31,7 +34,7 @@ def discover(pov, tenant_for):
         except KitError as e:
             s, c = {}, [check(f"{p.name}-discover", f"{p.title} discovery", FAIL, str(e)[:200])]
         snaps[p.name] = s
-        checks += c
+        checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}") for x in c]
     pov.write_json("discovery.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "products": snaps})
     pov.log("discover", f"discovery: {len(checks)} checks")
     return snaps, checks
@@ -42,7 +45,8 @@ def make_plan(pov, snaps):
     for p in products.selected(pov.products):
         if not p.ready or p.name not in snaps:
             continue
-        i, n = (p.plan(pov, snaps["zcc"], snaps.get("zia")) if p.name == "zcc" else p.plan(pov, snaps[p.name]))
+        # Client Connector and CASB scope their objects to ZIA's pilot group, so they see ZIA's discovery too
+        i, n = (p.plan(pov, snaps[p.name], snaps.get("zia")) if p.name in ("zcc", "casb") else p.plan(pov, snaps[p.name]))
         items += i
         notes += n
     return items, notes
@@ -94,7 +98,7 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
     ro = ReadOnlyTenant(tenant_for(pov, "discovery"))
     for p in products.selected(pov.products):
         if p.ready:
-            checks += p.drift(ro, pov, led, items)
+            checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}") for x in p.drift(ro, pov, led, items)]
     open_actions = [i for i in items if i["action"] == "customer_action"]
     if open_actions:
         checks.append(check("customer-actions", "Customer actions to confirm", INFO,
@@ -127,3 +131,28 @@ def teardown(pov, tenant_for, log, include_adopted=False):
     pov.save()
     pov.log("teardown", f"teardown: {len(led.active())} objects left")
     return out
+
+
+def api_proofs(pov, tenant_for, ids=None):
+    """Run each product's automated API proofs with the read-only discovery client; save them for the report."""
+    from . import evidence
+    t = ReadOnlyTenant(tenant_for(pov, "discovery"))
+    led = ledger(pov)
+    saved = pov.read_json("api_proofs.json", {}) or {}
+    ran = {}
+    for c in evidence.selected_criteria(pov, ids):
+        if "api" not in c["proofs"]:
+            continue
+        p = products.get(c["product"])
+        if not hasattr(p, "api_proof"):
+            continue
+        try:
+            res = p.api_proof(t, pov, led, c)
+        except KitError as e:
+            res = {"status": "incomplete", "detail": f"couldn't run: {str(e)[:160]}"}
+        if res:
+            res["at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            saved[c["id"]] = ran[c["id"]] = res
+    pov.write_json("api_proofs.json", saved)
+    pov.log("test", f"API proofs: {len(ran)} run")
+    return ran

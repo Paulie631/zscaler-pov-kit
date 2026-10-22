@@ -3,6 +3,7 @@
 | What | Where | When it goes |
 | --- | --- | --- |
 | API client secrets (discovery, apply) | OS keychain, service `zscaler-pov-kit`, entry `<pov-id>/<client>` | `handover` deletes them |
+| ZPA provisioning key, AI Guard detection key | OS keychain, same service | teardown deletes each with its object |
 | Discovery snapshot (describes the customer's policy) | `~/.zscaler-pov-kit/povs/<pov-id>/discovery.json` | `handover` deletes it |
 | Change list, approval, ledger | the POV folder | kept as the record of what was done |
 | Probe results, attestations, report | the POV folder | kept; give the report to the customer |
@@ -13,5 +14,9 @@
   objects with placeholders, and leaves out the discovery snapshot and plan bodies.
 - The probe needs no API keys and sends only safe test data: the EICAR test string, Google Safe Browsing test pages and
   generated fake card numbers.
+- The ZPA connector template takes the provisioning key as a hidden (NoEcho) stack parameter, but the key is readable
+  in each instance's user data. The POV's key enrolls at most two connectors and teardown deletes it.
+- The CASB DLP rule only reports incidents: it never quarantines, deletes or changes the customer's SaaS data.
+- AI Guard proofs scan the demo kit's synthetic test prompts; no customer data and no LLM calls.
 - Updates are verified against the SHA-256 published with each release before anything is replaced.
 - The kit's API clients can't delete themselves: at handover, remind the customer to delete both in the console.

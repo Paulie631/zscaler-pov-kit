@@ -92,6 +92,38 @@ def zcc_running():
         return False
 
 
+def tcp_probe(host, port, timeout=6):
+    """-> open | block | timeout. portquiz.net answers HTTP on every port. From the demo kit's traffic generator."""
+    try:
+        with socket.create_connection((host, port), timeout=timeout) as sk:
+            sk.sendall(f"GET / HTTP/1.0\r\nHost: {host}\r\nUser-Agent: {UA}\r\n\r\n".encode())
+            sk.settimeout(timeout)
+            data = sk.recv(600)
+        if not data:
+            return "block"
+        return "block" if b"zscaler" in data.lower() else "open"
+    except socket.timeout:
+        return "timeout"
+    except OSError as e:
+        return "block" if re.search(r"reset|refused|10054|10061|aborted", str(e), re.I) else "error:" + type(e).__name__
+
+
+def dns_query(server, name, timeout=4):
+    """One A-record query over UDP/53 (DNS control sees it on Z-Tunnel 2.0). -> (rcode, answer count).
+    From the demo kit's traffic generator."""
+    import struct
+    qid = random.randint(0, 0xFFFF)
+    q = struct.pack(">HHHHHH", qid, 0x0100, 1, 0, 0, 0) + b"".join(
+        bytes([len(p)]) + p.encode() for p in name.strip(".").split(".")) + b"\x00" + struct.pack(">HH", 1, 1)
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+        sk.settimeout(timeout)
+        sk.sendto(q, (server, 53))
+        data, _ = sk.recvfrom(2048)
+    rcode = data[3] & 0x0F
+    return {0: "NOERROR", 2: "SERVFAIL", 3: "NXDOMAIN", 5: "REFUSED"}.get(rcode, f"RCODE{rcode}"), \
+        struct.unpack(">H", data[6:8])[0]
+
+
 def tag(url, run_id):
     """Adds the run ID so the probe's events can be matched in the customer's logs."""
     return url + ("&" if "?" in url else "?") + f"zpov_run={run_id}"
@@ -119,6 +151,18 @@ def run_spec(spec, run_id, s):
             issuer = tls_issuer(spec["host"])
             got = "Zscaler" if issuer == "Zscaler" else "not-Zscaler"
             detail = f"certificate issuer: {issuer}"
+        elif kind == "tcp":
+            got = tcp_probe(spec["host"], spec["port"])
+            detail = f"TCP {spec['port']} to {spec['host']}"
+        elif kind == "dns":
+            # Not confirmed yet (TESTPLAN): whether ZIA answers a DNS block with an error or a block-page address.
+            # Anything but a normal answer counts as blocked.
+            try:
+                rcode, n = dns_query(spec["server"], spec["name"])
+                got = "resolved" if rcode == "NOERROR" and n else "block"
+                detail = f"{rcode}, {n} answers, UDP/53 to {spec['server']}"
+            except (socket.timeout, ConnectionError, OSError) as e:
+                got, detail = "block", f"no answer: {str(e)[:80]}"
         elif kind == "zcc_running":
             got = "running" if zcc_running() else "not running"
             detail = "Client Connector process"

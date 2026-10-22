@@ -1,0 +1,14 @@
+{
+ "product": "zdx",
+ "criteria": [
+  {
+   "id": "DX-SCR-01",
+   "phase": "v3",
+   "title": "Pilot devices report a ZDX score",
+   "statement": "Pilot devices report a ZDX score and the POV probes run.",
+   "proofs": [
+    "api"
+   ]
+  }
+ ]
+}

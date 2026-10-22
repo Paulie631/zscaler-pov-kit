@@ -1,0 +1,15 @@
+{
+ "product": "casb",
+ "criteria": [
+  {
+   "id": "CS-SAS-01",
+   "phase": "v3",
+   "title": "SaaS posture findings appear",
+   "statement": "A connected SaaS tenant shows posture findings.",
+   "proofs": [
+    "api",
+    "attested"
+   ]
+  }
+ ]
+}
