@@ -1,0 +1,17 @@
+name: Idea or use case
+description: Something the kit should prove, check or do
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: "This repository is public: describe the idea generically, without customer names."
+  - type: textarea
+    id: idea
+    attributes:
+      label: What should the kit do?
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Which POVs would it help?

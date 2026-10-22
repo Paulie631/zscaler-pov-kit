@@ -46,5 +46,6 @@
 ## Help
 
 - **Updates** button: install the newest version, or roll back one.
-- **Logs → Download diagnostics:** a zip without secrets or customer names, for the kit owner.
+- **Logs → Download diagnostics:** a zip without secrets or customer names. **Report a problem** opens a GitHub issue
+  form: attach the zip, and never paste secrets or customer names (the repository is public).
 - The SE Deployment Guide has a troubleshooting table.

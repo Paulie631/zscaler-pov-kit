@@ -175,7 +175,9 @@ remove them.
 ## Troubleshooting
 
 Start with the **Logs** tab: every API call and change is there, and **Download diagnostics** makes a zip without
-secrets or the customer's object names for the kit owner.
+secrets or the customer's object names for the kit owner. **Report a problem** (next to it) opens the kit's GitHub
+issue form: attach the zip, and never paste a secret, a customer's name or anything from their tenant there (the
+repository is public).
 
 | Symptom | Fix |
 | --- | --- |

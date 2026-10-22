@@ -1,0 +1,48 @@
+name: Something went wrong
+description: A step failed, a check is wrong, or the kit did something unexpected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. **Never paste a client secret, a customer's name, or anything from their tenant here** — this repository is public.
+        Attach the diagnostics zip instead (Logs → **Download diagnostics**): it has no secrets and no customer object names.
+  - type: input
+    id: version
+    attributes:
+      label: Kit version
+      description: Shown in the console header (e.g. 0.9.0)
+    validations:
+      required: true
+  - type: dropdown
+    id: step
+    attributes:
+      label: Where it happened
+      options: [Install or update, Start a POV, Connect, Pilot users, Preflight, Change list, Approval, Apply, Status / Fix drift, Use cases, Success criteria / report, Handover, Delete a POV, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: products
+    attributes:
+      label: Products in the POV
+      multiple: true
+      options: [ZIA, Client Connector, ZPA, AI Guard, ZDX, CASB and SSPM]
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      description: The message the console showed helps most (copy it, with customer names removed).
+    validations:
+      required: true
+  - type: dropdown
+    id: tenant
+    attributes:
+      label: Was anything left in the customer's tenant?
+      options: [No / not sure, "Yes: objects the POV made are still there", "Yes: something of the customer's changed"]
+    validations:
+      required: true
+  - type: textarea
+    id: diag
+    attributes:
+      label: Diagnostics zip
+      description: Drag the zip from Logs → Download diagnostics here.
