@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.7.0
+
+- **Claude Desktop's read-only access to the POV tenant** (`pov-kit mcp consent|install|remove|config|status|serve`,
+  and a card in the console's Next steps). It uses Zscaler's MCP server (zscaler-mcp 0.15.4, pinned), started by the
+  kit from the keychain with writes off, every write and start tool disabled, secret-returning reads disabled, and
+  only the POV's products. The Claude Desktop entry holds no secret; handover removes it. Checked against the real
+  server: 186 to 194 read tools offered, none that write. An optional view-only client (`connect --mcp`) is in the
+  role spec.
+- **A Claude plugin** that drives the kit (`tools/build_plugin.py`), with approval, apply and teardown always left to
+  the SE and the customer.
+- **ZPA customer ID** (`set customer_id`, or the Connect step): ZPA over OneAPI needs it; preflight warns without it.
+- `--pov` works after the command too (`pov-kit mcp serve --pov ID`).
+
 ## 0.6.1
 
 Fixes from an independent review of 0.6.0's safety-critical code:

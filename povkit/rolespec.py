@@ -31,6 +31,12 @@ def render(pov) -> str:
             for p in sel:
                 out += [f"| {area} | {access} |" for area, access in p.role_scopes(pov).get(which, [])]
             out.append("")
+    out += [f"## Optional: ZPOV {pov.id} read-only", "Only if the SE asks for Claude Desktop's read-only access to the "
+            "tenant during the POV (`pov-kit mcp`). View only, everything in scope; delete it at handover.", "",
+            "| Product area | Access |", "| --- | --- |"]
+    for p in sel:
+        out += [f"| {area} | {access} |" for area, access in p.role_scopes(pov).get("discovery", [])]
+    out.append("")
     out += ["Scope names above follow the design; confirm them against your console's role editor.",
             "The kit never needs administration, role, user-management or authentication rights."]
     return "\n".join(out) + "\n"

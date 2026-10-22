@@ -41,6 +41,8 @@ class Tenant:
         conf = {"clientId": cl["client_id"], "clientSecret": secret, "vanityDomain": pov.cfg["vanity_domain"]}
         if pov.cfg.get("cloud"):
             conf["cloud"] = pov.cfg["cloud"]
+        if pov.cfg.get("customer_id"):   # ZPA through OneAPI needs the tenant's customer ID
+            conf["customerId"] = str(pov.cfg["customer_id"])
         self.pov, self.which = pov, which
         self.c = ZscalerClient(conf)
 

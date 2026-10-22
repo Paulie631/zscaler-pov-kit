@@ -105,6 +105,11 @@ class ZPA(Product):
             return {"readable": False}, [check("zpa-read", "ZPA readable", FAIL, str(e)[:160],
                                                "Give the discovery client view access to ZPA.")]
         snap["readable"] = True
+        if not pov.cfg.get("customer_id"):
+            checks.append(check("zpa-customer-id", "ZPA customer ID", WARN, "not set",
+                                "ZPA through OneAPI needs the tenant's customer ID (ZPA console: Configuration & "
+                                "Control > Public API > API Keys, or the URL). `pov-kit set customer_id 2166...`, or "
+                                "the Connect step."))
         checks.append(check("zpa-cert", "Connector enrollment certificate", OK if snap["enrollment_cert"] else FAIL,
                             "found" if snap["enrollment_cert"] else "no certificate named 'Connector'",
                             "" if snap["enrollment_cert"] else "Every ZPA tenant has one; check the discovery client's "

@@ -71,7 +71,12 @@ def terraform(pov, led):
 
 def finish(pov):
     """Both exits end here: secrets out of the keychain, customer data off the laptop."""
-    from . import usecases
+    from . import mcp, usecases
+    try:
+        if mcp.remove(pov):
+            pov.log("handover", "Claude Desktop's read-only entry for this POV removed")
+    except Exception as e:   # never let a config file stop the handover
+        pov.log("handover", f"couldn't remove the Claude Desktop entry: {str(e)[:120]}", "warn")
     gone = secrets.delete_all(pov.id, usecases.secret_names(pov))
     purged = pov.purge_customer_data()
     pov.cfg["state"] = "handed_over"

@@ -15,7 +15,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, evidence, handover, lifecycle, products, remind, rolespec, settings
+from . import VERSION, evidence, handover, lifecycle, mcp, products, remind, rolespec, settings
 from .core import KitError, pov as povs, secrets
 from .core.changelist import ChangeList
 from .core.checks import exit_code
@@ -56,7 +56,9 @@ def pov_state(p):
             "test_users": sum(1 for e in led.active("zia") if e["kind"] == "user"),
             "zpa_key": bool(secrets.get(p.id, "zpa-provisioning-key")),
             "end": remind.end_check(p), "backup_at": (p.cfg.get("backup") or {}).get("at"),
-            "record": bool(p.cfg.get("record")), "selftest": p.read_json("selftest.json")}
+            "record": bool(p.cfg.get("record")), "selftest": p.read_json("selftest.json"),
+            "mcp": {"consent": mcp.consent(p), "installed": (p.cfg.get("mcp") or {}).get("installed"),
+                    "uses": mcp.slot(p)[1], "entry": mcp.entry_name(p)}}
 
 
 def state():
@@ -194,7 +196,7 @@ def api(method, path, body, q):
         return 200, {"settings": settings.snapshot(p)}
     if path == "/api/connect":
         p = current()
-        for k in ("vanity_domain", "cloud"):
+        for k in ("vanity_domain", "cloud", "customer_id"):
             if body.get(k) is not None and str(body[k]).strip():
                 settings.set_value(p, k, body[k], save=False)
         slot = body.get("slot") or ("main" if p.cfg.get("client_mode", "single") == "single" else "discovery")
@@ -258,6 +260,17 @@ def api(method, path, body, q):
     if path == "/api/status":
         p = current()
         return 200, {"job": start_job("status", lambda log: lifecycle.status(p, tf, fix=bool(body.get("fix")), log=log))}
+    if path == "/api/mcp":
+        p, what = current(), body.get("what")
+        if what == "consent":
+            mcp.record_consent(p, body.get("by"))
+        elif what == "install":
+            return 200, {"path": str(mcp.install(p))}
+        elif what == "remove":
+            return 200, {"removed": mcp.remove(p)}
+        elif what == "config":
+            return 200, {"config": {"mcpServers": mcp.snippet(p)}}
+        return 200, {"ok": True}
     if path == "/api/remind/install":
         return 200, {"message": remind.install()}
     if path == "/api/record":

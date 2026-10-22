@@ -274,6 +274,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       ${cl.saved?note(`Saved: client ${cl.client_id} on ${c.settings.vanity_domain}.zslogin.net`,"good"):""}
       <div class="form" style="margin-top:14px"><span class="lbl">Vanity domain</span><input type="text" id="wvan" placeholder="acme (from acme.zslogin.net)" value="${esc(c.settings.vanity_domain||"")}">
         <span class="lbl">Cloud <span class="muted">(optional)</span></span><input type="text" id="wcloud" placeholder="leave empty for production" value="${esc(c.settings.cloud||"")}">
+        ${has("zpa")?`<span class="lbl">ZPA customer ID</span><input type="text" id="wcustid" placeholder="from the ZPA console (Public API page)" value="${esc(c.settings.customer_id||"")}">`:""}
         <span class="lbl">${single?"Client ID":"Discovery client ID"}</span><input type="text" id="wcid" autocomplete="off" value="${esc(cl.client_id||"")}">
         <span class="lbl">Client secret</span><input type="password" id="wsec" autocomplete="new-password" placeholder="${cl.saved?"saved in the keychain (enter a new one to replace it)":""}"></div>
       <div id="wmsg"></div>`+nav(true,true,cl.saved?"Test and continue ›":"Save and test ›");
@@ -281,7 +282,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     $("#wdlrole").onclick=()=>download(`role-spec-${c.id}.md`,W.role,"text/markdown");
     $("#wshowrole").onclick=()=>{const p=$("#wrole");p.style.display=p.style.display=="none"?"block":"none"};
     bindNav(async()=>{$("#wmsg").innerHTML='<div class="notice">Signing in…</div>';
-      try{await api("/api/connect",{slot,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,client_id:$("#wcid").value,secret:$("#wsec").value});
+      try{await api("/api/connect",{slot,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
         $("#wsec").value="";await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }
   else if(W.step==2){
@@ -384,6 +385,9 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The POV's own tests. On a pilot device signed in to Client Connector: <code>pov-kit probe --pack &lt;file&gt;</code>. No keys needed.</p><button id="npack">Download probe pack</button></div>
         ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A template for two connectors in the customer's AWS account or Azure subscription, plus the provisioning key to paste into it.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>AWS template</button><button id="ntplaz" ${c.zpa_key?"":"disabled"}>Azure template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button></div><div id="nkeyv"></div></div>`:""}
         ${has("aiguard")?`<div class="card"><h4>AI Guard policy</h4><p class="muted" style="margin:4px 0 10px">What the POV's own policy blocks. Takes about 30 seconds to apply.</p><div class="seg" id="nag"><button data-p="monitor">Monitor</button><button data-p="attacks">Block attacks</button><button data-p="data">+ data leakage</button></div><div id="nagmsg" class="hint"></div></div>`:""}
+        <div class="card"><h4>Ask Claude about this tenant</h4><p class="muted" style="margin:4px 0 8px">Read-only access for Claude Desktop through Zscaler's MCP server: "why was Jane blocked?", "what did the pilot group use today?". Writes stay with the change list. Requests go from Claude Desktop to Anthropic, not through AI Guard, with names as they are.</p>
+          ${c.mcp.consent?note(`${c.mcp.consent.by} agreed on ${c.mcp.consent.at.slice(0,10)}.`,"good"):`<div class="row" style="gap:8px"><input type="text" id="nmcpby" placeholder="Who agreed (name, title)" style="flex:1"><button id="nmcpok">Record agreement</button></div>`}
+          ${c.mcp.consent?(c.mcp.installed?`<p style="margin:6px 0">${note("In Claude Desktop as "+c.mcp.entry+" (using "+c.mcp.uses+"). Quit and reopen Claude Desktop to load it.","good")}</p><button id="nmcprm">Remove from Claude Desktop</button>`:`<div class="row" style="margin-top:6px"><button id="nmcpin">Add to Claude Desktop</button><button id="nmcpcfg">Copy config for another client</button></div>`):""}<div id="nmcpmsg"></div></div>
         ${users.length?`<div class="card"><h4>Test users</h4>${users.map(u=>`<div class="row" style="gap:8px;margin:4px 0"><code>${esc(u.email)}</code><button data-n="${esc(u.n)}" class="nuser">Show password</button></div><div id="nuser${esc(u.n)}"></div>`).join("")}</div>`:""}
       </div>`+nav(true,true,"Go to Success criteria ›");
     bindNav(()=>{$$("#tabs button").find(b=>b.dataset.t=="criteria").click()});
@@ -391,6 +395,11 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     $("#ntpl")&&($("#ntpl").onclick=async()=>download(`pov-${c.id}-app-connectors.json`,JSON.stringify((await api("/api/zpa-template",{})).template,null,2),"application/json"));
     $("#ntplaz")&&($("#ntplaz").onclick=async()=>download(`pov-${c.id}-app-connectors-azure.json`,JSON.stringify((await api("/api/zpa-template",{cloud:"azure"})).template,null,2),"application/json"));
     $("#nkey")&&($("#nkey").onclick=async()=>{const v=(await api("/api/reveal",{what:"zpa-key"})).value;$("#nkeyv").innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span><div class="hint">Paste it into the stack's ProvisioningKey field; don't save it anywhere else.</div>`});
+    const mcpGo=async b=>{try{const r=await api("/api/mcp",b);if(b.what=="config"){await navigator.clipboard.writeText(JSON.stringify(r.config,null,2)).catch(()=>download(`mcp-${c.id}.json`,JSON.stringify(r.config,null,2),"application/json"));$("#nmcpmsg").innerHTML=note("Copied: no secret in it.","good");return}await load();wizard()}catch(e){$("#nmcpmsg").innerHTML=note(e.message,"bad")}};
+    $("#nmcpok")&&($("#nmcpok").onclick=()=>mcpGo({what:"consent",by:$("#nmcpby").value}));
+    $("#nmcpin")&&($("#nmcpin").onclick=()=>mcpGo({what:"install"}));
+    $("#nmcprm")&&($("#nmcprm").onclick=()=>mcpGo({what:"remove"}));
+    $("#nmcpcfg")&&($("#nmcpcfg").onclick=()=>mcpGo({what:"config"}));
     $$(".nuser").forEach(b=>b.onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:b.dataset.n})).value;$("#nuser"+b.dataset.n).innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span>`});
     $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});
   }

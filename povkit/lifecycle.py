@@ -118,6 +118,8 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
     from . import backup, remind
     checks.append(remind.end_check(pov))
     checks.append(backup.check(pov))
+    from . import mcp
+    checks.append(mcp.status(pov))
     open_actions = [i for i in items if i["action"] == "customer_action"]
     if open_actions:
         checks.append(check("customer-actions", "Customer actions to confirm", INFO,

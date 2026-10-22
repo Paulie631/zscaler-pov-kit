@@ -3,7 +3,7 @@ from __future__ import annotations
 
 SERVICE = "zscaler-pov-kit"
 NAMES = ("main-client-secret", "discovery-client-secret", "apply-client-secret", "zpa-provisioning-key",
-         "aiguard-detection-key")
+         "aiguard-detection-key", "mcp-client-secret")
 
 
 def _kr():

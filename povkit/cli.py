@@ -88,7 +88,9 @@ def save_client(p, slot, cid, secret):
 
 def c_connect(a):
     p = _pov(a)
-    if a.discovery or a.apply:
+    if a.mcp:
+        slot = "mcp"
+    elif a.discovery or a.apply:
         p.cfg["client_mode"] = "separate"
         slot = "apply" if a.apply else "discovery"
     else:
@@ -506,6 +508,32 @@ def c_selftest(a):
     return 0 if res["ok"] else 1
 
 
+def c_mcp(a):
+    from . import mcp
+    p = _pov(a)
+    if a.what == "serve":
+        return mcp.serve(p)
+    if a.what == "consent":
+        if not a.by:
+            raise KitError("Say who agreed: `pov-kit mcp consent --by \"Name, title\"`.")
+        mcp.record_consent(p, a.by)
+        print(f"Recorded: {a.by} agreed that Claude Desktop may read {p.cfg['customer']}'s tenant (read-only). These "
+              "requests go from Claude Desktop to Anthropic, not through AI Guard, with names as they are.")
+    elif a.what == "install":
+        path = mcp.install(p, a.config)
+        _, why = mcp.slot(p)
+        print(f"Added '{mcp.entry_name(p)}' to {path} (no secret in it; it uses {why}). Quit and reopen Claude "
+              "Desktop, then ask it about the tenant. Writes still go only through the approved change list.")
+    elif a.what == "remove":
+        print("Removed." if mcp.remove(p, a.config) else "There was no entry for this POV.")
+    elif a.what == "config":
+        print(json.dumps({"mcpServers": mcp.snippet(p)}, indent=2))
+    else:
+        c = mcp.status(p)
+        print(f"{c['label']}: {c['detail']}" + (f"\n  {c['fix']}" if c["fix"] else ""))
+        print(f"Customer agreement: {mcp.consent(p)['by'] if mcp.consent(p) else 'not yet'}")
+
+
 def c_version(a):
     print(VERSION)
 
@@ -515,9 +543,12 @@ def parser():
     ap = argparse.ArgumentParser(prog="pov-kit", description="Zscaler POV Kit")
     ap.add_argument("--pov", help="POV ID (default: the one last used)")
     sub = ap.add_subparsers(dest="cmd", required=True)
+    # --pov works after the command too (`pov-kit mcp serve --pov ID`); SUPPRESS keeps one given first
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--pov", default=argparse.SUPPRESS, help="POV ID (default: the one last used)")
 
     def cmd(name, fn, help_):
-        s = sub.add_parser(name, help=help_)
+        s = sub.add_parser(name, help=help_, parents=[common])
         s.set_defaults(fn=fn)
         return s
 
@@ -538,6 +569,7 @@ def parser():
     g = s.add_mutually_exclusive_group()
     g.add_argument("--discovery", action="store_true")
     g.add_argument("--apply", action="store_true")
+    g.add_argument("--mcp", action="store_true", help="the optional view-only client for Claude Desktop (pov-kit mcp)")
     s.add_argument("--client-id")
     s = cmd("preflight", c_preflight, "read-only checks (exit 0/2/1)")
     s.add_argument("--json", action="store_true")
@@ -621,6 +653,10 @@ def parser():
     s.add_argument("--out")
     s = cmd("selftest", c_selftest, "in YOUR LAB tenant: read, create, read back and delete one object per product")
     s.add_argument("--lab", action="store_true")
+    s = cmd("mcp", c_mcp, "mcp consent|install|remove|config|status|serve: Claude Desktop's read-only access to the tenant")
+    s.add_argument("what", choices=["consent", "install", "remove", "config", "status", "serve"])
+    s.add_argument("--by")
+    s.add_argument("--config", help="a Claude Desktop config file other than the default")
     cmd("version", c_version, "print the version")
     return ap
 

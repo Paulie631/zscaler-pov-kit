@@ -68,6 +68,12 @@ one Windows pilot device. Each item settles an open question in the design or br
   proposals are as good as with `ai.share full` on the five console examples.
 - [ ] **Customer approval.** Open plan.html from an email attachment on Windows and Mac: the form saves the file and
   `approve --file` accepts it; a file for an older change list is refused.
+- [ ] **Claude Desktop read-only access.** `mcp install` on a Mac and a Windows laptop; after reopening Claude
+  Desktop the zscaler-pov entry starts, answers "list the URL filtering rules", and offers no write tools. ZPA tools
+  work with `customer_id` set. Ask Claude to delete a rule: it can't.
+- [ ] **ZPA customer ID.** ZPA discovery fails without `customer_id` and works with it (OneAPI).
+- [ ] **Plugin.** Install `dist/zscaler-pov-kit.plugin` in the Claude desktop app; "run preflight for the lab POV"
+  works, and "approve the change list" makes Claude ask who approved.
 - [ ] **Model and size.** `claude-sonnet-5-5` answers within the proxy's timeout for a large tenant snapshot (the kit
   cuts it at 150,000 characters).
 

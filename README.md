@@ -4,7 +4,7 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.6.1**: every product module, the identity step,
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.7.0**: every product module, the identity step,
 the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
@@ -154,6 +154,30 @@ structured data rather than text to parse.
 Before the first use, record the customer's agreement: Claude reads the discovery snapshot (names replaced, unless
 you choose otherwise), which travels through your AI Guard tenant to Anthropic. The proxy key is your AI Guard demo kit's Anthropic app key if it's on this
 computer, or one you save with `pov-kit ai connect`; your Anthropic key stays in your own AI Guard tenant.
+
+## Ask Claude about the tenant (read-only)
+
+During the POV, Claude Desktop can read the customer's tenant through Zscaler's own MCP server ("why was Jane
+blocked?", "what did the pilot group use today?", "why is this device's ZDX score down?"):
+
+```
+./pov-kit mcp consent --by "Jane Doe, CISO"        # the customer agrees: these requests don't go through AI Guard
+./pov-kit mcp install                              # adds zscaler-pov-<id> to Claude Desktop; quit and reopen it
+./pov-kit mcp remove                               # handover removes it anyway
+```
+
+The entry holds no secret: it runs `pov-kit --pov <id> mcp serve`, which takes the credentials from the keychain and
+starts `zscaler-mcp` (pinned) with writes off whatever the environment says, every create, update, delete, activate
+and start tool disabled, the reads that return secrets disabled (a device's one-time password, PRA and VPN
+credentials), and only the POV's products. It uses the most read-only client the POV has: a view-only client from
+`pov-kit connect --mcp` (in the role spec as optional), else the discovery client, else the main one. Writes to the
+tenant still go only through the approved change list. `pov-kit mcp config` prints the entry for other MCP clients.
+
+## Let Claude drive the kit
+
+`python tools/build_plugin.py` builds `dist/zscaler-pov-kit.plugin` (a skill plus a copy of the kit). Installed in the
+Claude desktop app, it lets you say "run preflight for Acme", "what's left for the customer?", "build the report".
+Claude never approves, applies or tears down without you saying so, and never asks for a secret in chat.
 
 ## Products and criteria
 

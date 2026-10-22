@@ -51,5 +51,12 @@
   repository keeps only field names, types and Zscaler's own values.
 - **`selftest`** runs only on a POV marked as a lab POV and with `--lab` (the console asks too), keeps its own ledger,
   checks ZIA has nothing pending just before writing, and activates only after its own create and delete succeeded.
+- **Claude Desktop's read-only access** (`pov-kit mcp`) needs a recorded customer agreement: those requests go from
+  Claude Desktop to Anthropic, not through AI Guard, with names as they are. The config entry holds no secret. The
+  server starts with `ZSCALER_MCP_WRITE_*` removed from its environment, no write flags, every write-like and start
+  tool disabled by pattern, and the reads that return secrets disabled (device OTPs, PRA and VPN credentials). The
+  version is pinned, and a test holds the patterns to the pinned server's own write-tool list.
+- **The plugin** tells Claude never to approve, apply, tear down, record an agreement, or handle a secret without the
+  SE saying so; secrets are typed by the SE in the console or a terminal.
 - Updates are verified against the SHA-256 published with each release before anything is replaced.
 - The kit's API clients can't delete themselves: at handover, remind the customer to delete both in the console.
