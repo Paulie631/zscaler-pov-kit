@@ -2,6 +2,7 @@
 import hashlib
 import io
 import json
+import os
 import zipfile
 
 import pytest
@@ -58,7 +59,8 @@ def test_install_copies_the_kit_and_adds_the_shortcuts(kit):
     installer.install(lambda lv, m: log.append(m))
     assert (installer.APP / "pov_kit.py").exists() and (installer.APP / "assets" / "pov-icon.icns").exists()
     assert (home / ".local" / "bin" / "pov-kit").exists() and (home / "Desktop" / "Zscaler POV Console.desktop").exists()
-    assert oct((installer.APP / "pov-kit").stat().st_mode & 0o777) == "0o755"
+    if os.name != "nt":   # Windows has no executable bit
+        assert oct((installer.APP / "pov-kit").stat().st_mode & 0o777) == "0o755"
     installer.uninstall(lambda lv, m: log.append(m))
     assert not installer.APP.exists() and not (home / ".local" / "bin" / "pov-kit").exists()
 

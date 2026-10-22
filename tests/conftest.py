@@ -300,3 +300,14 @@ def pov_all(home):
 @pytest.fixture
 def tenant_for(tenant):
     return lambda pov, which: tenant
+
+
+def pytest_terminal_summary(terminalreporter):
+    """On GitHub Actions, each failure also becomes an annotation, readable from the run's API without the log."""
+    import os
+    if not os.getenv("GITHUB_ACTIONS"):
+        return
+    for rep in terminalreporter.stats.get("failed", []) + terminalreporter.stats.get("error", []):
+        msg = str(getattr(rep, "longrepr", "") or "").strip().splitlines()
+        tail = " | ".join(m.strip() for m in msg[-6:])[:900].replace("%", "%25").replace("\r", "").replace("\n", " ")
+        terminalreporter.write_line(f"::error title={rep.nodeid}::{tail}")
