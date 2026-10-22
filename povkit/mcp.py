@@ -200,6 +200,46 @@ def remove(pov, path=None):
     return True
 
 
+def desktop_client():
+    """The OneAPI client a Zscaler MCP server in Claude Desktop uses, for `connect --from-claude-desktop`.
+    -> {server, client_id, secret, vanity_domain, cloud, customer_id} or None. Read on this laptop only; the secret
+    goes to the keychain and is never printed, logged or sent anywhere."""
+    try:
+        servers = _read(desktop_config()).get("mcpServers") or {}
+    except KitError:
+        return None
+    for name in sorted(servers, key=lambda n: (n != "zscaler", n)):   # the plain 'zscaler' server first
+        env = (servers[name] or {}).get("env") or {}
+        if name.startswith("zscaler-pov-") or not (env.get("ZSCALER_CLIENT_ID") and env.get("ZSCALER_CLIENT_SECRET")):
+            continue
+        vanity = str(env.get("ZSCALER_VANITY_DOMAIN") or "").replace("https://", "").split("/")[0].replace(".zslogin.net", "")
+        return {"server": name, "client_id": env["ZSCALER_CLIENT_ID"], "secret": env["ZSCALER_CLIENT_SECRET"],
+                "vanity_domain": vanity, "cloud": env.get("ZSCALER_CLOUD") or "",
+                "customer_id": env.get("ZSCALER_CUSTOMER_ID") or ""}
+    return None
+
+
+def use_desktop_client(pov, slot="main"):
+    """Save the Claude Desktop Zscaler MCP client as this POV's client. -> the server it came from."""
+    from . import settings
+    c = desktop_client()
+    if not c:
+        raise KitError("No Zscaler MCP server with a OneAPI client (ZSCALER_CLIENT_ID and ZSCALER_CLIENT_SECRET) in "
+                       f"Claude Desktop's config ({desktop_config()}).")
+    if not c["vanity_domain"]:
+        raise KitError(f"The '{c['server']}' MCP server has no ZSCALER_VANITY_DOMAIN; enter the client in Connect instead.")
+    secrets.put(pov.id, f"{slot}-client-secret", c["secret"])
+    pov.cfg.setdefault("clients", {})[slot] = {"client_id": c["client_id"], "from": f"Claude Desktop ({c['server']})"}
+    settings.set_value(pov, "vanity_domain", c["vanity_domain"], save=False)
+    if c["cloud"] and c["cloud"].lower() != "production":
+        settings.set_value(pov, "cloud", c["cloud"], save=False)
+    if c["customer_id"] and not pov.cfg.get("customer_id"):
+        settings.set_value(pov, "customer_id", c["customer_id"], save=False)
+    pov.save()
+    pov.log("connect", f"{slot} client taken from Claude Desktop's '{c['server']}' MCP server")
+    return c["server"]
+
+
 def status(pov):
     from .core.checks import INFO, OK, WARN
     from .core.checks import check as mk

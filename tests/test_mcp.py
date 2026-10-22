@@ -90,3 +90,21 @@ def test_blocklist_covers_every_write_tool_of_the_pinned_server():
     assert not [t.name for t in tools if not t.is_write and any(fnmatch.fnmatch(t.name, p) for p in pats)]
     blocked = [t.name for t in tools if any(fnmatch.fnmatch(t.name, p) for p in mcp.NO_SECRETS.split(","))]
     assert "zcc_get_device_otp" in blocked and "zpa_get_pra_credential" in blocked
+
+
+def test_connect_reuses_the_claude_desktop_zscaler_client_without_exposing_it(pov_all, tmp_path, monkeypatch):
+    cfg = tmp_path / "claude_desktop_config.json"
+    cfg.write_text(json.dumps({"mcpServers": {
+        "zscaler-ai": {"command": "x", "env": {"ZSCALER_CLIENT_ID": "other", "ZSCALER_CLIENT_SECRET": "other-secret"}},
+        "zscaler": {"command": "uvx", "env": {"ZSCALER_CLIENT_ID": "cid-1", "ZSCALER_CLIENT_SECRET": "s3cr3t-value",
+                                              "ZSCALER_VANITY_DOMAIN": "pyite.zslogin.net", "ZSCALER_CLOUD": "production",
+                                              "ZSCALER_CUSTOMER_ID": "2166"}}}}))
+    monkeypatch.setattr(mcp, "desktop_config", lambda: cfg)
+    assert mcp.use_desktop_client(pov_all) == "zscaler"                         # the plain 'zscaler' server first
+    assert secrets.get(pov_all.id, "main-client-secret") == "s3cr3t-value"
+    assert pov_all.cfg["clients"]["main"]["client_id"] == "cid-1" and pov_all.cfg["vanity_domain"] == "pyite"
+    assert pov_all.cfg.get("cloud") in (None, "") and pov_all.cfg["customer_id"] == "2166"
+    assert "s3cr3t-value" not in json.dumps(pov_all.cfg) and "s3cr3t-value" not in pov_all.path("activity.jsonl").read_text()
+    from povkit import gui
+    monkeypatch.setattr(gui, "current", lambda: pov_all)
+    assert "s3cr3t-value" not in json.dumps(gui.pov_state(pov_all), default=str)

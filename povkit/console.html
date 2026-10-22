@@ -361,12 +361,14 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     st.innerHTML=head(1,"Connect to the customer's tenant",single?"The customer's admin (or you, with a temporary admin login) creates one OneAPI client from this role spec. The secret goes straight to this computer's keychain.":"Two clients: create the view-only discovery client now. The apply client comes at the approval step.")+
       `<div class="row"><button id="wcopyrole">Copy the role spec</button><button id="wdlrole">Download it (.md)</button><button id="wshowrole">Show it</button></div><pre id="wrole" style="display:none">${esc(W.role)}</pre>
       ${cl.saved?note(`Saved: client ${cl.client_id} on ${c.settings.vanity_domain}.zslogin.net`,"good"):""}
+      ${c.claude_desktop&&!cl.saved?`<div class="row" style="gap:10px;margin-top:14px"><button id="wcd">Use the client from Claude Desktop</button><span class="muted" style="font-size:12px">the '${esc(c.claude_desktop.server)}' MCP server on this computer (${esc(c.claude_desktop.vanity_domain)}); the secret goes straight to the keychain</span></div>`:""}
       <div class="form" style="margin-top:14px"><span class="lbl">Vanity domain</span><input type="text" id="wvan" placeholder="acme (from acme.zslogin.net)" value="${esc(c.settings.vanity_domain||"")}">
         <span class="lbl">Cloud <span class="muted">(optional)</span></span><input type="text" id="wcloud" placeholder="leave empty for production" value="${esc(c.settings.cloud||"")}">
         ${has("zpa")?`<span class="lbl">ZPA customer ID</span><input type="text" id="wcustid" placeholder="from the ZPA console (Public API page)" value="${esc(c.settings.customer_id||"")}">`:""}
         <span class="lbl">${single?"Client ID":"Discovery client ID"}</span><input type="text" id="wcid" autocomplete="off" value="${esc(cl.client_id||"")}">
         <span class="lbl">Client secret</span><input type="password" id="wsec" autocomplete="new-password" placeholder="${cl.saved?"saved in the keychain (enter a new one to replace it)":""}"></div>
       <div id="wmsg"></div>`+nav(true,true,cl.saved?"Test and continue ›":"Save and test ›");
+    $("#wcd")&&($("#wcd").onclick=async()=>{try{await api("/api/connect/claude-desktop",{});await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
     $("#wcopyrole").onclick=async()=>{try{await navigator.clipboard.writeText(W.role);$("#wcopyrole").textContent="Copied ✓"}catch(e){download(`role-spec-${c.id}.md`,W.role,"text/markdown")}};
     $("#wdlrole").onclick=()=>download(`role-spec-${c.id}.md`,W.role,"text/markdown");
     $("#wshowrole").onclick=()=>{const p=$("#wrole");p.style.display=p.style.display=="none"?"block":"none"};

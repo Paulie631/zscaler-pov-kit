@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.1
+
+From the first checks against a live tenant:
+- **Use your Zscaler MCP client.** Connect can take the OneAPI client of the Zscaler MCP server in Claude Desktop
+  ("Use the client from Claude Desktop", or `pov-kit connect --from-claude-desktop`): the secret goes straight to the
+  keychain, never shown or logged.
+- **DLP engine names stay readable for Claude.** A live tenant flags Zscaler's own engine templates ("5 or more Credit
+  Card Numbers", "GDPR - High Volume"...) as custom, so names-only use cases hid them all. Only the customer's own
+  engines are hidden now. The test tenant returns engines the way the live one does.
+
 ## 0.8.0
 
 Released like the AI Guard SE Demo Kit:

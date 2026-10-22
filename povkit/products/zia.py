@@ -77,6 +77,14 @@ def template():
     return json.loads((HERE / "zia_pov_template.json").read_text(encoding="utf-8"))
 
 
+# The DLP engine templates Zscaler ships in every tenant. The API flags them custom_dlp_engine: true (seen in a live
+# tenant, 2026-10), so names-only use cases would otherwise hide them from Claude; only other custom engines are hidden.
+ZSCALER_ENGINES = {"5 or more PII Identifiers", "5 or more Credit Card Numbers", "GDPR - Low Volume", "GDPR - High Volume",
+                   "CCPA - High Volume", "CCPA - Low Volume", "NIST (RMF for DoD IT) - Low Volume",
+                   "NIST (RMF for DoD IT) - High Volume", "PDPA - Low Volume", "PDPA - High Volume", "PIPEDA - Low Volume",
+                   "PIPEDA - High Volume", "LGPD - Low Volume", "LGPD - High Volume", "FISMA - Low Volume",
+                   "FISMA - High Volume", "PII (US) - Low Volume", "PII (US) - High Volume", "Credentials and Secrets",
+                   "Finance", "Legal", "Medical", "DPDPA", "SOX"}
 UNSTAMPED = {"department", "user_group", "user"}   # ZIA keeps 'comments' on these, not a description: ledger + prefix
 TEST_PW = "zia-test-user-{n}"
 
@@ -299,7 +307,8 @@ class ZIA(Product):
                     snap["dlp_engines"][str(g(e, k))] = g(e, "id")
             # the customer's own engines (their names can identify them; names-only use cases hide them)
             custom = g(e, "custom_dlp_engine")
-            if g(e, "name") and (custom is True or (custom is None and not g(e, "predefined_engine_name"))):
+            if g(e, "name") and str(g(e, "name")) not in ZSCALER_ENGINES and \
+                    (custom is True or (custom is None and not g(e, "predefined_engine_name"))):
                 snap["custom_engines"].append(str(g(e, "name")))
         try:
             cats = t.call("file_type_control_rule", "list_file_type_categories",

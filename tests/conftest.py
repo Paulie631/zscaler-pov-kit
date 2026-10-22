@@ -36,8 +36,9 @@ class FakeTenant:
         self.file_types = ["FTCATEGORY_WINDOWS_EXECUTABLES", "FTCATEGORY_MSI"]
         self.cbi = [{"id": "cbi-1", "name": "Default isolation", "url": "https://cbi.example", "defaultProfile": True}]
         self.cats = ["GAMBLING", "ANONYMIZER", "SOCIAL_NETWORKING", "FINANCE", "HEALTH", "OTHER_GAMES"]
-        self.engines = [{"id": 61, "name": "5 or more Credit Card Numbers", "predefinedEngineName": "CREDIT_CARD_5",
-                         "customDlpEngine": False},
+        # as a live tenant returns them: Zscaler's named templates are flagged custom; predefined ones have no name
+        self.engines = [{"id": 61, "name": "5 or more Credit Card Numbers", "customDlpEngine": True},
+                        {"id": 63, "name": None, "predefinedEngineName": "PCI", "customDlpEngine": False},
                         {"id": 62, "name": "Acme Project Falcon", "customDlpEngine": True}]
         self.actions = {"FILE_SHARE": ["BLOCK_FILE_SHARE_UPLOAD", "ALLOW_FILE_SHARE_UPLOAD"],
                         "AI_ML": ["BLOCK_AI_ML_WEB_USE", "ALLOW_AI_ML_WEB_USE"]}

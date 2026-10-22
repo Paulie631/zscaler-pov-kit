@@ -88,6 +88,12 @@ def save_client(p, slot, cid, secret):
 
 def c_connect(a):
     p = _pov(a)
+    if a.from_claude_desktop:
+        from . import mcp
+        server = mcp.use_desktop_client(p, "main" if p.cfg.get("client_mode", "single") == "single" else "discovery")
+        print(f"Saved the client from Claude Desktop's '{server}' MCP server (secret straight to the keychain), "
+              f"vanity domain {p.cfg.get('vanity_domain')}. Next: `pov-kit preflight`.")
+        return
     if a.mcp:
         slot = "mcp"
     elif a.discovery or a.apply:
@@ -593,6 +599,8 @@ def parser():
     g.add_argument("--apply", action="store_true")
     g.add_argument("--mcp", action="store_true", help="the optional view-only client for Claude Desktop (pov-kit mcp)")
     s.add_argument("--client-id")
+    s.add_argument("--from-claude-desktop", action="store_true",
+                   help="use the OneAPI client of the Zscaler MCP server in Claude Desktop (read on this laptop only)")
     s = cmd("preflight", c_preflight, "read-only checks (exit 0/2/1)")
     s.add_argument("--json", action="store_true")
     cmd("discover", c_discover, "read-only snapshot of the tenant")

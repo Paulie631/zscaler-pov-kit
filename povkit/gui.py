@@ -58,6 +58,8 @@ def pov_state(p):
             "zpa_key": bool(secrets.get(p.id, "zpa-provisioning-key")),
             "end": remind.end_check(p), "backup_at": (p.cfg.get("backup") or {}).get("at"),
             "record": bool(p.cfg.get("record")), "selftest": p.read_json("selftest.json"),
+            "claude_desktop": (lambda c: {"server": c["server"], "vanity_domain": c["vanity_domain"]} if c else None)(
+                mcp.desktop_client()),
             "aiguard": {"live": bool(led.find("aiguard.policy")),
                         "profile": (p.cfg.get("aiguard") or {}).get("profile") or "monitor"},
             "mcp": {"consent": mcp.consent(p), "installed": (p.cfg.get("mcp") or {}).get("installed"),
@@ -199,6 +201,12 @@ def api(method, path, body, q):
             settings.set_value(p, k, v, save=False)
         p.save()
         return 200, {"settings": settings.snapshot(p)}
+    if path == "/api/connect/claude-desktop":
+        p = current()
+        slot = "main" if p.cfg.get("client_mode", "single") == "single" else "discovery"
+        server = mcp.use_desktop_client(p, slot)
+        sign_in_check(p, "discovery")
+        return 200, {"server": server}
     if path == "/api/connect":
         p = current()
         for k in ("vanity_domain", "cloud", "customer_id"):

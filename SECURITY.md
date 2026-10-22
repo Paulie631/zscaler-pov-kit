@@ -62,5 +62,8 @@
   against the SHA-256 in the release's latest.json before anything is replaced, keeps the previous version for
   rollback, and never overwrites a git checkout. The installers aren't code-signed yet (INSTALL.md covers the
   first-run prompts).
+- **`connect --from-claude-desktop`** (and the console's "Use the client from Claude Desktop") reads the OneAPI client
+  of a Zscaler MCP server from Claude Desktop's config on the same laptop and puts the secret in the keychain. Nothing
+  is printed, logged or sent; the state shown in the console names only the MCP server and the vanity domain.
 - Updates are verified against the SHA-256 published with each release before anything is replaced.
 - The kit's API clients can't delete themselves: at handover, remind the customer to delete both in the console.
