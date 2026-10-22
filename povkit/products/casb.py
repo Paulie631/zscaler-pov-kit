@@ -31,7 +31,7 @@ ACTION = "OFLCASB_DLP_REPORT_INCIDENT"
 class CASB(Product):
     name, title, phase = "casb", "CASB and SSPM", "v3"
 
-    def role_scopes(self):
+    def role_scopes(self, pov=None):
         return {"discovery": [("ZIA: SaaS security (CASB, SSPM)", "view only")],
                 "apply": [("ZIA: CASB DLP rules", "full"), ("ZIA: SaaS tenant connections", "none")]}
 

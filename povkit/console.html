@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Zscaler POV Console</title>
+<style>
+:root{
+  --bg:#f6f7f9;--panel:#fff;--ink:#14171c;--muted:#5d6673;--line:#e3e6eb;--soft:#eef1f5;
+  --accent:#1f5eff;--accent-ink:#fff;--ok:#127a3e;--ok-bg:#e3f4ea;--warn:#9a5b00;--warn-bg:#fdf1dc;
+  --bad:#b42318;--bad-bg:#fde8e6;--chip:#eef2ff;--chip-ink:#2a3f99;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1115;--panel:#171a20;--ink:#e8eaee;--muted:#9aa3b0;--line:#2a2f38;--soft:#1f232b;
+  --accent:#5b8cff;--accent-ink:#0b0d12;--ok:#4cc77f;--ok-bg:#16301f;--warn:#e6a23c;--warn-bg:#33270f;
+  --bad:#ff7a6e;--bad-bg:#3a1714;--chip:#1e2747;--chip-ink:#a9bcff;}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5;flex-wrap:wrap}
+header h1{font-size:16px;margin:0;font-weight:650;letter-spacing:-.01em}
+header .meta{color:var(--muted);font-size:13px}
+header .sp{flex:1}
+nav.tabs{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:53px;z-index:4;overflow-x:auto}
+nav.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:10px 14px;background:none;color:var(--muted);font-weight:600;white-space:nowrap}
+nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+.view{display:none}.view.on{display:block}
+.wrap{padding:20px 24px;max-width:1180px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:600}
+.stack>*+*{margin-top:16px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 11px;cursor:pointer}
+button:hover{background:var(--soft)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:8px 18px}
+button.primary:hover{filter:brightness(1.08)}
+button.danger{border-color:var(--bad);color:var(--bad)}
+button:disabled{opacity:.5;cursor:default}
+select,input[type=text],input[type=password],input[type=number],textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+textarea{width:100%;min-height:64px;resize:vertical}
+.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.form{display:grid;grid-template-columns:200px 1fr;gap:10px 14px;align-items:center;max-width:760px}
+.form .lbl{font-size:13px;color:var(--muted)}
+.form input[type=text],.form input[type=password],.form textarea,.form select{width:100%}
+.lbl{font-size:12px;color:var(--muted)}
+.hint{font-size:12px;color:var(--muted);margin-top:6px}
+.muted{color:var(--muted)}
+.kicker{font:600 11px var(--mono);letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
+h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
+.wiz{display:grid;grid-template-columns:260px 1fr;gap:20px}
+.wiz>*{min-width:0}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{padding:9px 10px;border-radius:8px;cursor:pointer;display:flex;gap:10px;align-items:center;font-size:13.5px}
+.steps li:hover{background:var(--soft)}
+.steps li.on{background:var(--chip);color:var(--chip-ink);font-weight:600}
+.steps .num{width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font:600 11px var(--mono);background:var(--soft);color:var(--muted);flex:none}
+.steps li.done .num{background:var(--ok-bg);color:var(--ok)}
+.steps li.on .num{background:var(--accent);color:var(--accent-ink)}
+.notice{padding:10px 12px;border-radius:8px;background:var(--warn-bg);color:var(--warn);font-size:13px;margin:10px 0}
+.notice.good{background:var(--ok-bg);color:var(--ok)}
+.notice.bad{background:var(--bad-bg);color:var(--bad)}
+.chk{display:inline-flex;gap:7px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer}
+.chk input{margin:0}
+.opt{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid var(--line);border-radius:8px;margin:6px 0;cursor:pointer;max-width:760px}
+.opt input{margin-top:3px}
+.badge{font:600 11px var(--mono);padding:2px 7px;border-radius:6px;white-space:nowrap;display:inline-block}
+.b-ok,.b-pass{background:var(--ok-bg);color:var(--ok)}.b-warn,.b-incomplete{background:var(--warn-bg);color:var(--warn)}
+.b-fail{background:var(--bad-bg);color:var(--bad)}.b-info{background:var(--soft);color:var(--muted)}
+.chip{display:inline-block;font:500 11.5px var(--mono);padding:2px 7px;border-radius:6px;background:var(--chip);color:var(--chip-ink);margin:1px 3px 1px 0}
+.checks{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.check{display:grid;grid-template-columns:64px 1fr;gap:10px;padding:9px 12px;border-top:1px solid var(--line);font-size:13px}
+.check:first-child{border-top:0}
+.check .fix{color:var(--muted);margin-top:3px;font-size:12.5px}
+.group-h{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:16px 0 6px;font-weight:600}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{text-align:left;font-weight:600;font-size:12px;color:var(--muted);padding:8px 10px;background:var(--soft)}
+td{padding:8px 10px;border-top:1px solid var(--line);vertical-align:top}
+.tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px}
+tr.r{cursor:pointer}tr.r:hover td{background:var(--soft)}
+tr.detail td{background:var(--soft);font-size:12.5px}
+pre,code{font:12px/1.5 var(--mono)}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-radius:8px;padding:10px;margin:8px 0;max-height:420px;overflow:auto}
+.log{font:12px/1.55 var(--mono);background:var(--soft);border-radius:8px;padding:10px;max-height:380px;overflow:auto;margin-top:12px}
+.log .fail{color:var(--bad)}.log .warn{color:var(--warn)}.log .ok{color:var(--ok)}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h4{margin:0 0 6px;font-size:14px}
+.secret{font:600 13px var(--mono);background:var(--soft);padding:6px 9px;border-radius:6px;word-break:break-all;display:inline-block;margin-top:6px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 12px}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+.stat{display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.stat b{display:block;font-size:20px;color:var(--ink);font-weight:650}
+@media (max-width:860px){.wiz{grid-template-columns:1fr}.form{grid-template-columns:1fr}.check{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Zscaler POV Console</h1>
+  <span class="meta" id="hpov">No POV yet</span>
+  <span class="sp"></span>
+  <select id="povsel" title="Switch POV"></select>
+  <span class="meta" id="hver"></span>
+</header>
+<nav class="tabs" id="tabs">
+  <button data-t="setup" class="on">Setup</button>
+  <button data-t="status">Status</button>
+  <button data-t="criteria">Success criteria</button>
+  <button data-t="handover">Handover</button>
+  <button data-t="logs">Logs</button>
+</nav>
+
+<div class="view on" id="v-setup"><div class="wrap">
+  <div class="wiz">
+    <div class="panel"><ol class="steps" id="wsteps"></ol>
+      <div class="hint">Nothing changes in the customer's tenant until step 7, and only what they approved in step 6.</div></div>
+    <div class="panel" id="wstage"></div>
+  </div>
+</div></div>
+
+<div class="view" id="v-status"><div class="wrap stack">
+  <div class="panel">
+    <h2>Is the tenant still what the customer approved?</h2>
+    <p class="muted" style="margin-top:0">Reads the tenant (read-only) and compares it with the ledger and the approved change list. Fix drift repairs only the POV's own objects.</p>
+    <div class="row"><button class="primary" id="stcheck">Check now</button><button id="stfix">Fix drift</button></div>
+    <div id="stout" style="margin-top:14px"></div>
+  </div>
+</div></div>
+
+<div class="view" id="v-criteria"><div class="wrap stack">
+  <div class="panel">
+    <h2>Success criteria</h2>
+    <div class="stat" id="crstat"></div>
+    <div class="row" style="margin-top:14px">
+      <button id="crapi">Run API proofs</button>
+      <button id="crpack">Download probe pack</button>
+      <label class="chk"><input type="file" id="crfile" accept=".json" style="display:none">Import probe results…</label>
+      <span class="sp" style="flex:1"></span>
+      <button class="primary" id="crreport">Build the report</button>
+    </div>
+    <div id="crmsg"></div>
+    <div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>ID</th><th>Criterion</th><th>Proofs</th><th>Result</th></tr></thead><tbody id="crrows"></tbody></table></div>
+    <div class="hint">Click a row for its evidence, and to record what someone saw (an attestation).</div>
+  </div>
+</div></div>
+
+<div class="view" id="v-handover"><div class="wrap stack">
+  <div class="panel">
+    <h2>Keep it: hand over as Terraform</h2>
+    <p class="muted" style="margin-top:0">Writes a Terraform folder that adopts every POV object in place (import blocks, nothing recreated). The kit then never touches them again, and removes its secrets and the discovery data from this computer.</p>
+    <label class="chk"><input type="checkbox" id="hotfok">The customer wants to keep this configuration</label>
+    <div class="row" style="margin-top:12px"><button class="primary" id="hotf">Export to Terraform</button></div>
+  </div>
+  <div class="panel">
+    <h2>Remove it: teardown</h2>
+    <p class="muted" style="margin-top:0">Deletes every object in the ledger, newest first, and leaves everything else as it was. ZPA: delete the connector stack in AWS first.</p>
+    <label class="chk"><input type="checkbox" id="hoadopt">Also delete objects that were built by hand and adopted</label>
+    <div class="row" style="margin-top:12px"><input type="text" id="hoconfirm" placeholder="Type DELETE" style="width:140px"><button class="danger" id="hotd">Remove the POV</button></div>
+  </div>
+  <div class="panel" id="hoout" style="display:none"><h2>Progress</h2><div class="log" id="holog"></div></div>
+</div></div>
+
+<div class="view" id="v-logs"><div class="wrap stack">
+  <div class="panel">
+    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Activity</h2>
+      <div class="row"><button id="lgref">Refresh</button><button id="lgdiag" title="Logs and versions, without secrets or the customer's object names">Download diagnostics</button></div></div>
+    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th style="width:160px">Time (UTC)</th><th style="width:70px">Level</th><th style="width:90px">Kind</th><th>What</th></tr></thead><tbody id="lgrows"></tbody></table></div>
+  </div>
+</div></div>
+
+<script>
+const TOKEN="__POV_TOKEN__";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(path,body){
+  const r=await fetch(path,{method:body===undefined?"GET":"POST",headers:{"X-POV-Token":TOKEN,"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({error:"No answer from the kit. Is the console still running?"}));
+  if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j}
+function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div>`}
+async function runJob(id,el){let since=0;el.innerHTML="";
+  for(;;){const j=await api(`/api/job?id=${id}&since=${since}`);
+    for(const l of j.lines){const d=document.createElement("div");d.className=l.level;d.textContent=`${l.t}  ${l.msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight}
+    since+=j.lines.length;if(j.done){if(j.error)throw new Error(j.error);return j.result}
+    await new Promise(r=>setTimeout(r,700))}}
+const STATUS_ORDER={fail:0,warn:1,ok:2,info:3};
+function checksHTML(checks){if(!checks.length)return'<div class="empty">No checks.</div>';
+  const groups={};for(const c of checks){const g=(c.label.match(/^([A-Za-z ]+?):\s/)||[,"General"])[1];(groups[g]=groups[g]||[]).push(c)}
+  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><div class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<div class="check"><div><span class="badge b-${esc(c.status)}">${esc(c.status.toUpperCase())}</span></div><div><b>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}</b>${c.detail?` <span class="muted">· ${esc(c.detail)}</span>`:""}${c.fix&&c.status!="ok"?`<div class="fix">${esc(c.fix)}</div>`:""}</div></div>`).join("")}</div>`).join("")}
+function reportText(checks){return checks.map(c=>`[${c.status.toUpperCase()}] ${c.label}${c.detail?": "+c.detail:""}${c.fix&&c.status!="ok"?"\n    fix: "+c.fix:""}`).join("\n")}
+
+/* ---------------- state ---------------- */
+let S=null;
+async function load(){S=await api("/api/state");const c=S.current;
+  $("#hver").textContent="POV kit "+S.version;
+  $("#hpov").innerHTML=c?`<b>${esc(c.customer)}</b> · ${esc(c.id)} · <span class="chip">${esc(c.state||"new")}</span>`:"No POV yet";
+  $("#povsel").innerHTML=S.povs.length?S.povs.map(p=>`<option value="${esc(p.id)}" ${c&&p.id==c.id?"selected":""}>${esc(p.customer)} (${esc(p.id)})</option>`).join(""):'<option>No POVs</option>';
+  $("#povsel").disabled=!S.povs.length;return S}
+$("#povsel").onchange=async e=>{await api("/api/pov/use",{id:e.target.value});await load();W.step=firstOpen();W.checks=null;W.plan=null;wizard();refreshTab()};
+$$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".view").forEach(v=>v.classList.toggle("on",v.id=="v-"+b.dataset.t));refreshTab()});
+function tab(){return $("#tabs button.on").dataset.t}
+function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="criteria")criteria();if(t=="logs")logs()}
+
+/* ---------------- setup wizard ---------------- */
+const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Approval","Apply","Next steps"];
+const W={step:0,checks:null,plan:null,role:null};
+function done(i){const c=S&&S.current;if(!c)return false;
+  const clients=Object.values(c.clients);const s=c.settings;
+  return [true, clients.length&&clients[0].saved,
+    !!(s.pilot_group||s["identity.test_users"]), W.checks&&!W.checks.some(x=>x.status=="fail"),
+    !!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), (c.ledger.owned||0)+(c.ledger.adopted||0)>0, false][i]}
+function firstOpen(){if(!S.current)return 0;for(let i=1;i<7;i++)if(!done(i))return i;return 7}
+function wsteps(){$("#wsteps").innerHTML=STEPS.map((t,i)=>`<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":i+1}</span><span>${esc(t)}</span></li>`).join("");
+  $$("#wsteps li").forEach(li=>li.onclick=()=>{const i=+li.dataset.i;if(i>0&&!S.current)return;W.step=i;wizard()})}
+function head(i,title,desc){return `<div class="kicker">STEP ${i+1} OF ${STEPS.length}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
+function nav(back,next,nextLabel,disabled){return `<div class="row" style="margin-top:20px">${back?'<button id="wback">‹ Back</button>':""}${next?`<button class="primary" id="wnext" ${disabled?"disabled":""}>${esc(nextLabel||"Continue ›")}</button>`:""}</div>`}
+function bindNav(onNext){$("#wback")&&($("#wback").onclick=()=>{W.step--;wizard()});$("#wnext")&&($("#wnext").onclick=onNext||(()=>{W.step++;wizard()}))}
+const has=n=>S.current&&S.current.products.includes(n);
+const KIND={label:"rule label",url_category:"custom URL category",network_service:"network service",url_filtering:"URL filtering rule",
+  ssl:"SSL inspection rule",cloud_app_control:"Cloud App Control rule",file_type:"file type control rule",dlp:"DLP rule",firewall:"firewall rule",
+  dns:"DNS control rule",department:"department",user_group:"user group",user:"test user",forwarding_profile:"forwarding profile",
+  app_profile:"app profile",connector_group:"App Connector group",provisioning_key:"provisioning key",server_group:"server group",
+  segment_group:"segment group",app_segment:"application segment",access_rule:"access policy rule",policy:"detection policy",app:"AI app",
+  key:"Detection API key",rule:"policy rule",deeptrace:"deep trace",casb_dlp_rule:"CASB DLP rule"};
+
+async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.current;
+  try{
+  if(W.step==0){
+    st.innerHTML=head(0,"Start a POV","One POV per customer. Its prefix goes on every object the kit creates in their tenant, so its objects are easy to see and can't be confused with theirs.")+
+      (S.povs.length?`<div class="group-h">Continue a POV</div>${S.povs.map(p=>`<label class="opt"><input type="radio" name="wp" value="${esc(p.id)}" ${c&&p.id==c.id?"checked":""}><span><b>${esc(p.customer)}</b> <span class="muted">· ${esc(p.id)} · ${esc(p.state||"new")}</span></span></label>`).join("")}<div class="row" style="margin:10px 0 18px"><button class="primary" id="wcont">Continue with this POV ›</button></div><div class="group-h">Or start a new one</div>`:"")+
+      `<div class="form"><span class="lbl">Customer</span><input type="text" id="wcust" placeholder="Acme Corp">
+        <span class="lbl">Products in scope</span><div>${S.products.map(p=>`<label class="chk" style="margin:0 6px 6px 0"><input type="checkbox" value="${esc(p.name)}" ${["zia","zcc"].includes(p.name)?"checked":""}>${esc(p.title)}</label>`).join("")}</div>
+        <span class="lbl">Prefix</span><input type="text" id="wprefix" value="ZPOV" maxlength="12">
+        <span class="lbl">API clients</span><div>
+          <label class="opt" style="margin-top:0"><input type="radio" name="wmode" value="single" checked><span><b>One API client</b> (recommended)<br><span class="muted">The customer creates one client at kickoff. Discovery stays read-only in the kit's code, and nothing is written until they approve the change list.</span></span></label>
+          <label class="opt"><input type="radio" name="wmode" value="separate"><span><b>Two clients</b>: view-only first, write access after approval<br><span class="muted">For security teams that want read-only access before anything else. Adds a second client at the approval step.</span></span></label></div></div>
+      <div class="row" style="margin-top:16px"><button class="primary" id="wnew">Create the POV ›</button></div><div id="wmsg"></div>`;
+    $("#wcont")&&($("#wcont").onclick=async()=>{const v=($$('input[name=wp]').find(x=>x.checked)||{}).value;if(!v)return;await api("/api/pov/use",{id:v});await load();W.checks=null;W.plan=null;W.step=firstOpen()||1;wizard()});
+    $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,
+        products:$$('#wstage .form input[type=checkbox]').filter(x=>x.checked).map(x=>x.value),client_mode:($$('input[name=wmode]').find(x=>x.checked)||{}).value});
+      await load();W.checks=null;W.plan=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}};
+  }
+  else if(W.step==1){
+    const single=c.settings.client_mode!="separate", slot=single?"main":"discovery", cl=c.clients[slot]||{};
+    if(!W.role)W.role=(await api("/api/rolespec")).text;
+    st.innerHTML=head(1,"Connect to the customer's tenant",single?"The customer's admin (or you, with a temporary admin login) creates one OneAPI client from this role spec. The secret goes straight to this computer's keychain.":"Two clients: create the view-only discovery client now. The apply client comes at the approval step.")+
+      `<div class="row"><button id="wcopyrole">Copy the role spec</button><button id="wdlrole">Download it (.md)</button><button id="wshowrole">Show it</button></div><pre id="wrole" style="display:none">${esc(W.role)}</pre>
+      ${cl.saved?note(`Saved: client ${cl.client_id} on ${c.settings.vanity_domain}.zslogin.net`,"good"):""}
+      <div class="form" style="margin-top:14px"><span class="lbl">Vanity domain</span><input type="text" id="wvan" placeholder="acme (from acme.zslogin.net)" value="${esc(c.settings.vanity_domain||"")}">
+        <span class="lbl">Cloud <span class="muted">(optional)</span></span><input type="text" id="wcloud" placeholder="leave empty for production" value="${esc(c.settings.cloud||"")}">
+        <span class="lbl">${single?"Client ID":"Discovery client ID"}</span><input type="text" id="wcid" autocomplete="off" value="${esc(cl.client_id||"")}">
+        <span class="lbl">Client secret</span><input type="password" id="wsec" autocomplete="new-password" placeholder="${cl.saved?"saved in the keychain (enter a new one to replace it)":""}"></div>
+      <div id="wmsg"></div>`+nav(true,true,cl.saved?"Test and continue ›":"Save and test ›");
+    $("#wcopyrole").onclick=async()=>{try{await navigator.clipboard.writeText(W.role);$("#wcopyrole").textContent="Copied ✓"}catch(e){download(`role-spec-${c.id}.md`,W.role,"text/markdown")}};
+    $("#wdlrole").onclick=()=>download(`role-spec-${c.id}.md`,W.role,"text/markdown");
+    $("#wshowrole").onclick=()=>{const p=$("#wrole");p.style.display=p.style.display=="none"?"block":"none"};
+    bindNav(async()=>{$("#wmsg").innerHTML='<div class="notice">Signing in…</div>';
+      try{await api("/api/connect",{slot,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,client_id:$("#wcid").value,secret:$("#wsec").value});
+        $("#wsec").value="";await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+  }
+  else if(W.step==2){
+    const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), scope=s["zpa.scope"]||"scim";
+    st.innerHTML=head(2,"Pilot users","Who the POV applies to. Every rule the kit creates is scoped to these users only. The next step checks each product can see them and that they're entitled.")+
+      `<div class="form">
+        ${zia?`<span class="lbl">Pilot group <span class="muted">(as ZIA lists it)</span></span><input type="text" id="s_pilot_group" value="${esc(s.pilot_group||"")}" placeholder="POV Pilot">`:""}
+        <span class="lbl">Pilot users' emails</span><textarea id="s_pilot_emails" placeholder="jane@acme.com, raj@acme.com">${esc((s.pilot_emails||[]).join(", "))}</textarea>
+        <span class="lbl">Identity provider</span><select id="s_identity.idp"><option value="">Detect it</option>${["okta","entra","ping","duo","google","onelogin"].map(x=>`<option ${s["identity.idp"]==x?"selected":""}>${x}</option>`).join("")}</select>
+        ${has("zia")?`<span class="lbl">Sign-in sites not decrypted</span><input type="text" id="s_identity.bypass_domains" value="${esc((s["identity.bypass_domains"]||[]).join(", "))}" placeholder="leave empty to use the IdP's own sites">
+        <span class="lbl">Rule placement</span><div><label class="chk"><input type="radio" name="s_placement" value="top" ${s.placement!="bottom"?"checked":""}>Above the customer's rules</label> <label class="chk"><input type="radio" name="s_placement" value="bottom" ${s.placement=="bottom"?"checked":""}>Below them</label></div>
+        <span class="lbl">No pilot group yet?</span><div><input type="number" id="s_identity.test_users" min="0" max="10" value="${esc(s["identity.test_users"]||0)}" style="width:80px"> test users created by the POV <div class="hint">Only where ZIA keeps its own users (Hosted DB). Not usable for ZPA, which takes users from the IdP.</div></div>`:""}
+      </div>
+      ${has("zpa")?`<div class="group-h">Private Access (ZPA)</div><div class="form">
+        <span class="lbl">POV app name</span><input type="text" id="s_zpa.app_name" value="${esc(s["zpa.app_name"]||"")}" placeholder="HR portal">
+        <span class="lbl">Its domains or IPs</span><input type="text" id="s_zpa.domains" value="${esc((s["zpa.domains"]||[]).join(", "))}" placeholder="hr.acme.internal">
+        <span class="lbl">TCP ports</span><input type="text" id="s_zpa.tcp_ports" value="${esc((s["zpa.tcp_ports"]||["443"]).join(", "))}">
+        <span class="lbl">Pilot users in ZPA</span><div><label class="chk"><input type="radio" name="s_zpa.scope" value="scim" ${scope!="saml"?"checked":""}>A SCIM group</label> <label class="chk"><input type="radio" name="s_zpa.scope" value="saml" ${scope=="saml"?"checked":""}>A SAML attribute</label></div>
+        <span class="lbl">SCIM group <span class="muted">(if not the pilot group)</span></span><input type="text" id="s_zpa.group" value="${esc(s["zpa.group"]||"")}">
+        <span class="lbl">SAML attribute and value</span><div class="row" style="gap:8px"><input type="text" id="s_zpa.saml_attribute" value="${esc(s["zpa.saml_attribute"]||"")}" placeholder="memberOf" style="flex:1"><input type="text" id="s_zpa.saml_value" value="${esc(s["zpa.saml_value"]||"")}" placeholder="pov-pilots" style="flex:1"></div></div>`:""}
+      ${has("casb")?`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`:""}
+      <div id="wmsg"></div>`+nav(true,true,"Save ›");
+    bindNav(async()=>{const vals={};
+      $$("#wstage [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
+      ["placement","zpa.scope"].forEach(k=>{const r=$$(`input[name='s_${k}']`).find(x=>x.checked);if(r)vals[k]=r.value});
+      try{await api("/api/settings",{values:vals});await load();W.checks=null;W.step=3;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+  }
+  else if(W.step==3){
+    st.innerHTML=head(3,"Preflight","Read-only checks of this computer, each product, and the pilot users across products. Nothing is written.")+
+      `<div id="wchecks">${W.checks?checksHTML(W.checks):'<div class="notice">Running the checks…</div>'}</div><div id="wgate"></div>`;
+    const draw=()=>{const fails=W.checks.filter(x=>x.status=="fail");$("#wchecks").innerHTML=checksHTML(W.checks);
+      $("#wgate").innerHTML=(fails.length?note(`${fails.length} check${fails.length>1?"s":""} failed. Fix ${fails.length>1?"them":"it"} (often in the Pilot users step), then run the checks again.`,"bad"):note("Every check passed or only warns.","good"))+
+        `<div class="row" style="margin-top:14px"><button id="wback">‹ Back</button><button id="wrerun">Run checks again</button><button id="wcopy" title="Checks only. No secrets.">Copy report</button><button class="primary" id="wnext" ${fails.length?"disabled":""}>Continue ›</button></div>`;
+      bindNav();$("#wrerun").onclick=run;
+      $("#wcopy").onclick=async()=>{const t=reportText(W.checks);try{await navigator.clipboard.writeText(t);$("#wcopy").textContent="Copied ✓"}catch(e){download("pov-preflight.txt",t,"text/plain")}}};
+    const run=async()=>{$("#wchecks").innerHTML='<div class="notice">Running the checks…</div>';$("#wgate").innerHTML="";
+      try{W.checks=(await api("/api/preflight",{})).checks;wsteps();draw()}catch(e){$("#wchecks").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}};
+    W.checks?draw():run();
+  }
+  else if(W.step==4){
+    st.innerHTML=head(4,"The change list","Everything the kit will create, who it affects, and the changes only the customer makes. Walk the customer's admin through it; any change after approval needs a new approval.")+'<div id="wplan"><div class="notice">Making the change list from the tenant (read-only)…</div></div>';
+    try{const r=await api("/api/plan",{});W.plan=r;await load();wsteps();
+      const creates=r.items.filter(i=>i.action!="customer_action"), acts=r.items.filter(i=>i.action=="customer_action");
+      const byP={};for(const i of creates)(byP[i.product]=byP[i.product]||[]).push(i);
+      const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
+      $("#wplan").innerHTML=`<div class="stat" style="margin:6px 0 10px"><div><b>${creates.length}</b>objects to create</div><div><b>${acts.length}</b>customer actions</div><div><b style="font:600 15px var(--mono);margin-top:4px">${esc(r.hash.slice(0,16))}</b>change list</div></div>
+        ${r.checks.some(x=>x.status=="fail")?note("Discovery found problems; apply will refuse until they're fixed. See Preflight.","bad"):""}
+        ${Object.entries(byP).map(([p,is])=>`<div class="group-h">${esc(title(p))} · ${is.length}</div><div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th><th>Criteria</th></tr>${is.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(KIND[i.kind]||i.kind.replace(/_/g," "))}${i.placement?" · placed at the "+esc(i.placement):""}${i.action=="create_or_adopt"?" · or built by hand and adopted":""}</div>${i.why?`<div style="font-size:12.5px">${esc(i.why)}</div>`:""}</td><td>${esc(i.affects)}</td><td>${i.criteria.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</td></tr>`).join("")}</table></div>`).join("")}
+        ${acts.length?`<div class="group-h">Changes only the customer makes</div><ul>${acts.map(a=>`<li><b>${esc(a.name)}</b><div class="muted" style="font-size:12.5px">${esc(a.why)}</div></li>`).join("")}</ul>`:""}
+        ${r.notes.length?`<div class="group-h">Notes</div><ul class="muted">${r.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`:""}
+        <div class="row" style="margin-top:12px"><button id="wopen">Open the customer page ↗</button><span class="hint">Printable, with a signature line.</span></div>`+nav(true,true,"Continue to approval ›");
+      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindNav();
+    }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
+  }
+  else if(W.step==5){
+    const sep=c.settings.client_mode=="separate", ap=c.clients.apply||{};
+    const ok=c.approval&&c.plan&&c.approval.hash==c.plan.hash;
+    st.innerHTML=head(5,"Approval","The customer approves this exact change list. The kit records who and when, and apply refuses any plan that differs from it.")+
+      (c.plan?`<p>Change list <code>${esc(c.plan.hash.slice(0,16))}</code>: ${c.plan.creates} objects, ${c.plan.items-c.plan.creates} customer actions.</p>`:note("Make the change list first (step 5).","bad"))+
+      (ok?note(`Approved by ${c.approval.by} on ${c.approval.at.slice(0,10)}.`,"good"):
+       `<div class="form"><span class="lbl">Approved by</span><input type="text" id="wby" placeholder="Jane Doe, CISO">
+        <span class="lbl">Note <span class="muted">(optional)</span></span><textarea id="wnote" placeholder="e.g. approved on the kickoff call; email sign-off attached to the POV record"></textarea></div>
+        <label class="chk" style="margin-top:12px"><input type="checkbox" id="wrev">The customer reviewed this change list, including who it affects</label>`)+
+      (sep?`<div class="group-h">Apply client (two-client mode)</div>${ap.saved?note(`Saved: apply client ${ap.client_id}`,"good"):`<p class="muted">Now that it's approved, the customer creates the apply client from the role spec.</p>`}
+        <div class="form"><span class="lbl">Apply client ID</span><input type="text" id="wacid" value="${esc(ap.client_id||"")}"><span class="lbl">Secret</span><input type="password" id="wasec" autocomplete="new-password"></div>`:"")+
+      '<div id="wmsg"></div>'+nav(true,true,ok?"Continue ›":"Approve ›",!c.plan);
+    bindNav(async()=>{try{
+      if(!ok)await api("/api/approve",{by:$("#wby").value,note:$("#wnote").value,reviewed:$("#wrev").checked});
+      if(sep&&($("#wasec").value||!ap.saved))await api("/api/connect",{slot:"apply",client_id:$("#wacid").value,secret:$("#wasec").value});
+      await load();W.step=6;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+  }
+  else if(W.step==6){
+    const ok=c.approval&&c.plan&&c.approval.hash==c.plan.hash, appliedN=(c.ledger.owned||0)+(c.ledger.adopted||0);
+    st.innerHTML=head(6,"Apply","The kit reads the tenant again, checks it still makes the approved change list, then creates each object, recording it in the ledger as it goes. Safe to run again: anything already made is skipped.")+
+      (ok?"":note("The change list isn't approved yet (step 6).","bad"))+
+      (appliedN?note(`${appliedN} POV objects are in the ledger.`,"good"):"")+
+      `<div class="row" style="margin-top:6px"><button class="primary" id="wapply" ${ok?"":"disabled"}>${appliedN?"Apply again (fills in anything missing)":`Apply to ${esc(c.customer)}'s tenant`}</button></div>
+      <div class="log" id="wlog" style="display:none"></div><div id="wafter"></div><div id="wnav">${nav(true,!!appliedN,"Next steps ›")}</div>`;
+    bindNav();
+    $("#wapply").onclick=async()=>{const b=$("#wapply");b.disabled=true;$("#wlog").style.display="block";
+      try{await runJob((await api("/api/apply",{})).job,$("#wlog"));await load();wsteps();
+        $("#wafter").innerHTML='<div class="notice">Checking the result…</div>';
+        const checks=await runJob((await api("/api/status",{})).job,document.createElement("div"));
+        $("#wnav").innerHTML="";$("#wafter").innerHTML='<div class="group-h">Status after apply</div>'+checksHTML(checks)+nav(true,true,"Next steps ›");bindNav()}
+      catch(e){$("#wafter").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
+  }
+  else if(W.step==7){
+    let plan=null;try{plan=(await api("/api/plan")).plan}catch(e){}
+    const acts=plan?plan.items.filter(i=>i.action=="customer_action"):[];
+    const users=c.test_users?(await api("/api/users")).users:[];
+    st.innerHTML=head(7,"Next steps","What's left for the customer, and the things to hand to the pilot devices.")+
+      `<div class="cards">
+        <div class="card"><h4>Customer actions</h4>${acts.length?`<ul style="padding-left:18px;margin:6px 0">${acts.map(a=>`<li>${esc(a.name)}</li>`).join("")}</ul><div class="hint">Record each one done in Success criteria (attest), and check Status.</div>`:'<p class="muted">None.</p>'}</div>
+        <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The POV's own tests. On a pilot device signed in to Client Connector: <code>pov-kit probe --pack &lt;file&gt;</code>. No keys needed.</p><button id="npack">Download probe pack</button></div>
+        ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A CloudFormation template for two connectors in the customer's AWS account, plus the provisioning key to paste into the stack.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>Download template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button></div><div id="nkeyv"></div></div>`:""}
+        ${has("aiguard")?`<div class="card"><h4>AI Guard policy</h4><p class="muted" style="margin:4px 0 10px">What the POV's own policy blocks. Takes about 30 seconds to apply.</p><div class="seg" id="nag"><button data-p="monitor">Monitor</button><button data-p="attacks">Block attacks</button><button data-p="data">+ data leakage</button></div><div id="nagmsg" class="hint"></div></div>`:""}
+        ${users.length?`<div class="card"><h4>Test users</h4>${users.map(u=>`<div class="row" style="gap:8px;margin:4px 0"><code>${esc(u.email)}</code><button data-n="${esc(u.n)}" class="nuser">Show password</button></div><div id="nuser${esc(u.n)}"></div>`).join("")}</div>`:""}
+      </div>`+nav(true,true,"Go to Success criteria ›");
+    bindNav(()=>{$$("#tabs button").find(b=>b.dataset.t=="criteria").click()});
+    $("#npack").onclick=async()=>download(`pov-probe-pack-${c.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
+    $("#ntpl")&&($("#ntpl").onclick=async()=>download(`pov-${c.id}-app-connectors.json`,JSON.stringify((await api("/api/zpa-template",{})).template,null,2),"application/json"));
+    $("#nkey")&&($("#nkey").onclick=async()=>{const v=(await api("/api/reveal",{what:"zpa-key"})).value;$("#nkeyv").innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span><div class="hint">Paste it into the stack's ProvisioningKey field; don't save it anywhere else.</div>`});
+    $$(".nuser").forEach(b=>b.onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:b.dataset.n})).value;$("#nuser"+b.dataset.n).innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span>`});
+    $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});
+  }
+  }catch(e){st.innerHTML=note(e.message,"bad")+nav(W.step>0,false);bindNav()}
+}
+
+/* ---------------- status ---------------- */
+async function status(fix){const out=$("#stout");out.innerHTML='<div class="log" id="stlog"></div>';
+  try{const checks=await runJob((await api("/api/status",{fix})).job,$("#stlog"));out.innerHTML=checksHTML(checks);await load()}
+  catch(e){out.innerHTML=note(e.message,"bad")}}
+$("#stcheck").onclick=()=>status(false);$("#stfix").onclick=()=>status(true);
+
+/* ---------------- criteria ---------------- */
+let CR=[],open=null;
+async function criteria(){try{CR=(await api("/api/criteria")).rows}catch(e){$("#crrows").innerHTML=`<tr><td colspan="4">${esc(e.message)}</td></tr>`;return}
+  const n=s=>CR.filter(r=>r.status==s).length;
+  $("#crstat").innerHTML=`<div><b>${n("pass")}</b>passed</div><div><b>${n("fail")}</b>failed</div><div><b>${n("incomplete")}</b>still to prove</div><div><b>${CR.length}</b>criteria</div>`;
+  $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span></td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
+  $$("#crrows tr.r").forEach(tr=>tr.onclick=()=>{open=open==+tr.dataset.i?null:+tr.dataset.i;criteria()});
+  $$(".attgo").forEach(b=>b.onclick=async e=>{e.stopPropagation();const i=+b.dataset.i;
+    try{await api("/api/attest",{criterion:CR[i].criterion.id,note:$("#att"+i).value,by:$("#attby"+i).value});criteria()}catch(err){alertIn(i,err.message)}});
+  $$("#crrows tr.detail").forEach(tr=>tr.onclick=e=>e.stopPropagation())}
+function alertIn(i,m){$("#attmsg"+i).innerHTML=note(m,"bad")}
+function detail(r,i){const c=r.criterion;
+  const proof=([k,p])=>`<div style="margin:6px 0"><span class="badge b-${esc(p.status)}">${esc(k)}</span> ${esc(p.detail||"")}${p.attestation?` <span class="muted">· ${esc(p.attestation.note)} (${esc(p.attestation.by)}, ${esc(p.attestation.at)})</span>`:""}${p.results?`<ul style="margin:4px 0 0 18px;padding:0">${p.results.map(x=>`<li>${esc(x.spec?(x.spec.url||x.spec.host||x.spec.name||x.spec.type):(x.expect||x.device||""))}: ${esc(x.outcome??(x.detected||x.scores||[]).join?.(", ")??"")} ${x.expect&&x.spec?`<span class="muted">(expected ${esc(x.expect)})</span>`:""}</li>`).join("")}</ul>`:""}</div>`;
+  return `<tr class="detail"><td colspan="4"><div>${esc(c.statement||"")}</div>${Object.entries(r.proofs).map(proof).join("")}${c.attest?`<div class="hint">To attest: ${esc(c.attest)}</div>`:""}
+    <div class="row" style="margin-top:10px;gap:8px"><input type="text" id="att${i}" placeholder="What was seen, e.g. the block in Web Insights for the pilot user" style="flex:1;min-width:240px"><input type="text" id="attby${i}" placeholder="Who" style="width:140px"><button class="attgo" data-i="${i}">Record attestation</button></div><div id="attmsg${i}"></div></td></tr>`}
+$("#crapi").onclick=async()=>{$("#crmsg").innerHTML='<div class="log" id="crlog"></div>';try{await runJob((await api("/api/test-api",{})).job,$("#crlog"));$("#crmsg").innerHTML=note("API proofs done.","good");criteria()}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
+$("#crpack").onclick=async()=>download(`pov-probe-pack-${S.current.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
+$("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
+  try{const r=await api("/api/import-probe",{data:JSON.parse(await f.text())});$("#crmsg").innerHTML=note(`Imported probe run ${r.run_id}: ${r.results} results.`,"good");criteria()}catch(err){$("#crmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
+$("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
+
+/* ---------------- handover ---------------- */
+async function handover(body){$("#hoout").style.display="block";
+  try{const r=await runJob((await api("/api/handover",body)).job,$("#holog"));
+    if(r&&r.checks)$("#holog").insertAdjacentHTML("beforeend",`<div class="ok">${r.finished?"Done.":"Not finished: see above."}</div>`);await load()}
+  catch(e){$("#holog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}}
+$("#hotf").onclick=()=>{if(!$("#hotfok").checked){$("#hotfok").parentElement.style.borderColor="var(--bad)";return}handover({how:"terraform"})};
+$("#hotd").onclick=()=>handover({how:"teardown",confirm:$("#hoconfirm").value,include_adopted:$("#hoadopt").checked});
+
+/* ---------------- logs ---------------- */
+async function logs(){try{const r=await api("/api/logs");$("#lgrows").innerHTML=r.lines.map(l=>`<tr><td><code>${esc(l.t)}</code></td><td><span class="badge b-${l.level=="error"?"fail":esc(l.level)}">${esc(l.level)}</span></td><td>${esc(l.kind)}</td><td>${esc(l.summary)}${l.error?`<div class="muted" style="font-size:12px">${esc(l.error)}</div>`:""}</td></tr>`).join("")||'<tr><td colspan="4" class="empty">Nothing yet.</td></tr>'}
+  catch(e){$("#lgrows").innerHTML=`<tr><td colspan="4">${esc(e.message)}</td></tr>`}}
+$("#lgref").onclick=logs;
+$("#lgdiag").onclick=()=>window.open(`/diagnostics?t=${encodeURIComponent(TOKEN)}`,"_blank");
+
+load().then(()=>{W.step=firstOpen();wizard()}).catch(e=>{$("#wstage").innerHTML=note(e.message,"bad")});
+</script>
+</body>
+</html>

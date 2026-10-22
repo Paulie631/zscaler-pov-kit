@@ -80,7 +80,7 @@ def broad_allow(rule):
 class ZPA(Product):
     name, title, phase = "zpa", "Private Access (ZPA)", "v2"
 
-    def role_scopes(self):
+    def role_scopes(self, pov=None):
         return {"discovery": [("ZPA: all areas", "view only")],
                 "apply": [("ZPA: App Connector groups, provisioning keys, server groups, segment groups, application "
                            "segments, access policy", "full"),
@@ -111,8 +111,26 @@ class ZPA(Product):
                             "view access to certificates."))
 
         want = (c.get("group") or pov.cfg.get("pilot_group") or "").strip()
-        snap["pilot_group"] = None
-        for idp in items(t.call("zpa.idp", "list_idps")):
+        snap["pilot_group"] = snap["pilot_saml"] = None
+        idps = items(t.call("zpa.idp", "list_idps"))
+        snap["idps"] = [{"id": str(g(i, "id")), "name": g(i, "name")} for i in idps]
+        if c.get("scope") == "saml":   # tenants that scope ZPA by a SAML attribute instead of SCIM groups
+            attr, value = c.get("saml_attribute"), c.get("saml_value") or want
+            for idp in idps:
+                for a in items(t.call("zpa.saml_attributes", "list_saml_attributes_by_idp", str(g(idp, "id")))):
+                    if attr and str(g(a, "name")) == attr:
+                        snap["pilot_saml"] = {"idp_id": str(g(idp, "id")), "attr_id": str(g(a, "id")), "name": attr,
+                                              "value": value, "idp": g(idp, "name")}
+                        break
+                if snap["pilot_saml"]:
+                    break
+            ps = snap["pilot_saml"]
+            checks.append(check("zpa-pilot", "Pilot users matched by a SAML attribute", OK if ps and value else FAIL,
+                                f"{attr} = {value} ({ps['idp']})" if ps else f"no SAML attribute named '{attr}'",
+                                "" if ps and value else "`pov-kit set zpa.saml_attribute NAME` (as ZPA lists it under "
+                                "the IdP's SAML attributes) and `set zpa.saml_value VALUE`."))
+            idps = []   # skip the SCIM lookup
+        for idp in idps:
             for grp in items(t.call("zpa.scim_groups", "list_scim_groups", str(g(idp, "id")),
                                     query_params={"search": want})) if want else []:
                 if str(g(grp, "name")) == want:
@@ -121,14 +139,17 @@ class ZPA(Product):
                     break
             if snap["pilot_group"]:
                 break
-        checks.append(check("zpa-pilot", "Pilot group exists as a ZPA SCIM group", OK if snap["pilot_group"] else FAIL,
-                            f"{want} ({snap['pilot_group']['idp']})" if snap["pilot_group"] else f"no SCIM group named exactly '{want}'",
-                            "" if snap["pilot_group"] else "ZPA scopes access by SCIM group from the customer's IdP. "
-                            "Name it with `pov-kit set zpa.group NAME`."))
+        if c.get("scope") != "saml":
+            checks.append(check("zpa-pilot", "Pilot group exists as a ZPA SCIM group", OK if snap["pilot_group"] else FAIL,
+                                f"{want} ({snap['pilot_group']['idp']})" if snap["pilot_group"]
+                                else f"no SCIM group named exactly '{want}'",
+                                "" if snap["pilot_group"] else "Name the SCIM group with `pov-kit set zpa.group NAME`. "
+                                "If this tenant doesn't use SCIM for ZPA, scope by a SAML attribute instead: "
+                                "`set zpa.scope saml`, `set zpa.saml_attribute NAME`, `set zpa.saml_value VALUE`."))
 
         snap["customer_names"], taken, overlap = [], [], []
         probe_snap = dict(snap, enrollment_cert="x", app=dict(snap["app"], domains=domains or ["x"]),
-                          pilot_group=snap["pilot_group"] or {"idp_id": "x", "id": "x", "name": "x"})
+                          pilot_group=snap["pilot_group"] or {"idp_id": "x", "id": "x", "name": "x"}, pilot_saml=None)
         planned = {i["name"] for i in self.plan(pov, probe_snap)[0] if i["action"] == "create"}
         for kind, (res, meth) in LISTS.items():
             for o in items(t.call(res, meth)):
@@ -164,9 +185,12 @@ class ZPA(Product):
     def plan(self, pov, snap):
         if not snap.get("readable"):
             return [], ["No ZPA items: ZPA wasn't readable in discovery."]
-        grp, app = snap.get("pilot_group"), snap.get("app") or {}
+        app, saml = snap.get("app") or {}, snap.get("pilot_saml")
+        grp = snap.get("pilot_group") or ({"name": f"{saml['name']} = {saml['value']}"} if saml else None)
         if not grp or not app.get("domains"):
-            return [], ["No ZPA items until the pilot SCIM group and the POV app's domains are set."]
+            return [], ["No ZPA items until the pilot users (SCIM group or SAML attribute) and the POV app's domains "
+                        "are set."]
+        who = (["saml", [[saml["attr_id"], saml["value"]]]] if saml else ["scim_group", [[grp["idp_id"], grp["id"]]]])
         P, pid, c = pov.prefix, pov.id, zcfg(pov)
         n = {k: naming.name(P, s) for k, s in (("connector_group", "connectors"), ("provisioning_key", "connector key"),
                                                ("server_group", "POV servers"), ("segment_group", "POV apps"),
@@ -202,8 +226,7 @@ class ZPA(Product):
                  why="Allows the pilot group to the POV app only. Placed first, so a customer rule above can't deny it.",
                  body={"name": n["access_rule"], "description": d("pilot group to the POV app"), "action": "allow",
                        "app_connector_group_ids": ["{ref:zpa.connector_group}"],
-                       "conditions": [["app", ["{ref:zpa.app_segment}"]],
-                                      ["scim_group", [[grp["idp_id"], grp["id"]]]]]}),
+                       "conditions": [["app", ["{ref:zpa.app_segment}"]], who]}),
             item("zpa", "customer_action", "zpa.ca.connectors", "Two App Connectors run from the POV connector template",
                  action="customer_action", criteria=["PA-CON-01"], console="zpa.app_connectors",
                  why="`pov-kit zpa template` writes an AWS CloudFormation template; the customer deploys it in their "
@@ -342,8 +365,10 @@ class ZPA(Product):
             if not live:
                 return {"status": "fail", "detail": "the POV access rule isn't in ZPA"}
             operands = [o for c in (g(live, "conditions") or []) for o in (g(c, "operands") or [])]
-            groups = {str(g(o, "rhs")) for o in operands if str(g(o, "object_type") or "").upper() == "SCIM_GROUP"}
-            want = str((snap.get("pilot_group") or {}).get("id"))
+            saml = snap.get("pilot_saml")
+            kind = "SAML" if saml else "SCIM_GROUP"
+            groups = {str(g(o, "rhs")) for o in operands if str(g(o, "object_type") or "").upper() == kind}
+            want = str(saml["value"] if saml else (snap.get("pilot_group") or {}).get("id"))
             scoped = groups == {want}
             if criterion["id"] == "PA-APP-01":
                 up = self.api_proof(t, pov, ledger, {"id": "PA-CON-01"})
@@ -373,5 +398,7 @@ class ZPA(Product):
         names = set(snap.get("customer_names") or [])
         if snap.get("pilot_group"):
             names.add(snap["pilot_group"]["name"])
+        if snap.get("pilot_saml"):
+            names.add(str(snap["pilot_saml"]["value"]))
         names |= set((snap.get("app") or {}).get("domains") or [])
         return names

@@ -28,6 +28,18 @@ one Windows pilot device. Each item settles an open question in the design or br
 - [ ] **ZDX.** `start_deeptrace` returns a trace ID; device app scores are where the DX-SCR-01 proof reads them.
 - [ ] **CASB.** The report-only rule is accepted with these fields and raises an incident for a file with fake card numbers.
 
+- [ ] **Identity.** ZIdentity entitlements read with `zid.user_entitlement.get_service_entitlement` name the
+  Internet & SaaS and Private Access services as the regexes in `identity.py` expect; ZIA user search by email
+  returns each user's groups.
+- [ ] **Sign-in bypass.** With Okta and with Entra ID: sign-in and MFA (push, FastPass or Authenticator) still work for a
+  pilot user behind the inspect rule; tune `IDP_DOMAINS` if not.
+- [ ] **SAML scoping.** `list_saml_attributes_by_idp` finds the attribute by name, and the access rule with a SAML
+  condition admits only users with that value.
+- [ ] **Test users.** On a Hosted DB tenant: users and group are created with the department, can sign in to Client
+  Connector with the keychain password, and teardown removes them.
+- [ ] **Console.** The wizard runs end to end on Windows and Mac; Copy report and downloads work in Chrome, Edge and
+  Safari.
+
 ## Safety rules, broken on purpose
 
 - [ ] Edit a POV rule's description to remove `zpov:<id>`: teardown leaves it and says why.

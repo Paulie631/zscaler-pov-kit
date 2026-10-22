@@ -121,7 +121,7 @@ def hits(d):
 class AIGuard(Product):
     name, title, phase = "aiguard", "AI Guard", "v2"
 
-    def role_scopes(self):
+    def role_scopes(self, pov=None):
         return {"discovery": [("ZGUARD (AI Guard)", "view only")],
                 "apply": [("ZGUARD (AI Guard): policies, apps, app keys, rules", "full")]}
 

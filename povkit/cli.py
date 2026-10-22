@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import VERSION, evidence, handover, lifecycle, products, rolespec, updater
+from . import VERSION, evidence, handover, lifecycle, products, rolespec, settings, updater
 from .core import KitError, pov as povs, secrets
 from .core.changelist import ChangeList
 from .core.checks import exit_code, render
@@ -58,31 +58,9 @@ def c_use(a):
     print(f"Using POV {a.pov_id}.")
 
 
-SETTABLE = {"vanity_domain", "cloud", "pilot_group", "pilot_emails", "placement", "criteria", "products",
-            "zpa.app_name", "zpa.domains", "zpa.tcp_ports", "zpa.group", "zpa.location", "zpa.latitude", "zpa.longitude",
-            "zdx.app", "casb.tenant", "aiguard.competitor"}
-LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports"}
-
-
 def c_set(a):
     p = _pov(a)
-    if a.key not in SETTABLE:
-        raise KitError(f"Settable: {', '.join(sorted(SETTABLE))}.")
-    v = a.value
-    if a.key == "placement" and v not in ("top", "bottom"):
-        raise KitError("placement is 'top' or 'bottom'.")
-    if a.key in LISTS:
-        v = [x.strip() for x in v.split(",") if x.strip()]
-    if a.key == "products":
-        bad = [x for x in v if x not in products.REGISTRY]
-        if bad:
-            raise KitError(f"Unknown product(s): {', '.join(bad)}. Choose from {', '.join(products.ORDER)}.")
-    if "." in a.key:
-        sect, field = a.key.split(".", 1)
-        p.cfg.setdefault(sect, {})[field] = v
-    else:
-        p.cfg[a.key] = v
-    p.save()
+    v = settings.set_value(p, a.key, a.value)
     print(f"{a.key} = {v}")
 
 
@@ -95,18 +73,25 @@ def c_role_spec(a):
     print(f"(saved to {out})")
 
 
-def c_connect(a):
-    p = _pov(a)
-    which = "apply" if a.apply else "discovery"
-    cid = a.client_id or input(f"{which} client ID: ").strip()
-    secret = getpass.getpass(f"{which} client secret (hidden): ").strip()
+def save_client(p, slot, cid, secret):
     if not (cid and secret):
         raise KitError("Both the client ID and the secret are needed.")
-    secrets.put(p.id, f"{which}-client-secret", secret)
-    p.cfg.setdefault("clients", {})[which] = {"client_id": cid}
+    secrets.put(p.id, f"{slot}-client-secret", secret)
+    p.cfg.setdefault("clients", {})[slot] = {"client_id": cid}
     p.save()
-    p.log("connect", f"{which} client saved")
-    print(f"Saved the {which} client (secret in the keychain).")
+    p.log("connect", f"{slot} client saved")
+
+
+def c_connect(a):
+    p = _pov(a)
+    if a.discovery or a.apply:
+        p.cfg["client_mode"] = "separate"
+        slot = "apply" if a.apply else "discovery"
+    else:
+        slot = "main" if p.cfg.get("client_mode", "single") == "single" else "discovery"
+    cid = a.client_id or input(f"{slot} client ID: ").strip()
+    save_client(p, slot, cid, getpass.getpass(f"{slot} client secret (hidden): ").strip())
+    print(f"Saved the {slot} client (secret in the keychain).")
 
 
 def c_preflight(a):
@@ -153,8 +138,9 @@ def c_approve(a):
     p = _pov(a)
     rec = ChangeList(p.dir).approve(a.by, a.note or "")
     p.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']}")
-    print(f"Approved {rec['hash'][:16]} by {rec['by']}. Next: create the apply client, `pov-kit connect --apply`, "
-          "then `pov-kit apply`.")
+    nxt = ("create the apply client, `pov-kit connect --apply`, then `pov-kit apply`"
+           if p.cfg.get("client_mode") == "separate" else "`pov-kit apply`")
+    print(f"Approved {rec['hash'][:16]} by {rec['by']}. Next: {nxt}.")
 
 
 def c_apply(a):
@@ -306,6 +292,26 @@ def c_update(a):
     print(f"Installed {updater.install(info)}.")
 
 
+def c_users(a):
+    p = _pov(a)
+    led = lifecycle.ledger(p)
+    made = [e for e in led.active("zia") if e["kind"] == "user"]
+    if not made:
+        print("This POV has no Hosted DB test users (`pov-kit set identity.test_users 2` before planning).")
+        return
+    plan = {i["key"]: i for i in ChangeList(p.dir).plan()["items"]}
+    for e in made:
+        n = e["key"].rsplit(".", 1)[-1]
+        pw = secrets.get(p.id, f"zia-test-user-{n}") if a.show else "(add --show to print it)"
+        print(f"  {plan.get(e['key'], {}).get('body', {}).get('email', e['name'])}   {pw}")
+    print("Sign in to Client Connector on a pilot device with one of these. Passwords stay in this computer's keychain.")
+
+
+def c_gui(a):
+    from . import gui
+    gui.serve(port=a.port, open_browser=not a.no_browser)
+
+
 def c_version(a):
     print(VERSION)
 
@@ -332,8 +338,8 @@ def parser():
     s.add_argument("key")
     s.add_argument("value")
     cmd("role-spec", c_role_spec, "the two API clients' roles")
-    s = cmd("connect", c_connect, "save an API client (secret to the keychain)")
-    g = s.add_mutually_exclusive_group(required=True)
+    s = cmd("connect", c_connect, "save the API client (secret to the keychain); --discovery/--apply: separate mode")
+    g = s.add_mutually_exclusive_group()
     g.add_argument("--discovery", action="store_true")
     g.add_argument("--apply", action="store_true")
     s.add_argument("--client-id")
@@ -380,6 +386,11 @@ def parser():
     s = cmd("update", c_update, "self-update from GitHub releases")
     s.add_argument("--check", action="store_true")
     s.add_argument("--rollback", action="store_true")
+    s = cmd("gui", c_gui, "the POV console in your browser (setup wizard, status, criteria, handover, logs)")
+    s.add_argument("--port", type=int, default=8790)
+    s.add_argument("--no-browser", action="store_true")
+    s = cmd("users", c_users, "the POV's Hosted DB test users (--show prints their passwords)")
+    s.add_argument("--show", action="store_true")
     cmd("version", c_version, "print the version")
     return ap
 

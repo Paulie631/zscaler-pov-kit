@@ -38,7 +38,7 @@ def bare_400(e):
 class ZCC(Product):
     name, title, phase = "zcc", "Client Connector", "v1"
 
-    def role_scopes(self):
+    def role_scopes(self, pov=None):
         return {"discovery": [("Client Connector portal", "view only")],
                 "apply": [("Client Connector: app profiles and forwarding profiles", "full")]}
 

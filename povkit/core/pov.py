@@ -78,7 +78,7 @@ def new(customer: str, products: list[str], prefix: str = naming.DEFAULT_PREFIX)
     cfg = {"pov_id": pov_id, "customer": customer, "products": products, "prefix": prefix,
            "created": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "placement": "top",
            "pilot_group": None, "vanity_domain": None, "cloud": None,
-           "clients": {"discovery": None, "apply": None}, "state": "new"}
+           "client_mode": "single", "clients": {}, "state": "new"}
     (d / "pov.json").write_text(json.dumps(cfg, indent=2), encoding="utf-8")
     use(pov_id)
     return Pov(pov_id)

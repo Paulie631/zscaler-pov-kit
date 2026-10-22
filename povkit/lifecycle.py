@@ -35,6 +35,14 @@ def discover(pov, tenant_for):
             s, c = {}, [check(f"{p.name}-discover", f"{p.title} discovery", FAIL, str(e)[:200])]
         snaps[p.name] = s
         checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}") for x in c]
+    # the identity step: who the pilot users are and how they sign in, across products (read-only too)
+    from . import identity
+    try:
+        ident, ic = identity.discover(t, pov, snaps)
+    except KitError as e:
+        ident, ic = {}, [check("id-read", "Pilot users readable", FAIL, str(e)[:200])]
+    snaps["identity"] = ident
+    checks += [dict(x, label=f"Identity: {x['label']}") for x in ic]
     pov.write_json("discovery.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "products": snaps})
     pov.log("discover", f"discovery: {len(checks)} checks")
     return snaps, checks
@@ -42,6 +50,8 @@ def discover(pov, tenant_for):
 
 def make_plan(pov, snaps):
     items, notes = [], []
+    if "zia" in snaps:   # ZIA keeps the identity step's sign-in sites out of SSL inspection
+        snaps = dict(snaps, zia=dict(snaps["zia"], identity=snaps.get("identity") or {}))
     for p in products.selected(pov.products):
         if not p.ready or p.name not in snaps:
             continue

@@ -20,15 +20,24 @@ def _plain(x):
     return x.as_dict() if hasattr(x, "as_dict") else x
 
 
+def client_slot(pov, which):
+    """Which saved client serves a role. Single-client mode (the default): one client, 'main', for both discovery
+    and apply. Separate mode: a view-only 'discovery' client and an 'apply' client that exists only from approval to
+    handover. Either way the code guard keeps discovery read-only."""
+    return "main" if pov.cfg.get("client_mode", "single") == "single" else which
+
+
 class Tenant:
     def __init__(self, pov, which: str):
-        """which: 'discovery' or 'apply' (the two API clients in pov.json, secrets in the keychain)."""
+        """which: 'discovery' or 'apply'. The client behind it depends on the POV's client mode."""
         from zscaler import ZscalerClient
-        cl = (pov.cfg.get("clients") or {}).get(which) or {}
-        secret = secrets.get(pov.id, f"{which}-client-secret")
+        slot = client_slot(pov, which)
+        cl = (pov.cfg.get("clients") or {}).get(slot) or {}
+        secret = secrets.get(pov.id, f"{slot}-client-secret")
         if not (cl.get("client_id") and pov.cfg.get("vanity_domain") and secret):
-            raise KitError(f"No {which} API client saved for this POV. Run `pov-kit connect --{which}` with the "
-                           f"client ID from the role spec (`pov-kit role-spec`).")
+            how = "`pov-kit connect`" if slot == "main" else f"`pov-kit connect --{slot}`"
+            raise KitError(f"No API client saved for this POV ({slot}). Run {how} with the client ID from the role "
+                           f"spec (`pov-kit role-spec`), or use the console's Setup tab.")
         conf = {"clientId": cl["client_id"], "clientSecret": secret, "vanityDomain": pov.cfg["vanity_domain"]}
         if pov.cfg.get("cloud"):
             conf["cloud"] = pov.cfg["cloud"]

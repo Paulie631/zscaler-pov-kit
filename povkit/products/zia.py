@@ -13,7 +13,7 @@ import json
 import re
 from pathlib import Path
 
-from ..core import GuardError, KitError, naming
+from ..core import GuardError, KitError, naming, secrets
 from ..core.changelist import item
 from ..core.checks import FAIL, INFO, OK, WARN, check
 from ..core.ledger import Ledger
@@ -33,6 +33,15 @@ KINDS = {
     "network_service": dict(res="cloud_firewall", get="get_network_service", add="add_network_service",
                             upd="update_network_service", dele="delete_network_service", lst="list_network_services",
                             rule=False, title="Network service", tf=("zia_fw_network_service", False)),
+    "department": dict(res="user_management", get="get_department", add="add_department", upd="update_department",
+                       dele="delete_department", lst="list_departments", rule=False, title="Department", tf=None,
+                       by_prefix=True),
+    "user_group": dict(res="user_management", get="get_group", add="add_group", upd="update_group",
+                       dele="delete_group", lst="list_groups", rule=False, title="User group", tf=None,
+                       by_prefix=True),
+    "user": dict(res="user_management", get="get_user", add="add_user", upd="update_user", dele="delete_user",
+                 lst="list_users", rule=False, title="Test user", tf=("zia_user_management_users", False),
+                 by_prefix=True),
     "url_filtering": dict(res="url_filtering", rule=True, title="URL filtering", tf=("zia_url_filtering_rules", True)),
     "ssl": dict(res="ssl_inspection_rules", rule=True, title="SSL inspection", tf=("zia_ssl_inspection_rule", False)),
     "cloud_app_control": dict(res="cloudappcontrol", rule=True, typed=True, title="Cloud App Control",
@@ -68,8 +77,50 @@ def template():
     return json.loads((HERE / "zia_pov_template.json").read_text(encoding="utf-8"))
 
 
+UNSTAMPED = {"department", "user_group", "user"}   # ZIA keeps 'comments' on these, not a description: ledger + prefix
+TEST_PW = "zia-test-user-{n}"
+
+
+def test_domain(t):
+    """The email domain this tenant's users use (from the demo kit's tenant_domain)."""
+    from collections import Counter
+    seen = Counter()
+    try:
+        rows = items(t.call("user_management", "list_users", query_params={"page_size": 1000}))
+    except Exception:
+        rows = []
+    for u in rows:
+        v = str(g(u, "email") or "")
+        if "@" in v and not re.search(r"zscaler|zslogin|zscloud", v.split("@", 1)[1], re.I):
+            seen[v.split("@", 1)[1].lower()] += 1
+    return seen.most_common(1)[0][0] if seen else None
+
+
+def gen_password(n=20):
+    """Random, and meets ZIA's Hosted DB password rules (from the demo kit)."""
+    import secrets as _s
+    import string
+    special = "!@#$%^&*-_=+"
+    pool = string.ascii_letters + string.digits + special
+    while True:
+        pw = "".join(_s.choice(pool) for _ in range(n))
+        if (any(c.islower() for c in pw) and any(c.isupper() for c in pw) and any(c.isdigit() for c in pw)
+                and any(c in special for c in pw)):
+            return pw
+
+
 def key_for(kind, n):
     return f"zia.{kind}.{re.sub(r'[^a-z0-9]+', '-', n.lower()).strip('-')}"
+
+
+def want_groups(it, ledger):
+    """The groups a POV rule should apply to, with {ref:...} filled in from the ledger."""
+    ids = {e["key"]: e["id"] for e in ledger.active()}
+    out = set()
+    for x in it["body"].get("groups", []):
+        x = str(x)
+        out.add(ids.get(x[5:-1], x) if x.startswith("{ref:") else x)
+    return out
 
 
 def ledger_of(pov):
@@ -80,9 +131,13 @@ def obj_name(o):
     return str(g(o, "name") or g(o, "configured_name") or "")
 
 
-def list_kind(t, kind, rule_type=None):
+def list_kind(t, kind, rule_type=None, prefix=None):
+    """by_prefix kinds (users, groups, departments) are searched by the POV prefix: listing every user in a large
+    tenant would be slow, and the kit only needs to see its own and lookalikes."""
     k = KINDS[kind]
     args = (rule_type,) if k.get("typed") else ()
+    if k.get("by_prefix"):
+        return items(t.call(k["res"], k["lst"], query_params={"search": prefix or "ZPOV"}))
     if k.get("q"):
         return items(t.call(k["res"], k["lst"], *args, query_params=k["q"]))
     return items(t.call(k["res"], k["lst"], *args))
@@ -151,14 +206,17 @@ def pick_actions(t, rule_type, apps, choices):
 class ZIA(Product):
     name, title, phase = "zia", "Internet Access (ZIA)", "v1"
 
-    def role_scopes(self):
+    def role_scopes(self, pov=None):
         # Placeholders: the exact ZIA role scope names are an open question in the design (confirm in a lab tenant).
+        users = bool(pov and int((pov.cfg.get("identity") or {}).get("test_users") or 0))
         return {"discovery": [("ZIA: all policy and administration areas", "view only")],
                 "apply": [("ZIA policy: URL filtering, SSL inspection, Cloud App Control, file type control, DLP web "
                            "rules, firewall and DNS control, rule labels, custom URL categories, network services",
                            "full"),
-                          ("ZIA: activation", "allowed"),
-                          ("ZIA administration, roles, user management, authentication settings", "none")]}
+                          ("ZIA: activation", "allowed")]
+                + ([("ZIA user management (for the POV's Hosted DB test users only)", "full")] if users else [])
+                + [("ZIA administration, roles, authentication settings"
+                    + ("" if users else ", user management"), "none")]}
 
     # ---------------------------------------------------------------- names
     def _names(self, pov):
@@ -166,6 +224,8 @@ class ZIA(Product):
         tpl, P = template(), pov.prefix
         out = {k: set() for k in KINDS}
         out["label"].add(naming.safe_name(naming.name(P, tpl["label"]["name"]), P))
+        out["user_group"].add(naming.safe_name(naming.name(P, "pilot users"), P))
+        out["department"].add(naming.safe_name(naming.name(P, "pilot users"), P))
         out["url_category"].add(naming.safe_name(naming.name(P, tpl["url_category"]["name"]), P))
         out["network_service"].add(naming.safe_name(naming.name(P, tpl["network_service"]["name"]), P))
         for kind, sect in (("url_filtering", "url_filtering"), ("url_filtering", "isolation"), ("ssl", "ssl_inspection"),
@@ -201,7 +261,22 @@ class ZIA(Product):
 
         want = (pov.cfg.get("pilot_group") or "").strip()
         snap["pilot_group"] = None
-        if not want:
+        n_test = int((pov.cfg.get("identity") or {}).get("test_users") or 0)
+        snap["test_users"] = None
+        if n_test and (mode != "hosted" or snap["zidentity"]):
+            checks.append(check("zia-testusers", "Hosted DB test users", FAIL,
+                                "this tenant's users come from " + ("ZIdentity" if snap["zidentity"] else "an IdP or directory"),
+                                "ZIA can only hold its own test users when it uses its Hosted DB. Use a pilot group from "
+                                "the customer's directory instead (`set identity.test_users 0`, `set pilot_group NAME`)."))
+        elif n_test:
+            dom = (pov.cfg.get("identity") or {}).get("test_domain") or test_domain(t)
+            snap["test_users"] = {"count": n_test, "domain": dom}
+            gname = naming.safe_name(naming.name(pov.prefix, "pilot users"), pov.prefix)
+            snap["pilot_group"] = {"id": "{ref:zia.user_group}", "name": gname}
+            checks.append(check("zia-testusers", "Hosted DB test users", OK if dom else FAIL,
+                                f"{n_test} users at {dom}" if dom else "couldn't tell the users' email domain",
+                                "" if dom else "`pov-kit set identity.test_domain acme.com`"))
+        elif not want:
             checks.append(check("zia-pilot", "Pilot group chosen", FAIL, "none yet",
                                 "The customer names an existing group of pilot users: `pov-kit set pilot_group NAME`."))
         else:
@@ -247,7 +322,7 @@ class ZIA(Product):
             rows = []
             for rt in types_:
                 try:
-                    rows += list_kind(t, kind, rt)
+                    rows += list_kind(t, kind, rt, pov.prefix)
                 except KitError as e:
                     checks.append(check(f"zia-read-{kind}", f"{KIND_LABEL[kind]} readable", FAIL, str(e)[:160],
                                         "Give the discovery client view access to this ZIA area."))
@@ -308,6 +383,30 @@ class ZIA(Product):
                         body={"name": lname, "description": naming.describe(pid, "labels every rule this POV creates")},
                         why="Created first: if the apply client lacks write access, apply stops here with nothing "
                             "else changed."))
+        tu = snap.get("test_users")
+        if tu and tu.get("domain"):
+            dname = naming.safe_name(naming.name(P, "pilot users"), P)
+            out.append(item("zia", "department", "zia.department", dname, affects="the POV's test users only",
+                            body={"name": dname, "comments": naming.describe(pid, "department for POV test users")}))
+            out.append(item("zia", "user_group", "zia.user_group", grp["name"], affects="the POV's test users only",
+                            why="The pilot group: the POV's own test users, since this tenant keeps users in ZIA.",
+                            body={"name": grp["name"], "comments": naming.describe(pid, "POV pilot users")}))
+            for n in range(1, tu["count"] + 1):
+                uname = naming.safe_name(naming.name(P, f"pilot user {n}"), P)
+                out.append(item("zia", "user", f"zia.user.{n}", uname, affects="this test user only",
+                                why="Its password is generated at apply and kept in the SE's keychain.",
+                                body={"name": uname, "email": f"zpov-pilot-{n}@{tu['domain']}",
+                                      "groups": [{"id": "{ref:zia.user_group}"}],
+                                      "department": {"id": "{ref:zia.department}"},
+                                      "comments": naming.describe(pid, "POV test user")}))
+        ident = snap.get("identity") or {}
+        if ident.get("bypass_domains"):
+            bname = naming.safe_name(naming.name(P, "sign-in sites"), P)
+            out.append(item("zia", "url_category", "zia.url_category.sign-in", bname, affects="nobody until a rule uses it",
+                            why="The customer's IdP and MFA sites, from the identity step.",
+                            body={"configured_name": bname, "super_category": "USER_DEFINED",
+                                  "urls": ident["bypass_domains"], "custom_category": True,
+                                  "description": naming.describe(pid, "sign-in and MFA sites, never decrypted")}))
         uc = tpl["url_category"]
         ucname = naming.safe_name(naming.name(P, uc["name"]), P)
         out.append(item("zia", "url_category", f"zia.url_category.{uc['key']}", ucname, criteria=uc["criteria"],
@@ -337,7 +436,12 @@ class ZIA(Product):
                                               request_methods=["CONNECT", "GET", "HEAD"], user_agent_types=BROWSERS,
                                               cbi_profile=snap["cbi"]),
                      why=f"Opens these sites in the isolation profile '{snap['cbi']['name']}'.")
-        for r in tpl["ssl_inspection"]:
+        ssl_rules = list(tpl["ssl_inspection"])
+        if ident.get("bypass_domains"):   # first, so the inspect rule below can never break sign-in or MFA
+            refs["@sign-in"] = "{ref:zia.url_category.sign-in}"
+            ssl_rules.insert(0, {"name": "Bypass sign-in", "action": "DO_NOT_DECRYPT", "url_categories": ["@sign-in"],
+                                 "criteria": [], "why": "Never decrypts the customer's IdP and MFA sites."})
+        for r in ssl_rules:
             body = {"action": SSL_ACTIONS[r["action"]]}
             if r.get("url_categories"):
                 body["url_categories"] = keep_cats(r)
@@ -402,11 +506,11 @@ class ZIA(Product):
             raise KitError(f"ZIA has changes waiting to be activated (status {st}). Nothing was {verb}. Ask the admin "
                            "to activate or discard them, then rerun; the kit never activates someone else's work.")
 
-    def _place(self, t, it):
+    def _place(self, t, it, pov=None):
         """Order 1 upward for 'top' (some tenants pin predefined rules first; the next slot is tried), last+1 for
         'bottom'. As the demo kit's _add_at_top."""
         k = KINDS[it["kind"]]
-        rows = list_kind(t, it["kind"], it.get("rule_type"))
+        rows = list_kind(t, it["kind"], it.get("rule_type"), pov.prefix if pov else None)
         taken = sorted(int(g(r, "order") or 0) for r in rows if int(g(r, "order") or 0) > 0)
         tries = (range(1, (taken[-1] if taken else 0) + 2) if it.get("placement") != "bottom"
                  else [(taken[-1] if taken else 0) + 1])
@@ -429,16 +533,19 @@ class ZIA(Product):
         for kind in [k for k in KINDS if not KINDS[k]["rule"]]:
             for it in [i for i in mine if i["kind"] == kind]:
                 k = KINDS[kind]
-                if kind == "url_category":
-                    t.create(it["key"], k["res"], k["add"], extract_id=lambda r: r.get("id"), **it["body"])
+                if kind == "user":
+                    n = it["key"].rsplit(".", 1)[-1]
+                    pw = secrets.get(pov.id, TEST_PW.format(n=n)) or gen_password()
+                    secrets.put(pov.id, TEST_PW.format(n=n), pw)
+                    t.create(it["key"], k["res"], k["add"], stamped=False, **dict(it["body"], password=pw))
                 else:
-                    t.create(it["key"], k["res"], k["add"], **it["body"])
+                    t.create(it["key"], k["res"], k["add"], stamped=kind not in UNSTAMPED, **it["body"])
                 log("ok", f"Created {it['name']}")
         for kind in RULE_KINDS:
             group = [i for i in mine if i["kind"] == kind]
             # placed one by one at the top, so the last created ends up first: go in reverse to keep template order
             for it in (reversed(group) if pov.cfg.get("placement", "top") == "top" else group):
-                self._place(t, it)
+                self._place(t, it, pov)
                 log("ok", f"Created {it['name']}")
         t.activate()
         log("ok", "ZIA changes activated")
@@ -477,7 +584,7 @@ class ZIA(Product):
                 if g(live, "state") not in (None, "ENABLED"):
                     disabled.append(it["name"])
                 ids = {str(g(x, "id") if isinstance(x, dict) else x) for x in (g(live, "groups") or [])}
-                if ids != {str(x) for x in it["body"].get("groups", [])}:
+                if ids != want_groups(it, ledger):
                     unscoped.append(it["name"])
         out.append(check("zia-present", "POV objects present", WARN if (missing or gone) else OK,
                          "; ".join(filter(None, [f"not created yet: {', '.join(missing)}" if missing else "",
@@ -522,8 +629,7 @@ class ZIA(Product):
             if not KINDS[e["kind"]]["rule"]:
                 continue
             ids = {str(g(x, "id") if isinstance(x, dict) else x) for x in (g(live, "groups") or [])}
-            want = {str(x) for x in it["body"].get("groups", [])}
-            if g(live, "state") not in (None, "ENABLED") or ids != want:
+            if g(live, "state") not in (None, "ENABLED") or ids != want_groups(it, ledger):
                 k = KINDS[e["kind"]]
                 t.update(e, live, k["res"], k["upd"], *self._args(e), **dict(it["body"], order=g(live, "order")))
                 log("ok", f"Restored {it['name']}")
@@ -548,6 +654,8 @@ class ZIA(Product):
             k = KINDS[e["kind"]]
             try:
                 t.delete(e, dict(live, name=obj_name(live)), k["res"], k["dele"], *self._args(e))
+                if e["kind"] == "user":
+                    secrets.delete(pov.id, TEST_PW.format(n=e["key"].rsplit(".", 1)[-1]))
                 deleted += 1
                 log("ok", f"Deleted {e['name']}")
             except GuardError as err:
@@ -559,7 +667,7 @@ class ZIA(Product):
         return out
 
     def terraform(self, entry, live):
-        if entry["kind"] not in KINDS:
+        if entry["kind"] not in KINDS or not KINDS[entry["kind"]].get("tf"):
             return None
         rtype, confirmed = KINDS[entry["kind"]]["tf"]
         return {"type": rtype, "confirmed": confirmed, "id": entry["id"], "name": entry["name"]}

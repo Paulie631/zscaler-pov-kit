@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.0
+
+- **Browser console** (`pov-kit gui`) with the demo kit's look and its setup wizard pattern: start a POV, connect,
+  pilot users, preflight, change list, approval, apply, next steps. Tabs for status and Fix drift, success criteria
+  (API proofs, probe import, attestations, report), handover (Terraform or teardown) and logs (diagnostics zip).
+  Same safety as the kit's console: 127.0.0.1 only, Host header checked, a per-run token on every call, and pages
+  with customer data need the token too.
+- **One API client by default.** Two-client mode stays a setting (`client_mode separate`).
+- **Identity step** in discovery, across products: how pilot users sign in; each pilot user exists in ZIA and is in
+  the pilot group; ZIdentity entitlements (Internet & SaaS, Private Access) read and checked automatically; the IdP's
+  sign-in and MFA sites kept out of SSL inspection by an approved bypass rule placed above the inspect rule.
+- ZPA can scope the access rule by a SAML attribute instead of a SCIM group (`zpa.scope saml`).
+- Hosted DB test users (`identity.test_users`, up to 10) for tenants where ZIA keeps its own users; refused where
+  ZIdentity or an IdP owns them. Passwords are made at apply, kept in the keychain, never in the change list;
+  `pov-kit users --show`. The role spec asks for user management only when test users are chosen.
+- ZIA discovery searches users, groups and departments by the POV prefix instead of listing every user.
+- Settings are validated in one place for the CLI and the console.
+
 ## 0.2.0
 
 Every product module, with the full lifecycle. Still for lab tenants until TESTPLAN.md is worked through.

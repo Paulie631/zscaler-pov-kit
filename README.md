@@ -4,12 +4,15 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.2.0**: every product module is built and
-tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.3.0**: every product module, the identity step
+and the browser console are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
 ## What it will and won't do in a customer tenant
 
+- **One API client by default.** Nothing is written before the customer approves the change list, and the code
+  keeps discovery read-only. Two-client mode (view-only first, write after approval) is a setting for security
+  teams that want it.
 - **Discovery is read-only.** A view-only API client, and a guard in the code that refuses any write before it is sent.
 - **Only an approved change list is applied.** `plan` writes the list (`plan.html` for the customer). `apply` refuses
   if the plan made from the tenant today differs from the one approved, by SHA-256.
@@ -18,7 +21,8 @@ tenants.
 - **It never edits the customer's objects.** Changes to them (malware policy, ZIdentity entitlements, installing
   Client Connector) are *customer actions* in the change list: the kit checks them, a person makes them.
 - **Rules apply to the customer's pilot group only**, placed at the top (or bottom) of each rule type, as the change
-  list says.
+  list says. The identity step checks the pilot users exist and are entitled in every product, and keeps the
+  customer's IdP and MFA sites out of SSL inspection so the POV can't break sign-in.
 - **It never activates someone else's work.** If ZIA has pending changes, apply and teardown stop (CASB DLP rules
   are ZIA policy, so they follow the same rule).
 - **It leaves cleanly.** `handover teardown` deletes the ledger objects; `handover terraform` exports them with
@@ -27,15 +31,40 @@ tenants.
 ## Quickstart (lab tenant)
 
 ```
-./pov-kit new "Acme Corp" --products zia,zcc       # .\pov-kit.cmd on Windows
-./pov-kit set vanity_domain acme                   # the acme in acme.zslogin.net
-./pov-kit set pilot_group "POV Pilot"              # an existing group of pilot users
-./pov-kit role-spec                                # the two API clients to create
-./pov-kit connect --discovery                      # client ID, then the secret (to the keychain)
+./pov-kit gui                                      # .\pov-kit.cmd gui on Windows
+```
+
+The console opens in your browser (this computer only). Its **Setup** tab walks through eight steps, like the demo
+kit's wizard:
+
+1. **Start a POV**: customer, products, prefix, and one API client (recommended) or two.
+2. **Connect**: copy the role spec for the customer's admin, then enter the vanity domain, client ID and secret
+   (straight to the keychain).
+3. **Pilot users**: the pilot group (or Hosted DB test users), their emails, the IdP, and per-product details such as
+   the ZPA app and whether ZPA scopes by SCIM group or SAML attribute.
+4. **Preflight**: read-only checks of every product and of the pilot users across products.
+5. **Change list**: everything the kit will create, who it affects, and what only the customer does.
+6. **Approval**: who approved this exact change list.
+7. **Apply**: live progress, then a status check.
+8. **Next steps**: customer actions, the probe pack, the ZPA connector template and key, the AI Guard profile, test
+   users' sign-ins.
+
+**Status** compares the tenant with what was approved (and fixes drift on POV objects only), **Success criteria**
+runs the API proofs, imports probe results, records attestations and builds the report, **Handover** exports to
+Terraform or tears down, and **Logs** holds the activity log and the diagnostics zip.
+
+Everything is also on the command line:
+
+```
+./pov-kit new "Acme Corp" --products zia,zcc
+./pov-kit set vanity_domain acme
+./pov-kit set pilot_group "POV Pilot"
+./pov-kit set pilot_emails jane@acme.com,raj@acme.com
+./pov-kit role-spec
+./pov-kit connect                                  # one client; --discovery / --apply for two
 ./pov-kit preflight
 ./pov-kit plan                                     # show the customer plan.html
 ./pov-kit approve --by "Jane Doe, CISO"
-./pov-kit connect --apply
 ./pov-kit apply
 ./pov-kit status                                   # --fix repairs drift on POV objects only
 ```

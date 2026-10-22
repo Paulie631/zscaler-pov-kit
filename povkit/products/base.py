@@ -26,7 +26,7 @@ class Product:
     ready = True       # False: catalog and role scopes only; the lifecycle methods raise
 
     # ---- access
-    def role_scopes(self) -> dict:
+    def role_scopes(self, pov=None) -> dict:
         """{'discovery': [(area, access)], 'apply': [(area, access)]}, written into the role spec."""
         raise NotImplementedError
 

@@ -26,7 +26,7 @@ def zcfg(pov):
 class ZDX(Product):
     name, title, phase = "zdx", "Digital Experience (ZDX)", "v3"
 
-    def role_scopes(self):
+    def role_scopes(self, pov=None):
         return {"discovery": [("ZDX", "view only")], "apply": [("ZDX: troubleshooting (deep traces)", "full")]}
 
     def discover(self, t, pov):

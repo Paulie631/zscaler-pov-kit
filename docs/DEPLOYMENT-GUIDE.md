@@ -1,6 +1,9 @@
 # Zscaler POV Kit: SE deployment guide
 
-Version 0.2.0. This guide ships with the kit and changes in the same branch as the behavior it describes.
+Version 0.3.0. This guide ships with the kit and changes in the same branch as the behavior it describes.
+
+Run `pov-kit gui` and follow the console's Setup tab; every step below has a matching wizard step. The commands are
+the same steps on the command line.
 
 ## Before the POV
 
@@ -12,16 +15,21 @@ Version 0.2.0. This guide ships with the kit and changes in the same branch as t
    - ZPA: `set zpa.domains` and `set zpa.tcp_ports` for the POV app, and `set zpa.group` if its SCIM group has
      another name.
    - CASB: the customer connects a SaaS tenant (an OAuth grant) before the kickoff; `set casb.tenant` picks one.
-4. Send `pov-kit role-spec` to the customer's admin. They create the **discovery** client now and the **apply** client
-   after approval, or give you a temporary admin login to create them yourself.
+4. Send the role spec (console: Connect, Copy the role spec; or `pov-kit role-spec`) to the customer's admin. By
+   default they create **one** client at kickoff; in two-client mode, a view-only client now and the apply client
+   after approval. Or they give you a temporary admin login to create it yourself.
+5. Agree the pilot users: a group from their directory and the members' emails. If ZIA keeps its own users and there
+   is no group yet, the POV can create up to 10 Hosted DB test users instead. For ZPA, check whether the IdP sends
+   SCIM groups; if not, agree a SAML attribute and value that marks pilot users.
 
 ## Kickoff session (with the customer's admin)
 
-1. `pov-kit connect --discovery`, then `pov-kit preflight`. Fix every FAIL before going on.
+1. Connect, then Preflight. Fix every FAIL before going on: missing ZIdentity entitlements, pilot users outside the
+   group, an unrecognised IdP (choose it in Pilot users so its sign-in sites stay out of SSL inspection).
 2. `pov-kit plan`. Walk the admin through `plan.html`: every object, who it affects, where it sits, and the customer
    actions only they make.
 3. When they agree: `pov-kit approve --by "<name, title>"`. Any later change to the plan needs a fresh approval.
-4. The admin creates the apply client; `pov-kit connect --apply`; `pov-kit apply`.
+4. Apply. (Two-client mode: the admin creates the apply client first, entered at the Approval step.)
 5. If Client Connector refused the forwarding profile (a bare 400), build both profiles from the printed spec, then
    `pov-kit status --fix` adopts them.
 6. ZPA: `pov-kit zpa template --show-key`; the customer deploys the stack in their AWS account (the App Connector

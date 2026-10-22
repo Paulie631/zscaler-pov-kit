@@ -24,6 +24,7 @@ class FakeTenant:
         self.activation = "ACTIVE"
         self.zidentity = False
         self.zcc_fwd_400 = False
+        self.saml = True
         self.groups = [{"id": 77, "name": "POV Pilot"}, {"id": 78, "name": "Everyone"}]
         self.rules = {"url_filtering": [{"id": 1, "name": "Corp: Block adult", "order": 1, "state": "ENABLED",
                                          "groups": [{"id": 78}], "description": "customer rule"}],
@@ -52,6 +53,11 @@ class FakeTenant:
             "zdx.troubleshooting": [], "casb_dlp_rules": [{"id": 601, "name": "Corp SaaS DLP", "order": 1}],
         }
         self.idps = [{"id": "idp1", "name": "Okta"}]
+        self.departments = [{"id": 81, "name": "Sales"}]
+        self.zid_users = [{"id": "z1", "loginName": "jane@acme.com"}, {"id": "z2", "loginName": "raj@acme.com"}]
+        self.entitlements = {"z1": ["Internet & SaaS", "Private Access"], "z2": ["Internet & SaaS"]}
+        self.users = [{"id": 91, "name": "Jane Roe", "email": "jane@acme.com", "groups": [{"id": 77}]},
+                      {"id": 92, "name": "Raj Patel", "email": "raj@acme.com", "groups": [{"id": 78}]}]
         self.scim = [{"id": "sg1", "name": "POV Pilot"}, {"id": "sg2", "name": "Everyone"}]
         self.zdx_devices = [{"id": "d1", "name": "PILOT-LAPTOP-1", "userEmail": "jane@acme.com"}]
         self.saas_tenants = [{"tenantId": 55, "tenantName": "Acme M365"}]
@@ -70,14 +76,18 @@ class FakeTenant:
                 return {"status": self.activation}
             return {"status": "ACTIVE"}
         if resource == "authentication_settings":
-            return {"orgAuthType": "SAFECHANNEL_DIR", "samlEnabled": True}
+            return {"orgAuthType": "SAFECHANNEL_DIR", "samlEnabled": self.saml}
         if resource == "zid.users":
             if not self.zidentity:
                 raise KitError("401 not ZIdentity")
-            return []
-        if resource == "user_management" and method == "list_groups":
-            q = (kw.get("query_params") or {}).get("search", "")
-            return [g for g in self.groups if q.lower() in g["name"].lower()]
+            ln = str((kw.get("query_params") or {}).get("login_name", "")).lower()
+            return [u for u in self.zid_users if not ln or u["loginName"] == ln]
+        if resource == "zid.user_entitlement":
+            return {"services": [{"serviceName": n} for n in self.entitlements.get(str(a[0]), [])]}
+        if resource == "zpa.saml_attributes":
+            return [{"id": "sa1", "name": "memberOf"}, {"id": "sa2", "name": "department"}]
+        if resource == "user_management":
+            return self._users(method, a, kw)
         if resource == "url_categories":
             if method == "list_categories" and not (kw.get("query_params") or {}).get("custom_only"):
                 return [{"id": c} for c in self.cats] + copy.deepcopy(self.rules["url_category"])
@@ -135,6 +145,29 @@ class FakeTenant:
         if resource in self.store:
             return self._generic(resource, method, a, kw)
         raise AssertionError(f"fake tenant has no {resource}.{method}")
+
+    def _users(self, method, a, kw):
+        kind = next(k for k in ("department", "group", "user") if k in method)
+        rows = {"department": self.departments, "group": self.groups, "user": self.users}[kind]
+        if method.startswith("list"):
+            q = str((kw.get("query_params") or {}).get("search", "")).lower()
+            return copy.deepcopy([r for r in rows if q in r["name"].lower() or q in str(r.get("email", "")).lower()])
+        if method.startswith("add"):
+            if any(r["name"] == kw["name"] for r in rows):
+                raise KitError("400 duplicate name")
+            o = dict(kw, id=self._id())
+            rows.append(o)
+            return copy.deepcopy(o)
+        hit = next((r for r in rows if str(r["id"]) == str(a[0])), None)
+        if hit is None:
+            raise KitError("404 not found")
+        if method.startswith("get"):
+            return copy.deepcopy(hit)
+        if method.startswith("delete"):
+            rows.remove(hit)
+            return {}
+        hit.update(kw)
+        return copy.deepcopy(hit)
 
     def _generic(self, res, method, a, kw):
         rows = self.store[res]
