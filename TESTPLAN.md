@@ -43,6 +43,11 @@ one Windows pilot device. Each item settles an open question in the design or br
 - [ ] **Use cases.** Through a real AI Guard proxy key: five prompts from the console's examples each return valid
   JSON; the kit builds what passes its checks; the accepted rules work on a pilot device; a prompt that asks for a
   tenant-wide change comes back as directions. With the AI Guard policy blocking, the console says AI Guard blocked it.
+- [ ] **Use cases in every product.** One accepted use case per product: a second ZPA app reached by a pilot user
+  (and denied to a non-pilot user); an AI Guard use-case key whose test prompts hit its own policy, not the POV's main
+  one; a ZDX deep trace that shows in the console; a CASB report-only rule that raises an incident. Teardown removes
+  all of them. Check `add_access_rule_v2` with action `deny`, and that more than one POV access rule placed first
+  keeps the order the change list shows.
 - [ ] **Model and size.** `claude-sonnet-5-5` answers within the proxy's timeout for a large tenant snapshot (the kit
   cuts it at 150,000 characters).
 

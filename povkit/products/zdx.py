@@ -41,6 +41,7 @@ class ZDX(Product):
         want = c.get("app")
         app = next((a for a in apps if want and str(g(a, "name")) == want), None) or (apps[0] if apps else None)
         snap["app"] = {"id": str(g(app, "id")), "name": g(app, "name")} if app else None
+        snap["apps"] = [{"id": str(g(a, "id")), "name": g(a, "name")} for a in apps[:200] if g(a, "id")]
         checks.append(check("zdx-app", "A ZDX-monitored app to trace", OK if app else WARN,
                             g(app, "name") if app else "none", "" if app else "Monitor an app in ZDX first."))
         if not emails:
@@ -59,6 +60,7 @@ class ZDX(Product):
     def plan(self, pov, snap):
         if not snap.get("readable") or not snap.get("app") or not snap.get("devices"):
             return [], ["No ZDX deep traces until pilot devices report and an app is monitored."]
+        from .. import usecases
         P, app = pov.prefix, snap["app"]
         out = []
         for d in snap["devices"]:
@@ -68,7 +70,7 @@ class ZDX(Product):
                             criteria=["DX-SCR-01"], why=f"A {MINUTES}-minute deep trace of {app['name']}, for the report.",
                             body={"session_name": n, "app_id": app["id"], "session_length_minutes": MINUTES,
                                   "probe_device": True}))
-        return out, ["Deep traces end on their own; teardown deletes them."]
+        return out + usecases.zdx_items(pov, snap), ["Deep traces end on their own; teardown deletes them."]
 
     def apply(self, t, pov, items_, log):
         for it in [i for i in items_ if i["product"] == "zdx" and i["action"] == "create"]:

@@ -71,7 +71,8 @@ def terraform(pov, led):
 
 def finish(pov):
     """Both exits end here: secrets out of the keychain, customer data off the laptop."""
-    gone = secrets.delete_all(pov.id)
+    from . import usecases
+    gone = secrets.delete_all(pov.id, usecases.secret_names(pov))
     purged = pov.purge_customer_data()
     pov.cfg["state"] = "handed_over"
     pov.cfg["clients"] = {k: ({"client_id": v.get("client_id"), "deleted_secret": True} if v else None)

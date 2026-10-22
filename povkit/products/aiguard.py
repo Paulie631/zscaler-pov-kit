@@ -130,8 +130,10 @@ class AIGuard(Product):
                 "key": naming.name(P, "POV detection key", 60), "rule": naming.name(P, "POV app rule", 60)}
 
     def discover(self, t, pov):
+        from .. import usecases
         checks, snap = [], {"customer_names": [], "taken": []}
         names, ledger = self._names(pov.prefix), ledger_of(pov)
+        planned = set(names.values()) | usecases.planned_names(pov, "aiguard")
         try:
             rows = {k: items(t.call(v["res"], v["lst"])) for k, v in KINDS.items()}
         except KitError as e:
@@ -144,12 +146,18 @@ class AIGuard(Product):
                 mine = ledger.by_id("aiguard", kind, o.get("id")) is not None
                 if not naming.has_prefix(n, pov.prefix):
                     snap["customer_names"].append(n)
-                elif n == names[kind] and not mine:
+                elif n in planned and not mine:
                     snap["taken"].append(f"'{n}' ({KINDS[kind]['title']})")
         snap["rule_orders"] = sorted(int(r.get("ruleOrder") or 0) for r in rows["rule"]
                                      if not naming.has_prefix(r.get("name"), pov.prefix))
+        # the detectors the POV's policies can switch to block, for use cases
+        tpl = template()
+        snap["detectors"] = {side: sorted(d["detector"] for d in tpl.get(key, [])
+                                          if d.get("enabled") and d.get("detector") not in NEVER_BLOCK)
+                             for side, key in (("prompts", SIDES[0]), ("responses", SIDES[1]))}
+        snap["detectors"]["all"] = sorted({d["detector"] for key in SIDES for d in tpl.get(key, [])})
         checks.append(check("aiguard-names", "POV names are free", FAIL if snap["taken"] else OK,
-                            ", ".join(snap["taken"]) or "4 names checked",
+                            ", ".join(snap["taken"]) or f"{len(planned)} names checked",
                             "Start the POV with a different prefix." if snap["taken"] else ""))
         checks.append(check("aiguard-tenant", "AI Guard readable", OK,
                             f"{len(rows['policy'])} policies, {len(rows['app'])} apps, {len(rows['rule'])} rules"))
@@ -164,6 +172,8 @@ class AIGuard(Product):
         pol.update(name=n["policy"], description=naming.describe(pid, "AI Guard POV policy, every detector on"))
         order = (snap.get("rule_orders") or [0])[-1] + 1
         affects = "only traffic sent with the POV app's key"
+        from .. import usecases   # each accepted use case gets its own policy, app, key and rule
+        uc_items, _ = usecases.aiguard_items(pov, snap, order + 1)
         return [
             item("aiguard", "policy", "aiguard.policy", n["policy"], criteria=["AI-AIG-01", "AI-AIG-02"], affects=affects,
                  why=f"Every detector on ({len(pol['inputDetectorPolicies'])} for prompts, "
@@ -179,19 +189,19 @@ class AIGuard(Product):
                  body={"name": n["rule"], "policyId": "{ref:aiguard.policy}", "enabled": True, "ruleOrder": order,
                        "matchCriteria": {"type": "DAS_APPLICATION", "llmApplications": [
                            {"applicationId": "{ref:aiguard.app}", "applicationCredentialsIds": ["{ref:aiguard.key}"]}]}}),
-        ], [f"Starts in Monitor. Switch with `pov-kit aiguard policy {'|'.join(PROFILES)}`; only the POV policy changes."]
+        ] + uc_items, [f"Starts in Monitor. Switch with `pov-kit aiguard policy {'|'.join(PROFILES)}`; only the POV policy changes."]
 
     def apply(self, t, pov, items_, log):
-        mine = {i["kind"]: i for i in items_ if i["product"] == "aiguard" and i["action"] == "create"}
+        from ..usecases import aiguard_secret
         verbs = {"policy": "add_policy", "app": "add_application", "key": "add_credential", "rule": "add_rule"}
-        for kind in ("policy", "app", "key", "rule"):
-            it = mine.get(kind)
-            if not it:
-                continue
+        for it in [i for i in items_ if i["product"] == "aiguard" and i["action"] == "create"]:   # in plan order
+            kind = it["kind"]
             if kind == "key":
-                def keep(r, pov=pov):
+                secret = aiguard_secret(it["key"])
+
+                def keep(r, pov=pov, name=secret):
                     if r.get("key"):
-                        secrets.put(pov.id, KEY_SECRET, r["key"])
+                        secrets.put(pov.id, name, r["key"])
                     return r.get("id")
                 t.create(it["key"], KINDS[kind]["res"], verbs[kind], extract_id=keep, stamped=False, **it["body"])
             else:
@@ -256,24 +266,39 @@ class AIGuard(Product):
                 log("ok", f"Deleted {e['name']}")
             except GuardError as err:
                 out.append(check("aiguard-left", f"Left in place: {e['name']}", WARN, str(err)))
+        from ..usecases import aiguard_secret
+        for e in ledger.entries:   # use cases' keys: their secrets go with them
+            if e["product"] == "aiguard" and e["kind"] == "key" and e["state"] == "deleted" and e["key"] != "aiguard.key":
+                secrets.delete(pov.id, aiguard_secret(e["key"]))
         if not ledger.find("aiguard.key"):
             secrets.delete(pov.id, KEY_SECRET)
         return out
 
-    def api_proof(self, t, pov, ledger, criterion, scan=das_scan):
-        tests = PROOF_TESTS.get(criterion["id"])
+    def api_proof(self, t, pov, ledger, criterion, scan=None):
+        from ..usecases import aiguard_secret
+        scan = scan or das_scan
+        tests, pkey = PROOF_TESTS.get(criterion["id"]), "aiguard.policy"
+        if criterion.get("usecase"):   # a use case's own prompts, through its own app if it has one
+            tests = criterion.get("aiguard") or []
+            n = int(criterion["id"].split("-")[1])
+            own = next((e for e in ledger.active("aiguard") if e["kind"] == "key"
+                        and e["key"].startswith(f"aiguard.uc{n:02d}.")), None)
+            if own:
+                pkey = own["key"].rsplit(".", 1)[0] + ".policy"
+            key = secrets.get(pov.id, aiguard_secret(own["key"] if own else "aiguard.key"))
+        else:
+            key = secrets.get(pov.id, KEY_SECRET)
         if not tests:
             return None
-        key = secrets.get(pov.id, KEY_SECRET)
         if not key:
             return {"status": "incomplete", "detail": "no POV detection key in the keychain"}
-        e = ledger.find("aiguard.policy")
+        e = ledger.find(pkey)
         base = scan(key, BASELINE)
         if e and base.get("policyId") not in (None, int(e["id"]), e["id"]):
             return {"status": "fail", "detail": f"handled by policy '{base.get('policyName')}', not the POV's"}
         rows, ok = [], True
         for x in tests:
-            d = scan(key, x["text"].replace("{_}", ""))
+            d = scan(key, x["text"].replace("{_}", ""), x.get("direction", "IN"))
             got = hits(d)
             hit = x["expect"] in got
             ok = ok and hit

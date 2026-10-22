@@ -371,7 +371,8 @@ def show_usecase(uc):
     for d in s["directions"]:
         print(f"  directions ({d['product']}{': ' + d['console_page'] if d['console_page'] else ''}): " + " / ".join(d["steps"]))
     t = s["test"]
-    print(f"  test: {t['title']}: {len(t['probe'])} probe tests" + (f"; check: {t['attest']}" if t["attest"] else ""))
+    print(f"  test: {t['title']}: {len(t['probe'])} probe tests, {len(t.get('aiguard') or [])} AI Guard prompts"
+          + (f"; check: {t['attest']}" if t["attest"] else ""))
 
 
 def c_version(a):

@@ -56,18 +56,21 @@ class CASB(Product):
         engines = zia_snap.get("dlp_engines") or {
             str(g(e, "name")): g(e, "id") for e in items(t.call("dlp_engine", "list_dlp_engines_lite"))}
         snap["engine"] = engines.get("5 or more Credit Card Numbers")
+        snap["engines"] = dict(engines)
         from ..core.ledger import Ledger
         led = Ledger(pov.path("ledger.json"), pov.id, pov.prefix)
         rules = items(t.call("casb_dlp_rules", "list_rules", RULE_TYPE))
-        name = naming.name(pov.prefix, "SaaS card numbers")
-        snap["taken"] = [name] if any(g(r, "name") == name and not led.by_id("casb", "casb_dlp_rule", g(r, "id"))
-                                      for r in rules) else []
+        from .. import usecases
+        planned = {naming.name(pov.prefix, "SaaS card numbers")} | usecases.planned_names(pov, "casb")
+        snap["taken"] = sorted({str(g(r, "name")) for r in rules
+                                if g(r, "name") in planned and not led.by_id("casb", "casb_dlp_rule", g(r, "id"))})
         theirs = [r for r in rules if not naming.has_prefix(g(r, "name"), pov.prefix)]
         snap["customer_names"] = [str(g(r, "name")) for r in theirs]
         # the customer's rules only: the POV rule's own order must not change the plan after apply
         snap["orders"] = sorted(int(g(r, "order") or 0) for r in theirs)
         if snap["taken"]:
-            checks.append(check("casb-names", "POV names are free", FAIL, name, "Use a different prefix."))
+            checks.append(check("casb-names", "POV names are free", FAIL, ", ".join(snap["taken"]),
+                                "Use a different prefix."))
         return snap, checks
 
     def plan(self, pov, snap, zia_snap=None):
@@ -88,6 +91,8 @@ class CASB(Product):
                                      "cloud_app_tenant_ids": [snap["tenant"]["id"]], "dlp_engines": [snap["engine"]],
                                      "groups": [grp["id"]], "without_content_inspection": False,
                                      "description": naming.describe(pov.id, "report-only SaaS DLP for the pilot group")}))
+            from .. import usecases   # accepted use cases: more report-only rules, after the POV's
+            out[1:1] = usecases.casb_items(pov, snap, grp, (snap.get("orders") or [0])[-1] + 2, RULE_TYPE, ACTION)
         notes = [] if len(out) > 1 else ["No CASB DLP rule until a SaaS tenant is connected and the ZIA pilot group exists."]
         return out, notes
 

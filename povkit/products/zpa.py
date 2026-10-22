@@ -147,7 +147,7 @@ class ZPA(Product):
                                 "If this tenant doesn't use SCIM for ZPA, scope by a SAML attribute instead: "
                                 "`set zpa.scope saml`, `set zpa.saml_attribute NAME`, `set zpa.saml_value VALUE`."))
 
-        snap["customer_names"], taken, overlap = [], [], []
+        snap["customer_names"], snap["segment_domains"], taken, overlap = [], [], [], []
         probe_snap = dict(snap, enrollment_cert="x", app=dict(snap["app"], domains=domains or ["x"]),
                           pilot_group=snap["pilot_group"] or {"idp_id": "x", "id": "x", "name": "x"}, pilot_saml=None)
         planned = {i["name"] for i in self.plan(pov, probe_snap)[0] if i["action"] == "create"}
@@ -160,9 +160,11 @@ class ZPA(Product):
                 if n in planned and not mine:
                     taken.append(f"'{n}' ({KINDS[kind]['title']})")
                 if kind == "app_segment" and not mine:
+                    snap["segment_domains"] += [str(d).lower() for d in g(o, "domain_names") or []]
                     hit = set(g(o, "domain_names") or []) & set(domains)
                     if hit:
                         overlap.append(f"{', '.join(sorted(hit))} in '{n}'")
+        snap["segment_domains"] = sorted(set(snap["segment_domains"]))
         rules = items(t.call("zpa.policies", "list_rules", "access"))
         snap["customer_names"] += [str(g(r, "name") or "") for r in rules if not naming.has_prefix(g(r, "name"), pov.prefix)]
         broad = [str(g(r, "name")) for r in rules if broad_allow(r) and not naming.has_prefix(g(r, "name"), pov.prefix)]
@@ -235,6 +237,8 @@ class ZPA(Product):
                  action="customer_action", criteria=["PA-APP-01"], console="zcc.app_profiles",
                  why="Their Client Connector app profile must have ZPA turned on."),
         ]
+        from .. import usecases   # accepted use cases: more POV apps, each with its own pilot-only access rule
+        out[-2:-2] = usecases.zpa_items(pov, snap, who, affects)
         taken = {x.split("'")[1] for x in snap.get("taken", [])}
         notes = ["ZPA access rules: the first match decides, and no match means deny."]
         if snap.get("broad_rules"):
@@ -247,34 +251,32 @@ class ZPA(Product):
 
     # ---------------------------------------------------------------- apply
     def apply(self, t, pov, items_, log):
-        mine = {i["kind"]: i for i in items_ if i["product"] == "zpa" and i["action"] == "create"}
+        mine = [i for i in items_ if i["product"] == "zpa" and i["action"] == "create"]
         for kind in ORDER:
-            it = mine.get(kind)
-            if not it:
-                continue
             k = KINDS[kind]
-            if kind == "connector_group":
-                t.create(it["key"], k["res"], "add_connector_group", **it["body"])
-            elif kind == "provisioning_key":
-                def keep_key(r, pov=pov):   # the key's secret, shown only now: straight to the keychain
-                    if r.get("provisioning_key") or r.get("provisioningKey"):
-                        secrets.put(pov.id, KEY_SECRET, r.get("provisioning_key") or r.get("provisioningKey"))
-                    return r.get("id")
-                t.create(it["key"], k["res"], "add_provisioning_key", KEY_TYPE, extract_id=keep_key, stamped=False,
-                         **it["body"])
-            elif kind in ("server_group", "segment_group"):
-                t.create(it["key"], k["res"], "add_group", **it["body"])
-            elif kind == "app_segment":
-                t.create(it["key"], k["res"], "add_segment", **it["body"])
-            elif kind == "access_rule":
-                body = dict(it["body"])
-                t.create(it["key"], k["res"], "add_access_rule_v2", body.pop("name"), body.pop("action"),
-                         extract_id=lambda r: r.get("id"), **body)
-                e = t.ledger.find(it["key"])
-                live = self.live_object(t, e)
-                if live and it.get("placement") == "top":
-                    t.update(e, live, k["res"], "reorder_rule", "access", e["id"], "1")
-            log("ok", f"Created {it['name']}")
+            for it in [i for i in mine if i["kind"] == kind]:
+                if kind == "connector_group":
+                    t.create(it["key"], k["res"], "add_connector_group", **it["body"])
+                elif kind == "provisioning_key":
+                    def keep_key(r, pov=pov):   # the key's secret, shown only now: straight to the keychain
+                        if r.get("provisioning_key") or r.get("provisioningKey"):
+                            secrets.put(pov.id, KEY_SECRET, r.get("provisioning_key") or r.get("provisioningKey"))
+                        return r.get("id")
+                    t.create(it["key"], k["res"], "add_provisioning_key", KEY_TYPE, extract_id=keep_key, stamped=False,
+                             **it["body"])
+                elif kind in ("server_group", "segment_group"):
+                    t.create(it["key"], k["res"], "add_group", **it["body"])
+                elif kind == "app_segment":
+                    t.create(it["key"], k["res"], "add_segment", **it["body"])
+                elif kind == "access_rule":
+                    body = dict(it["body"])
+                    t.create(it["key"], k["res"], "add_access_rule_v2", body.pop("name"), body.pop("action"),
+                             extract_id=lambda r: r.get("id"), **body)
+                    e = t.ledger.find(it["key"])
+                    live = self.live_object(t, e)
+                    if live and it.get("placement") == "top":
+                        t.update(e, live, k["res"], "reorder_rule", "access", e["id"], "1")
+                log("ok", f"Created {it['name']}")
         if secrets.get(pov.id, KEY_SECRET):
             log("info", "Provisioning key saved to the keychain. Next: `pov-kit zpa template` for the connectors.")
 

@@ -26,6 +26,8 @@
 - **Use cases send the customer's discovery snapshot to Claude** (their policy, group and user names; never secrets)
   through the SE's AI Guard tenant to Anthropic, and only after the customer's agreement is recorded in the POV.
   Proposals and Claude's raw answers stay in the POV folder (`usecases.json`). Claude never calls the tenant: what
-  it proposes is validated by the kit and built only through the approved change list.
+  it proposes is validated by the kit against that product's discovery and built only through the approved change
+  list, as new POV objects scoped to the pilot users. Use cases can't change the customer's objects or tenant-wide
+  settings in any product; a CASB use-case rule is always report-only, whatever Claude asks for.
 - Updates are verified against the SHA-256 published with each release before anything is replaced.
 - The kit's API clients can't delete themselves: at handover, remind the customer to delete both in the console.

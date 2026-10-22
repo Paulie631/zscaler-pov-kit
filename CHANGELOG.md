@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.0
+
+- **Use cases across the product suite.** Besides ZIA rules, Claude can now propose, and the kit build after a fresh
+  approval: a ZPA app (its own segment and allow or deny access rule for the pilot users, through the POV's
+  connectors; refused if a domain is already a customer segment), an AI Guard app with its own key, rule and blocking
+  policy (the customer's AI Guard apps and the POV's main policy stay as they are), ZDX deep traces on the pilot devices
+  for a monitored app, and a report-only CASB DLP rule. Client Connector stays directions only.
+- Discovery adds what the checks need: customer ZPA segment domains, the AI Guard detectors that can block, ZDX's
+  monitored apps, and every DLP engine for CASB.
+- Use-case tests can include AI Guard test prompts, run by `pov-kit test --api` with the use case's own key.
+- Use cases' AI Guard keys go to the keychain and are deleted at teardown and handover.
+
 ## 0.4.0
 
 - **Use cases from a prompt** (console: Use cases tab; CLI: `pov-kit usecase ask|list|show|accept|directions|discard`).

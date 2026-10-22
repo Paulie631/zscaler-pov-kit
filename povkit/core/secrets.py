@@ -31,8 +31,9 @@ def delete(pov_id, name):
         return False
 
 
-def delete_all(pov_id) -> list[str]:
-    return [n for n in NAMES if delete(pov_id, n)]
+def delete_all(pov_id, extra=()) -> list[str]:
+    """Every secret the POV may hold: the fixed names, plus extra ones (use cases' AI Guard keys)."""
+    return [n for n in (*NAMES, *extra) if delete(pov_id, n)]
 
 
 def keychain_works() -> tuple[bool, str]:

@@ -153,7 +153,7 @@ def api_proofs(pov, tenant_for, ids=None):
     for c in evidence.selected_criteria(pov, ids):
         if "api" not in c["proofs"]:
             continue
-        p = products.get(c["product"])
+        p = products.get("aiguard" if c.get("aiguard") else c["product"])   # use cases' AI Guard test prompts
         if not hasattr(p, "api_proof"):
             continue
         try:

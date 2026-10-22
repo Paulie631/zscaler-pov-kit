@@ -132,7 +132,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
   <div class="panel" id="ucsetup"></div>
   <div class="panel">
     <h2>Describe a use case to prove</h2>
-    <p class="muted" style="margin-top:0">Claude reads the tenant snapshot and proposes how to show it: changes the kit can build (they join the change list, and the customer approves again before Apply), or directions for a person, plus a test for the report.</p>
+    <p class="muted" style="margin-top:0">Claude reads the tenant snapshot and proposes how to show it, in any product of the POV: changes the kit can build (ZIA rules, a ZPA app, an AI Guard policy, ZDX traces, a CASB rule; they join the change list, and the customer approves again before Apply), or directions for a person, plus a test for the report.</p>
     <textarea id="ucprompt" placeholder="e.g. Marketing can use ChatGPT, but can't upload files to it or paste customer data"></textarea>
     <div class="row" style="margin-top:8px" id="ucex"></div>
     <div class="row" style="margin-top:12px"><button class="primary" id="ucask">Ask Claude</button><span class="hint" id="uchint"></span></div>
@@ -380,8 +380,12 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
 
 /* ---------------- use cases ---------------- */
 const UC_EX=["Marketing can use ChatGPT but can't upload files to it","Block a list of sites the customer names for the pilot group",
-  "Executives' traffic to banking sites is never decrypted","Show contractors reach only the HR portal through ZPA"];
-const KNAME={url_filtering:"URL filtering rule",ssl:"SSL inspection rule",cloud_app_control:"Cloud App Control rule",file_type:"file type control rule",dlp:"DLP rule",dns:"DNS control rule"};
+  "Executives' traffic to banking sites is never decrypted","Pilot users reach the wiki at wiki.acme.internal through ZPA, and nothing else",
+  "Our support chatbot blocks prompt injection and leaked API keys","Show why Microsoft 365 is slow for the pilot users",
+  "Report credit card numbers in files shared in our Microsoft 365"];
+const KNAME={url_filtering:"ZIA · URL filtering rule",ssl:"ZIA · SSL inspection rule",cloud_app_control:"ZIA · Cloud App Control rule",file_type:"ZIA · file type control rule",dlp:"ZIA · DLP rule",dns:"ZIA · DNS control rule",
+  zpa_app:"ZPA · app segment and its own access rule",aiguard_block:"AI Guard · its own app, key and blocking policy",zdx_deeptrace:"ZDX · deep trace on each pilot device",casb_dlp:"CASB · DLP rule, report only"};
+const PSHORT={zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard:"AI Guard",zdx:"ZDX",casb:"CASB"};
 let UC=null;
 async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a POV in Setup first.","bad");return}
   UC=await api("/api/usecases");const c=S.current;
@@ -408,10 +412,11 @@ function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",dir
   return `<div class="panel"><div class="row" style="justify-content:space-between"><div><span class="chip">${esc(u.id)}</span> <span class="badge b-${st}">${esc(u.status)}</span> <span class="muted" style="font-size:12px">${esc(u.at.slice(0,16).replace("T"," "))} UTC · ${esc(u.by)}</span></div></div>
     <p style="margin:10px 0 4px"><b>${esc(u.prompt)}</b></p><p class="muted" style="margin:0 0 10px">${esc(s.summary)}</p>
     ${s.already_covered_by.length?note("Already proved by "+s.already_covered_by.join(", ")+"."):""}
-    ${s.changes.length?`<div class="group-h">Changes the kit can build (pilot group only)</div><div class="tablewrap"><table>${s.changes.map(ch=>`<tr><td style="width:34%"><b>${esc(ch.name)}</b><div class="muted" style="font-size:12px">${esc(KNAME[ch.kind]||ch.kind)}</div></td><td>${ucDetail(ch)}${ch.why?`<div style="font-size:12.5px;margin-top:3px">${esc(ch.why)}</div>`:""}</td></tr>`).join("")}</table></div>`:""}
-    ${s.directions.length?`<div class="group-h">Directions for a person</div>${s.directions.map(d=>`<div style="margin:6px 0"><b>${esc((d.product||"").toUpperCase()||"Steps")}</b>${d.console_page?` · ${esc(d.console_page)}`:""}<ol style="margin:4px 0 0 18px;padding:0">${d.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>`).join("")}`:""}
+    ${s.changes.length?`<div class="group-h">Changes the kit can build (pilot users only)</div><div class="tablewrap"><table>${s.changes.map(ch=>`<tr><td style="width:34%"><b>${esc(ch.name)}</b><div class="muted" style="font-size:12px">${esc(KNAME[ch.kind]||ch.kind)}</div></td><td>${ucDetail(ch)}${ch.why?`<div style="font-size:12.5px;margin-top:3px">${esc(ch.why)}</div>`:""}</td></tr>`).join("")}</table></div>`:""}
+    ${s.directions.length?`<div class="group-h">Directions for a person</div>${s.directions.map(d=>`<div style="margin:6px 0"><b>${esc(PSHORT[d.product]||(d.product||"").toUpperCase()||"Steps")}</b>${d.console_page?` · ${esc(d.console_page)}`:""}<ol style="margin:4px 0 0 18px;padding:0">${d.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>`).join("")}`:""}
     <div class="group-h">How it's proved</div><div>${esc(t.statement)}</div>
     ${t.probe.length?`<ul style="margin:4px 0 0 18px;padding:0">${t.probe.map(p=>`<li><code>${esc(p.type)}</code> ${esc(p.url||p.host||p.name||"")}${p.port?":"+esc(p.port):""} → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
+    ${(t.aiguard||[]).length?`<div class="hint" style="margin-top:6px">AI Guard test prompts (scanned with the POV's key):</div><ul style="margin:4px 0 0 18px;padding:0">${t.aiguard.map(p=>`<li><code>${esc(p.direction)}</code> “${esc(p.text)}” → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
     ${t.attest?`<div class="hint">A person checks: ${esc(t.attest)}</div>`:""}
     <div class="row" style="margin-top:14px">
       ${u.status=="proposed"?`${s.changes.length?`<button class="primary ucact" data-id="${esc(u.id)}" data-s="accepted">Add to the change list</button>`:""}<button class="ucact" data-id="${esc(u.id)}" data-s="directions">Keep as directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="discarded">Discard</button>`:""}

@@ -4,7 +4,7 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.4.0**: every product module, the identity step,
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.5.0**: every product module, the identity step,
 the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
@@ -93,13 +93,25 @@ In the console's **Use cases** tab (or `pov-kit usecase ask "..."`), describe wh
 example "marketing can use ChatGPT but can't upload files to it". Claude, reached through your AI Guard proxy, reads
 the tenant snapshot and proposes:
 
-- **changes the kit can build**: ZIA URL filtering (categories or a list of sites), SSL inspection, Cloud App Control,
-  file type control, DLP and DNS control rules. The kit checks every value against the tenant, scopes each rule to the
-  pilot group and names it; Claude can't widen scope or touch the customer's objects. **Add to the change list** puts
-  them in the plan, so the customer approves again before Apply builds them.
-- **directions for a person**, for everything else (other products, tenant-wide settings) and for any change that
-  failed the kit's checks, with the reason.
-- **a test**: a success criterion (UC-01, UC-02...) with probe tests or an attestation, proved in the report like the
+- **changes the kit can build**, in any product of the POV:
+
+  | Product | What a use case can add |
+  |---|---|
+  | ZIA | URL filtering (categories or a list of sites), SSL inspection, Cloud App Control, file type control, DLP and DNS control rules |
+  | ZPA | another private app: its own application segment (in the POV's segment and server groups, through the POV's connectors) and its own allow or deny access rule |
+  | AI Guard | its own app, Detection API key, rule and policy, with every detector on and the named ones blocking |
+  | ZDX | a deep trace on each pilot device, for an app ZDX already monitors |
+  | CASB | a report-only CASB DLP rule over the connected SaaS tenant |
+  | Client Connector | directions only: profile changes reach devices, and its API sometimes refuses new profiles |
+
+  The kit checks every value against that product's discovery (categories, engines, file types, detectors, ZDX apps,
+  and that a ZPA domain isn't already a customer segment), scopes each object to the pilot users and names it; Claude
+  can't widen scope or touch the customer's objects. **Add to the change list** puts them in the plan, so the customer
+  approves again before Apply builds them; teardown and the handover remove them with the rest.
+- **directions for a person**, for everything else (Client Connector, tenant-wide settings, products outside the POV)
+  and for any change that failed the kit's checks, with the reason.
+- **a test**: a success criterion (UC-01, UC-02...) with probe tests, AI Guard test prompts (scanned through the
+  Detection API with the use case's own key by `pov-kit test --api`), or an attestation, proved in the report like the
   catalog's.
 
 Before the first use, record the customer's agreement: Claude reads the full discovery snapshot, which travels through
