@@ -54,7 +54,7 @@ def verify(pov, tenant_for=None):
                             f"tenant (or couldn't be checked). Remove them first (Handover → Remove the POV), or hand "
                             f"them over as Terraform, then delete.")
     removes = [f"the POV folder ({pov.dir})", "its secrets in the keychain"]
-    from . import backup, mcp
+    from . import backup
     if (pov.cfg.get("mcp") or {}).get("installed"):
         removes.append("its Claude Desktop entry")
     d = backup.folder()
