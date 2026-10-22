@@ -5,3 +5,4 @@ __pycache__/
 dist/
 pov-probe-*.json
 pov-kit-diagnostics-*.zip
+uv.lock
