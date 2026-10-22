@@ -58,5 +58,9 @@
   version is pinned, and a test holds the patterns to the pinned server's own write-tool list.
 - **The plugin** tells Claude never to approve, apply, tear down, record an agreement, or handle a secret without the
   SE saying so; secrets are typed by the SE in the console or a terminal.
+- **Installers and updates** never touch POVs, secrets or tenants. An update downloads only from GitHub, is checked
+  against the SHA-256 in the release's latest.json before anything is replaced, keeps the previous version for
+  rollback, and never overwrites a git checkout. The installers aren't code-signed yet (INSTALL.md covers the
+  first-run prompts).
 - Updates are verified against the SHA-256 published with each release before anything is replaced.
 - The kit's API clients can't delete themselves: at handover, remind the customer to delete both in the console.

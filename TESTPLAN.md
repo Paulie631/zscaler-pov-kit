@@ -74,6 +74,13 @@ one Windows pilot device. Each item settles an open question in the design or br
 - [ ] **ZPA customer ID.** ZPA discovery fails without `customer_id` and works with it (OneAPI).
 - [ ] **Plugin.** Install `dist/zscaler-pov-kit.plugin` in the Claude desktop app; "run preflight for the lab POV"
   works, and "approve the change list" makes Claude ask who approved.
+- [ ] **Installers.** On a clean Mac and a clean Windows laptop: the zip from a real release installs (uv included),
+  the desktop shortcut opens the console, `pov-kit` works in a new terminal, and the uninstaller removes it all but
+  keeps `~/.zscaler-pov-kit/povs`.
+- [ ] **Updates.** With 0.8.0 installed and a newer release out: the Updates pill turns blue, **Install update**
+  verifies, installs and restarts the console in place; **Roll back** returns to 0.8.0. Behind a web proxy that blocks
+  GitHub, the dialog says so.
+- [ ] **Release workflow.** Bumping VERSION on main publishes the release with every file, and the Word guides open.
 - [ ] **Model and size.** `claude-sonnet-5-5` answers within the proxy's timeout for a large tenant snapshot (the kit
   cuts it at 150,000 characters).
 

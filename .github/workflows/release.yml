@@ -1,0 +1,57 @@
+name: release
+# Publishes a GitHub Release whenever main has a VERSION (in povkit/__init__.py) that hasn't been released yet.
+# So releasing is: bump VERSION, add a CHANGELOG section, push to main. Pushing a tag v<version> also works.
+# The kit's Updates button and `pov-kit update` read latest.json from the newest release.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency: release
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      needed: ${{ steps.v.outputs.needed }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          v=$(python3 -c "import re;print(re.search(r'^VERSION = \"([^\"]+)\"', open('povkit/__init__.py', encoding='utf-8').read(), re.M).group(1))")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "v$v" ]]; then echo "Tag $GITHUB_REF_NAME doesn't match VERSION $v"; exit 1; fi
+          if gh release view "v$v" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"; echo "v$v is already released."
+          else
+            echo "needed=true" >> "$GITHUB_OUTPUT"; echo "Will release v$v."
+          fi
+  test:
+    needs: check
+    if: needs.check.outputs.needed == 'true'
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: [check, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python tools/package.py
+      - name: Guides (Markdown and Word, stamped with this version)
+        run: |
+          sudo apt-get install -y -qq pandoc
+          python tools/build_guide.py --require
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: v${{ needs.check.outputs.version }}
+        run: |
+          python tools/package.py --notes > notes.md
+          gh release create "$V" dist/zscaler-pov-kit-*.zip dist/zscaler-pov-kit-*.plugin dist/SHA256SUMS.txt \
+            dist/latest.json dist/*-Guide-*.md dist/*-Guide-*.docx dist/*-Overview-*.md dist/*-Overview-*.docx \
+            dist/*-Quick-Start-*.md dist/*-Quick-Start-*.docx \
+            --target "$GITHUB_SHA" --title "Zscaler POV Kit $V" --notes-file notes.md

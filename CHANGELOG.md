@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.0
+
+Released like the AI Guard SE Demo Kit:
+- **Double-click installers** for Mac and Windows (and uninstallers): uv if needed, the kit in
+  `~/.zscaler-pov-kit/app`, a **Zscaler POV Console** desktop shortcut (an app on the Mac; desktop and Start menu on
+  Windows) and the `pov-kit` command. `pov-kit install` / `uninstall` do the same from a terminal.
+- **Updates button** in the console: checks the latest release (cached for 12 hours), shows its notes, installs it
+  after checking its SHA-256, restarts the console, and rolls back one version. A git checkout is told to `git pull`.
+  `pov-kit update` (`--check`, `--rollback`) does the same.
+- **Releases publish themselves** when VERSION changes on main: the zip, an email-safe zip, the plugin, SHA256SUMS,
+  latest.json, and three guides as Markdown and Word: the **SE deployment guide** (restructured like the demo kit's:
+  overview, golden rules, prerequisites, parts with times, troubleshooting), a **customer overview** for the
+  customer's security team, and a one-page **quick start**.
+
+The console now matches the demo kit:
+- Header: the **Updates** pill, the POV's state and end date, the **AI Guard policy switch** (once the POV's policy
+  exists), a **Zscaler console** link, and a **light / dark / auto** theme toggle.
+- The demo kit's layout, step titles and check list style (✓, !, ✗ with a "Fix:" line), and its **Logs** tab: filter
+  by kind or text, pause, clear the view, click an entry for its details.
+
 ## 0.7.0
 
 - **Claude Desktop's read-only access to the POV tenant** (`pov-kit mcp consent|install|remove|config|status|serve`,

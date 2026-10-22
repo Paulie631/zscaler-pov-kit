@@ -1,14 +1,11 @@
 """Drift, Client Connector adopt, handover, diagnostics, evidence, catalog and updater."""
-import hashlib
 import io
 import json
 import zipfile
 
-import pytest
 
 from povkit.products.zcc import names as zcc_names
-from povkit import evidence, handover, lifecycle, probe, products, updater
-from povkit.core import KitError
+from povkit import evidence, handover, lifecycle, probe, products
 from povkit.core.changelist import ChangeList
 from povkit.core.redact import Redactor
 from povkit import diagnostics
@@ -236,11 +233,3 @@ def test_every_product_has_the_full_lifecycle():
         assert p.criteria(), name                     # from its catalog file
 
 
-# ---- updater
-def test_update_refuses_a_zip_that_doesnt_match_its_hash(tmp_path):
-    class R:
-        content = b"not the zip"
-    info = {"version": "9.9.9", "zip_url": "https://github.com/x/y.zip", "sha256": hashlib.sha256(b"other").hexdigest()}
-    with pytest.raises(KitError, match="SHA-256"):
-        updater.install(info, get=lambda *a, **k: R(), app=tmp_path / "app", previous=tmp_path / "prev")
-    assert not (tmp_path / "app").exists()

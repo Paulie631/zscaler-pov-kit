@@ -1,0 +1,8 @@
+*.cmd text eol=crlf
+*.command text eol=lf
+pov-kit text eol=lf
+*.icns binary
+*.ico binary
+*.png binary
+*.py text eol=lf
+*.sh text eol=lf

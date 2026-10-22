@@ -15,6 +15,11 @@
   --bg:#0f1115;--panel:#171a20;--ink:#e8eaee;--muted:#9aa3b0;--line:#2a2f38;--soft:#1f232b;
   --accent:#5b8cff;--accent-ink:#0b0d12;--ok:#4cc77f;--ok-bg:#16301f;--warn:#e6a23c;--warn-bg:#33270f;
   --bad:#ff7a6e;--bad-bg:#3a1714;--chip:#1e2747;--chip-ink:#a9bcff;}}
+:root[data-theme="dark"]{
+  --bg:#0f1115;--panel:#171a20;--ink:#e8eaee;--muted:#9aa3b0;--line:#2a2f38;--soft:#1f232b;
+  --accent:#5b8cff;--accent-ink:#0b0d12;--ok:#4cc77f;--ok-bg:#16301f;--warn:#e6a23c;--warn-bg:#33270f;
+  --bad:#ff7a6e;--bad-bg:#3a1714;--chip:#1e2747;--chip-ink:#a9bcff;color-scheme:dark}
+:root[data-theme="light"]{color-scheme:light}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,sans-serif}
 header{display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5;flex-wrap:wrap}
@@ -25,7 +30,19 @@ nav.tabs{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bott
 nav.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:10px 14px;background:none;color:var(--muted);font-weight:600;white-space:nowrap}
 nav.tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
 .view{display:none}.view.on{display:block}
-.wrap{padding:20px 24px;max-width:1180px;margin:0 auto}
+.wrap{padding:20px 24px;max-width:1500px;margin:0 auto}
+.upd{font-size:12px;padding:3px 10px;border-radius:99px}
+.upd.new{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.updlog{margin:10px 0 0;padding:0;list-style:none;font-size:13px}
+.updlog li{padding:2px 0}.updlog li.fail{color:var(--bad)}.updlog li.ok::before{content:"✓ ";color:var(--ok)}
+.updnotes{white-space:pre-wrap;font-size:13px;background:var(--soft);border-radius:8px;padding:10px 12px;margin:10px 0;max-height:40vh;overflow:auto}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:flex-start;justify-content:center;z-index:20;padding:60px 16px;overflow:auto}
+.modal.on{display:flex}
+.modal .panel{width:min(760px,100%)}
+.pol{display:flex;align-items:center;gap:8px;font-size:13px}
+.pol .state{color:var(--muted);font-size:12px;min-width:70px}
+.theme{font-size:13px;padding:4px 9px;border-radius:99px}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
 .panel h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:0 0 12px;font-weight:600}
 .stack>*+*{margin-top:16px}
@@ -38,7 +55,7 @@ button:disabled{opacity:.5;cursor:default}
 select,input[type=text],input[type=password],input[type=number],textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 9px}
 textarea{width:100%;min-height:64px;resize:vertical}
 .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-.form{display:grid;grid-template-columns:200px 1fr;gap:10px 14px;align-items:center;max-width:760px}
+.form{display:grid;grid-template-columns:200px 1fr;gap:10px 14px;align-items:center;max-width:620px}
 .form .lbl{font-size:13px;color:var(--muted)}
 .form input[type=text],.form input[type=password],.form textarea,.form select{width:100%}
 .lbl{font-size:12px;color:var(--muted)}
@@ -46,7 +63,8 @@ textarea{width:100%;min-height:64px;resize:vertical}
 .muted{color:var(--muted)}
 .kicker{font:600 11px var(--mono);letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
 h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
-.wiz{display:grid;grid-template-columns:260px 1fr;gap:20px}
+#wstage h3{font-size:26px;margin:6px 0 14px;letter-spacing:-.02em}
+.wiz{display:grid;grid-template-columns:240px 1fr;gap:20px;max-width:1100px}
 .wiz>*{min-width:0}
 .steps{list-style:none;margin:0;padding:0}
 .steps li{padding:9px 10px;border-radius:8px;cursor:pointer;display:flex;gap:10px;align-items:center;font-size:13.5px}
@@ -62,14 +80,16 @@ h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
 .chk input{margin:0}
 .opt{display:flex;gap:10px;align-items:flex-start;padding:9px 10px;border:1px solid var(--line);border-radius:8px;margin:6px 0;cursor:pointer;max-width:760px}
 .opt input{margin-top:3px}
+.opt:has(input:checked){border-color:var(--accent);background:var(--chip)}
 .badge{font:600 11px var(--mono);padding:2px 7px;border-radius:6px;white-space:nowrap;display:inline-block}
 .b-ok,.b-pass{background:var(--ok-bg);color:var(--ok)}.b-warn,.b-incomplete{background:var(--warn-bg);color:var(--warn)}
 .b-fail{background:var(--bad-bg);color:var(--bad)}.b-info{background:var(--soft);color:var(--muted)}
 .chip{display:inline-block;font:500 11.5px var(--mono);padding:2px 7px;border-radius:6px;background:var(--chip);color:var(--chip-ink);margin:1px 3px 1px 0}
-.checks{border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.check{display:grid;grid-template-columns:64px 1fr;gap:10px;padding:9px 12px;border-top:1px solid var(--line);font-size:13px}
-.check:first-child{border-top:0}
-.check .fix{color:var(--muted);margin-top:3px;font-size:12.5px}
+.checks{list-style:none;margin:0;padding:0}
+.checks>li{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+.checks>li:first-child{border-top:0}
+.ic{font-weight:700;text-align:center}.ic.ok{color:var(--ok)}.ic.warn{color:var(--warn)}.ic.fail{color:var(--bad)}.ic.info{color:var(--muted)}
+.checks .d{color:var(--muted);font-size:12.5px}.checks .fx{color:var(--warn);font-size:12.5px;margin-top:2px}
 .group-h{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:16px 0 6px;font-weight:600}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th{text-align:left;font-weight:600;font-size:12px;color:var(--muted);padding:8px 10px;background:var(--soft)}
@@ -79,8 +99,8 @@ tr.r{cursor:pointer}tr.r:hover td{background:var(--soft)}
 tr.detail td{background:var(--soft);font-size:12.5px}
 pre,code{font:12px/1.5 var(--mono)}
 pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-radius:8px;padding:10px;margin:8px 0;max-height:420px;overflow:auto}
-.log{font:12px/1.55 var(--mono);background:var(--soft);border-radius:8px;padding:10px;max-height:380px;overflow:auto;margin-top:12px}
-.log .fail{color:var(--bad)}.log .warn{color:var(--warn)}.log .ok{color:var(--ok)}
+.log{font:12.5px/1.6 var(--mono);background:var(--soft);border-radius:10px;padding:12px 14px;max-height:340px;overflow:auto;margin-top:12px}
+.log .ok{color:var(--ok)}.log .warn,.log .fail{color:var(--warn)}.log .info{color:var(--muted)}
 .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
 .card{border:1px solid var(--line);border-radius:10px;padding:14px}
 .card h4{margin:0 0 6px;font-size:14px}
@@ -91,16 +111,23 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
 .empty{padding:28px;text-align:center;color:var(--muted)}
 .stat{display:flex;gap:22px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
 .stat b{display:block;font-size:20px;color:var(--ink);font-weight:650}
-@media (max-width:860px){.wiz{grid-template-columns:1fr}.form{grid-template-columns:1fr}.check{grid-template-columns:1fr}}
+@media (max-width:860px){.wiz{grid-template-columns:1fr}.form{grid-template-columns:1fr}header .pol{display:none}}
 </style>
 </head>
 <body>
 <header>
   <h1>Zscaler POV Console</h1>
   <span class="meta" id="hpov">No POV yet</span>
+  <button class="upd" id="upd" title="Check for kit updates">Updates</button>
   <span class="sp"></span>
+  <div class="pol" id="hpol" style="display:none" title="What the POV's own AI Guard policy blocks. Takes about 30 seconds to apply.">
+    <span class="lbl">AI Guard</span>
+    <select id="polsel"><option value="monitor">Monitor (log only)</option><option value="attacks">Block attacks</option><option value="data">Block attacks + data leakage</option></select>
+    <span class="state" id="polstate"></span>
+  </div>
   <select id="povsel" title="Switch POV"></select>
-  <span class="meta" id="hver"></span>
+  <a id="hconsole" href="https://console.zscaler.com/" target="_blank" rel="noopener" title="The Zscaler console (sign in as the customer's admin)">Zscaler console ↗</a>
+  <button class="theme" id="theme" title="Light, dark, or follow the system">Auto</button>
 </header>
 <nav class="tabs" id="tabs">
   <button data-t="setup" class="on">Setup</button>
@@ -186,10 +213,31 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
 <div class="view" id="v-logs"><div class="wrap stack">
   <div class="panel" id="lglab"></div>
   <div class="panel">
-    <div class="row" style="justify-content:space-between"><h2 style="margin:0">Activity</h2>
-      <div class="row"><button id="lgref">Refresh</button><button id="lgdiag" title="Logs and versions, without secrets or the customer's object names">Download diagnostics</button></div></div>
-    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th style="width:160px">Time (UTC)</th><th style="width:70px">Level</th><th style="width:90px">Kind</th><th>What</th></tr></thead><tbody id="lgrows"></tbody></table></div>
+    <h2>Activity log</h2>
+    <p class="muted" style="font-size:13px;margin:-4px 0 12px">Everything the kit does in this POV: API calls, discovery, the change list and approval, apply, drift, use cases, evidence, backups and updates. Click an entry to see its details. Secrets are never logged.</p>
+    <div class="row" style="gap:8px">
+      <select id="logkind"><option value="">All activity</option><option value="!">Errors and warnings</option><option value="api">API calls</option><option value="plan,approve,discover">Discovery, change list, approval</option><option value="apply,teardown,handover,status">Apply, drift, handover</option><option value="usecase,ai,report">Use cases and AI</option><option value="test,probe,attest">Evidence</option><option value="backup,recover,mcp,selftest,record">Safety net and lab</option><option value="update">Updates</option></select>
+      <input type="text" id="logq" placeholder="Filter text…" style="width:200px">
+      <label class="chk" style="margin:0"><input type="checkbox" id="logpause">Pause</label>
+      <span class="sp" style="flex:1"></span>
+      <button id="logclear">Clear view</button><button id="lgdiag" title="Logs and versions, without secrets or the customer's object names">Download diagnostics</button>
+    </div>
+    <div class="tablewrap" style="margin-top:12px"><table><thead><tr><th style="width:150px">Time (UTC)</th><th style="width:110px">Type</th><th style="width:80px">Result</th><th>What happened</th><th style="width:60px;text-align:right">ms</th></tr></thead><tbody id="lgrows"></tbody></table></div>
   </div>
+</div></div>
+
+<div class="modal" id="updmodal"><div class="panel">
+  <div class="row" style="justify-content:space-between"><h2 style="margin:0">Kit updates</h2><button id="updclose">Close</button></div>
+  <p id="updsum" style="margin:10px 0 0"></p>
+  <div id="updnotes" class="updnotes" style="display:none"></div>
+  <ul id="updlog" class="updlog"></ul>
+  <div class="row" style="gap:10px;margin-top:14px">
+    <button class="primary" id="updgo" style="display:none">Install update</button>
+    <button id="updcheck">Check again</button>
+    <button id="updroll" style="display:none" title="Go back to the version installed before the last update">Roll back</button>
+    <a id="updrel" target="_blank" rel="noopener" style="font-size:13px">All releases ↗</a>
+  </div>
+  <p class="muted" style="font-size:12px;margin:12px 0 0">Updates come from the kit's GitHub releases and are checked against the release's SHA-256 checksum before installing. Your POVs, secrets and every tenant are untouched, and the previous version is kept so you can roll back.</p>
 </div></div>
 
 <script>
@@ -207,23 +255,64 @@ async function runJob(id,el){let since=0;el.innerHTML="";
     for(const l of j.lines){const d=document.createElement("div");d.className=l.level;d.textContent=`${l.t}  ${l.msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight}
     since+=j.lines.length;if(j.done){if(j.error)throw new Error(j.error);return j.result}
     await new Promise(r=>setTimeout(r,700))}}
-const STATUS_ORDER={fail:0,warn:1,ok:2,info:3};
+const STATUS_ORDER={fail:0,warn:1,ok:2,info:3},ICON={ok:"✓",warn:"!",fail:"✗",info:"i"};
 function checksHTML(checks){if(!checks.length)return'<div class="empty">No checks.</div>';
   const groups={};for(const c of checks){const g=(c.label.match(/^([A-Za-z ]+?):\s/)||[,"General"])[1];(groups[g]=groups[g]||[]).push(c)}
-  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><div class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<div class="check"><div><span class="badge b-${esc(c.status)}">${esc(c.status.toUpperCase())}</span></div><div><b>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}</b>${c.detail?` <span class="muted">· ${esc(c.detail)}</span>`:""}${c.fix&&c.status!="ok"?`<div class="fix">${esc(c.fix)}</div>`:""}</div></div>`).join("")}</div>`).join("")}
+  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><ul class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<li><span class="ic ${esc(c.status)}">${ICON[c.status]||"·"}</span><div>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix&&c.status!="ok"?`<div class="fx">${c.status=="info"?"":"Fix: "}${esc(c.fix)}</div>`:""}</div></li>`).join("")}</ul>`).join("")}
 function reportText(checks){return checks.map(c=>`[${c.status.toUpperCase()}] ${c.label}${c.detail?": "+c.detail:""}${c.fix&&c.status!="ok"?"\n    fix: "+c.fix:""}`).join("\n")}
 
 /* ---------------- state ---------------- */
 let S=null;
 async function load(){S=await api("/api/state");const c=S.current;
-  $("#hver").textContent="POV kit "+S.version;
-  $("#hpov").innerHTML=c?`<b>${esc(c.customer)}</b> · ${esc(c.id)} · <span class="chip">${esc(c.state||"new")}</span>`+
-    (c.end&&(c.end.status=="warn"||c.end.status=="fail")?` <span class="badge b-${esc(c.end.status)}" title="${esc(c.end.fix)}">${esc(c.end.detail)}</span>`:""):"No POV yet";
+  $("#hpov").innerHTML=(c?`<b>${esc(c.customer)}</b> · ${esc(c.id)} · <span class="chip">${esc(c.state||"new")}</span>`+
+    (c.end&&(c.end.status=="warn"||c.end.status=="fail")?` <span class="badge b-${esc(c.end.status)}" title="${esc(c.end.fix)}">${esc(c.end.detail)}</span>`:` · <span title="POV end date">ends ${esc((c.settings.ends||"").slice(0,10))}</span>`):"No POV yet")+` · kit ${esc(S.version)}`;
+  const ag=c&&c.aiguard&&c.aiguard.live;$("#hpol").style.display=ag?"":"none";if(ag){$("#polsel").value=c.aiguard.profile;$("#polstate").textContent=""}
   $("#povsel").innerHTML=S.povs.length?S.povs.map(p=>`<option value="${esc(p.id)}" ${c&&p.id==c.id?"selected":""}>${esc(p.customer)} (${esc(p.id)})</option>`).join(""):'<option>No POVs</option>';
   $("#povsel").disabled=!S.povs.length;return S}
 $("#povsel").onchange=async e=>{await api("/api/pov/use",{id:e.target.value});await load();W.step=firstOpen();W.checks=null;W.plan=null;wizard();refreshTab()};
 $$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".view").forEach(v=>v.classList.toggle("on",v.id=="v-"+b.dataset.t));refreshTab()});
 function tab(){return $("#tabs button.on").dataset.t}
+$("#polsel").onchange=async e=>{const v=e.target.value;$("#polstate").textContent="switching…";
+  try{await api("/api/aiguard-policy",{profile:v});$("#polstate").textContent="applied";await load()}catch(err){$("#polstate").textContent="failed";alert(err.message)}};
+
+/* ---------------- theme ---------------- */
+const THEMES=["auto","light","dark"],TNAME={auto:"Auto",light:"Light",dark:"Dark"};
+function setTheme(t){if(t=="auto")delete document.documentElement.dataset.theme;else document.documentElement.dataset.theme=t;
+  $("#theme").textContent=TNAME[t];try{localStorage.setItem("pov-theme",t)}catch(e){}}
+let THEME="auto";try{THEME=localStorage.getItem("pov-theme")||"auto"}catch(e){}
+setTheme(THEMES.includes(THEME)?THEME:"auto");
+$("#theme").onclick=()=>{const t=THEMES[(THEMES.indexOf($("#theme").textContent.toLowerCase())+1)%3];setTheme(t)};
+
+/* ---------------- updates ---------------- */
+let UPD=null;
+function showUpd(){const u=UPD||{},b=$("#upd");
+  b.classList.toggle("new",!!u.available);b.textContent=u.available?`Update to ${u.latest}`:"Updates";
+  $("#updrel").href=u.releases||"#";
+  $("#updroll").style.display=u.can_rollback&&u.installed?"":"none";
+  $("#updgo").style.display=u.available&&!u.git?"":"none";
+  $("#updnotes").style.display=u.available&&u.notes?"block":"none";$("#updnotes").textContent=u.notes||"";
+  let t=`You have <b>${esc(u.current||S&&S.version||"?")}</b>. `;
+  if(u.error)t+=`Couldn't check for updates: ${esc(u.error)}`;
+  else if(u.available)t+=`Version <b>${esc(u.latest)}</b> is available.`+(u.git?` This copy is a git checkout: update it with <code>git pull</code>.`:u.installed?"":" Installing it also installs the kit on this computer, with a desktop shortcut.");
+  else if(u.latest)t+="That's the latest release.";else t+="Checking…";
+  $("#updsum").innerHTML=t}
+async function checkUpd(force){try{UPD=await api("/api/update"+(force?"?force=1":""))}catch(e){UPD={error:e.message}}showUpd()}
+$("#upd").onclick=()=>{$("#updlog").innerHTML="";$("#updmodal").classList.add("on");showUpd();if(!UPD)checkUpd(false)};
+$("#updclose").onclick=()=>$("#updmodal").classList.remove("on");
+$("#updcheck").onclick=()=>{$("#updlog").innerHTML="";UPD=null;showUpd();checkUpd(true)};
+function updLine(level,msg){const li=document.createElement("li");li.className=level;li.textContent=msg;$("#updlog").appendChild(li)}
+async function waitForRestart(){updLine("info","Restarting the console…");
+  for(let i=0;i<40;i++){await new Promise(r=>setTimeout(r,1000));try{const r=await fetch("/",{cache:"no-store"});if(r.ok){location.reload();return}}catch(e){}}
+  updLine("info","The console didn't come back by itself: open it again from the desktop shortcut.")}
+$("#updgo").onclick=async()=>{["#updgo","#updcheck","#updroll"].forEach(x=>$(x).disabled=true);$("#updlog").innerHTML="";
+  try{const el=document.createElement("div");await runJob((await api("/api/update/apply",{})).job,el);
+    [...el.children].forEach(d=>updLine(d.className,d.textContent.replace(/^\S+\s+/,"")));
+    await api("/api/update/restart",{});await waitForRestart()}
+  catch(e){updLine("fail",e.message);["#updgo","#updcheck","#updroll"].forEach(x=>$(x).disabled=false)}};
+$("#updroll").onclick=async()=>{if(!confirm("Go back to the previously installed version?"))return;
+  try{const r=await api("/api/update/rollback",{});updLine("ok",`Rolled back to ${r.version}.`);await api("/api/update/restart",{});await waitForRestart()}
+  catch(e){updLine("fail",e.message)}};
+setTimeout(()=>checkUpd(false),1500);
 function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria")criteria();if(t=="logs")logs();if(t=="usecases")usecases()}
 
 /* ---------------- setup wizard ---------------- */
@@ -533,9 +622,23 @@ function labTools(){const c=S&&S.current;if(!c){$("#lglab").innerHTML="";return}
   $("#lgself")&&($("#lgself").onclick=async()=>{const b=$("#lgself");b.disabled=true;$("#lgselflog").style.display="block";
     try{const r=await runJob((await api("/api/selftest",{lab:$("#lglabok").checked})).job,$("#lgselflog"));await load();labTools();logs()}catch(e){$("#lgselflog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
   $("#lgrec").onchange=async e=>{await api("/api/record",{on:e.target.checked});await load();labTools()}}
-async function logs(){labTools();try{const r=await api("/api/logs");$("#lgrows").innerHTML=r.lines.map(l=>`<tr><td><code>${esc(l.t)}</code></td><td><span class="badge b-${l.level=="error"?"fail":esc(l.level)}">${esc(l.level)}</span></td><td>${esc(l.kind)}</td><td>${esc(l.summary)}${l.error?`<div class="muted" style="font-size:12px">${esc(l.error)}</div>`:""}</td></tr>`).join("")||'<tr><td colspan="4" class="empty">Nothing yet.</td></tr>'}
-  catch(e){$("#lgrows").innerHTML=`<tr><td colspan="4">${esc(e.message)}</td></tr>`}}
-$("#lgref").onclick=logs;
+const LOGS={items:[],cleared:0,open:null};
+function logMatch(e){const k=$("#logkind").value,q=$("#logq").value.toLowerCase();
+  if(k=="!"&&!["error","warn","fail"].includes(e.level))return false;
+  if(k&&k!="!"&&!k.split(",").includes(e.kind))return false;
+  return !q||JSON.stringify(e).toLowerCase().includes(q)}
+function drawLogs(){const rows=LOGS.items.slice(LOGS.cleared).filter(logMatch).reverse().slice(0,400);
+  $("#lgrows").innerHTML=rows.map((l,i)=>{const extra=Object.fromEntries(Object.entries(l).filter(([k])=>!["t","kind","level","summary","ms"].includes(k)));
+    const lv=l.level=="error"?"fail":l.level;return `<tr class="r" data-i="${i}"><td><code>${esc(l.t.replace("T"," ").replace("Z",""))}</code></td><td>${esc(l.kind)}</td><td><span class="badge b-${esc(lv)}">${esc(l.level)}</span></td><td>${esc(l.summary)}${l.error?`<div class="muted" style="font-size:12px">${esc(l.error)}</div>`:""}</td><td style="text-align:right">${l.ms??""}</td></tr>`+
+    (LOGS.open==l.t+l.summary&&Object.keys(extra).length?`<tr class="detail"><td colspan="5"><pre>${esc(JSON.stringify(extra,null,2))}</pre></td></tr>`:"")}).join("")||'<tr><td colspan="5" class="empty">Nothing matches.</td></tr>';
+  $$("#lgrows tr.r").forEach(tr=>tr.onclick=()=>{const l=rows[+tr.dataset.i],k=l.t+l.summary;LOGS.open=LOGS.open==k?null:k;drawLogs()})}
+async function logs(){labTools();await refreshLogs()}
+async function refreshLogs(){if($("#logpause").checked)return;
+  try{const r=await api("/api/logs");LOGS.items=r.lines.slice().reverse();drawLogs()}
+  catch(e){$("#lgrows").innerHTML=`<tr><td colspan="5">${esc(e.message)}</td></tr>`}}
+["logkind","logq"].forEach(id=>$("#"+id).addEventListener("input",drawLogs));
+$("#logclear").onclick=()=>{LOGS.cleared=LOGS.items.length;drawLogs()};
+setInterval(()=>{if(tab()=="logs")refreshLogs()},5000);
 $("#lgdiag").onclick=()=>window.open(`/diagnostics?t=${encodeURIComponent(TOKEN)}`,"_blank");
 
 load().then(()=>{W.step=firstOpen();wizard()}).catch(e=>{$("#wstage").innerHTML=note(e.message,"bad")});

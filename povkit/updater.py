@@ -1,5 +1,10 @@
-"""Self-update from GitHub releases, as in the demo kit: latest.json names the version, zip URL and SHA-256; the zip
-is verified before anything is replaced, and the previous copy is kept for one-step rollback."""
+"""Self-update from GitHub releases, as in the AI Guard SE Demo Kit.
+
+Each release publishes latest.json (version, notes, zip URL, SHA-256). The kit checks it at most every 12 hours (the
+console's Updates button can force a check), downloads the zip only from GitHub, verifies its SHA-256 before anything
+is replaced, and installs it into ~/.zscaler-pov-kit/app, keeping the previous copy for one-step rollback. A git
+checkout is never overwritten: it's told to `git pull` instead. POVs, secrets and tenants are never touched.
+"""
 from __future__ import annotations
 
 import hashlib
@@ -12,14 +17,15 @@ import time
 import zipfile
 from pathlib import Path
 
-from . import VERSION
+from . import VERSION, installer
 from .core import KitError
 from .core.pov import BASE
 
 REPO = os.getenv("ZPOV_KIT_REPO", "Paulie631/zscaler-pov-kit")
 UPDATE_URL = os.getenv("ZPOV_KIT_UPDATE_URL", f"https://github.com/{REPO}/releases/latest/download/latest.json")
-APP = BASE / "app"
-PREVIOUS = BASE / "app.previous"
+RELEASES = f"https://github.com/{REPO}/releases/latest"
+CACHE = BASE / "update.json"
+CACHE_HOURS = 12
 TOP = "zscaler-pov-kit/"
 HOSTS = ("github.com", "objects.githubusercontent.com", "release-assets.githubusercontent.com")
 
@@ -32,10 +38,18 @@ def _url_ok(u):
     return bool(re.match(r"https://([a-z0-9.-]+)/", u or "")) and u.split("/")[2] in HOSTS
 
 
-def fetch_release(get=None):
+def fetch_release(force=False, get=None):
+    """Latest release info {version, notes, zip_url, sha256}, cached for 12 hours."""
+    if not force and CACHE.exists():
+        try:
+            c = json.loads(CACHE.read_text(encoding="utf-8"))
+            if time.time() - c["at"] < CACHE_HOURS * 3600:
+                return c["info"]
+        except (ValueError, KeyError):
+            pass
     import requests
     get = get or requests.get
-    try:
+    try:   # cache-busting query and headers, so a proxy or CDN can't answer with an old latest.json
         r = get(UPDATE_URL, params={"t": int(time.time())}, timeout=15,
                 headers={"Accept": "application/json", "Cache-Control": "no-cache"})
     except Exception as e:
@@ -46,45 +60,78 @@ def fetch_release(get=None):
     info = r.json()
     if not (info.get("version") and _url_ok(info.get("zip_url")) and re.fullmatch(r"[0-9a-f]{64}", info.get("sha256", ""))):
         raise KitError("The release information was incomplete or not in the expected format.")
+    BASE.mkdir(parents=True, exist_ok=True)
+    CACHE.write_text(json.dumps({"at": time.time(), "info": info}), encoding="utf-8")
     return info
 
 
-def check(get=None):
-    info = fetch_release(get)
+def check(force=True, get=None):
+    info = fetch_release(force, get)
     return info, vtuple(info["version"]) > vtuple(VERSION)
 
 
-def install(info, get=None, app=APP, previous=PREVIOUS):
+def status(force=False, get=None):
+    """What the console's Updates button shows."""
+    prev = installer.APP.with_name("app.previous")
+    st = {"current": VERSION, "latest": None, "available": False, "notes": "", "error": None,
+          "installed": installer.installed(), "git": installer.is_git(), "releases": RELEASES,
+          "can_rollback": (prev / "pov_kit.py").exists()}
+    try:
+        info = fetch_release(force, get)
+        st.update(latest=info["version"], notes=info.get("notes", ""),
+                  available=vtuple(info["version"]) > vtuple(VERSION))
+    except KitError as e:
+        st["error"] = str(e)
+    return st
+
+
+def install(info, get=None, log=lambda level, msg: None):
+    """Download, verify, and install the release into the app folder. -> the installed version."""
+    if installer.is_git():
+        raise KitError("This copy is a git checkout: update it with `git pull` instead.")
+    if not _url_ok(info.get("zip_url", "")):
+        raise KitError("Refusing to download an update from anywhere but GitHub.")
     import requests
     get = get or requests.get
+    log("info", f"Downloading {info['version']}")
     r = get(info["zip_url"], timeout=120)
     data = r.content
     if hashlib.sha256(data).hexdigest() != info["sha256"]:
         raise KitError("The download didn't match its published SHA-256, so nothing was installed.")
+    log("ok", "Download verified against the release's SHA-256")
+    work = BASE / "update-staging"
+    shutil.rmtree(work, ignore_errors=True)
+    work.mkdir(parents=True)
     with zipfile.ZipFile(io.BytesIO(data)) as z:
         names = z.namelist()
-        if not names or not all(n.startswith(TOP) and ".." not in n for n in names):
+        if not names or not all(n.startswith(TOP) and ".." not in n and not n.startswith("/") for n in names):
             raise KitError("The release zip isn't laid out as expected, so nothing was installed.")
-        staging = Path(str(app) + ".new")
-        shutil.rmtree(staging, ignore_errors=True)
-        z.extractall(staging)
-    if previous.exists():
-        shutil.rmtree(previous)
-    if app.exists():
-        app.rename(previous)
-    (staging / TOP.rstrip("/")).rename(app)
-    shutil.rmtree(staging, ignore_errors=True)
-    (app / "installed.json").write_text(json.dumps({"version": info["version"], "at": time.time()}), encoding="utf-8")
+        z.extractall(work)
+    src = work / TOP.rstrip("/")
+    if not (src / "pov_kit.py").exists():
+        raise KitError("The release zip has no kit in it, so nothing was installed.")
+    installer.copy_kit(src, installer.APP)
+    shutil.rmtree(work, ignore_errors=True)
+    log("ok", f"Installed {info['version']} in {installer.APP} (the previous version is kept for rollback)")
+    installer.shortcuts(log, installer.APP)
     return info["version"]
 
 
-def rollback(app=APP, previous=PREVIOUS):
-    if not previous.exists():
+def installed_version(folder):
+    m = re.search(r'VERSION = "([^"]+)"', (Path(folder) / "povkit" / "__init__.py").read_text(encoding="utf-8")) \
+        if (Path(folder) / "povkit" / "__init__.py").exists() else None
+    return m.group(1) if m else "?"
+
+
+def rollback():
+    app, prev = installer.APP, installer.APP.with_name("app.previous")
+    if not (prev / "pov_kit.py").exists():
         raise KitError("There's no previous version to roll back to.")
-    tmp = Path(str(app) + ".rollback")
+    tmp = app.with_name("app.rollback")
     shutil.rmtree(tmp, ignore_errors=True)
     if app.exists():
         app.rename(tmp)
-    previous.rename(app)
+    prev.rename(app)
     if tmp.exists():
-        tmp.rename(previous)
+        tmp.rename(prev)
+    return installed_version(app)

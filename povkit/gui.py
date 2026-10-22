@@ -9,13 +9,14 @@ when the SE asks for it by name.
 from __future__ import annotations
 
 import json
+import os
 import secrets as _rand
 import threading
 import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, evidence, handover, lifecycle, mcp, products, remind, rolespec, settings
+from . import VERSION, evidence, handover, installer, lifecycle, mcp, products, remind, rolespec, settings, updater
 from .core import KitError, pov as povs, secrets
 from .core.changelist import ChangeList
 from .core.checks import exit_code
@@ -57,6 +58,8 @@ def pov_state(p):
             "zpa_key": bool(secrets.get(p.id, "zpa-provisioning-key")),
             "end": remind.end_check(p), "backup_at": (p.cfg.get("backup") or {}).get("at"),
             "record": bool(p.cfg.get("record")), "selftest": p.read_json("selftest.json"),
+            "aiguard": {"live": bool(led.find("aiguard.policy")),
+                        "profile": (p.cfg.get("aiguard") or {}).get("profile") or "monitor"},
             "mcp": {"consent": mcp.consent(p), "installed": (p.cfg.get("mcp") or {}).get("installed"),
                     "uses": mcp.slot(p)[1], "entry": mcp.entry_name(p)}}
 
@@ -141,6 +144,8 @@ def api(method, path, body, q):
             if not cl.plan_file.exists():
                 return 200, {"plan": None}
             return 200, {"plan": cl.plan(), "approval": cl.approval()}
+        if path == "/api/update":
+            return 200, updater.status(force=q.get("force") == "1")
         if path == "/api/criteria":
             from . import summary
             summ, stale = summary.current(current())
@@ -322,7 +327,28 @@ def api(method, path, body, q):
         out = []
         products.get("aiguard").set_profile(LedgerTenant(tf(p, "apply"), led, []), p, led, body.get("profile"),
                                             lambda lv, m: out.append(m))
+        p.cfg.setdefault("aiguard", {})["profile"] = body.get("profile")
+        p.save()
         return 200, {"message": " ".join(out)}
+    if path == "/api/update/apply":
+        def work(log):
+            v = updater.install(updater.fetch_release(force=True), log=log)
+            p0 = None
+            try:
+                p0 = current()
+            except KitError:
+                pass
+            if p0:
+                p0.log("update", f"kit updated to {v}")
+            return {"version": v, "restart": True}
+        return 200, {"job": start_job("update", work)}
+    if path == "/api/update/rollback":
+        return 200, {"version": updater.rollback()}
+    if path == "/api/update/restart":
+        if not (installer.APP / "pov_kit.py").exists():
+            raise KitError("The kit isn't installed, so there's nothing to restart into.")
+        threading.Timer(0.5, restart_console).start()
+        return 200, {"ok": True}
     if path == "/api/zpa-template":
         from . import connector_template
         p = current()
@@ -444,6 +470,28 @@ def page_file(path, q, token):
 
 
 # ---------------------------------------------------------------- server
+SERVER = {}
+
+
+def restart_console():
+    """After an update or rollback: stop serving; serve() then starts the installed kit's console on the same port.
+    The page polls until it answers, then reloads (with the new run's token)."""
+    SERVER["restart"] = True
+    if SERVER.get("srv"):
+        SERVER["srv"].shutdown()
+
+
+def _exec_installed(port):
+    """Replace this process with the installed kit's console (on Windows, start it and exit)."""
+    import subprocess
+    launcher = installer.APP / ("pov-kit.cmd" if installer.windows() else "pov-kit")
+    args = [str(launcher), "gui", "--port", str(port), "--no-browser"]
+    if installer.windows():
+        subprocess.Popen(["cmd", "/c", *args], creationflags=0x00000010)   # CREATE_NEW_CONSOLE
+        os._exit(0)
+    os.execv(str(launcher), args)
+
+
 def serve(port=8790, open_browser=True):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from urllib.parse import parse_qsl, urlsplit
@@ -516,6 +564,7 @@ def serve(port=8790, open_browser=True):
             continue
     if not srv:
         raise KitError(f"No free local port between {port} and {port + 19}.")
+    SERVER.update(srv=srv, port=port)
     url = f"http://127.0.0.1:{port}/"
     print(f"  POV console: {url}   (this computer only; Ctrl+C to stop)")
     if open_browser:
@@ -524,4 +573,8 @@ def serve(port=8790, open_browser=True):
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\n  Stopped.")
+    if SERVER.pop("restart", False):   # an update or rollback asked for it: the main thread restarts, not a timer
+        srv.server_close()
+        print("  Restarting the console with the installed kit...")
+        _exec_installed(port)
     return srv

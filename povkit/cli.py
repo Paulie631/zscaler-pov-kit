@@ -303,17 +303,39 @@ def c_diagnostics(a):
 
 def c_update(a):
     if a.rollback:
-        updater.rollback()
-        print("Rolled back one version.")
+        print(f"Rolled back to {updater.rollback()}.")
         return
-    info, newer = updater.check()
-    if not newer:
-        print(f"Up to date ({VERSION}).")
+    st = updater.status(force=True)
+    if st["error"]:
+        raise KitError(st["error"])
+    if not st["available"]:
+        print(f"Up to date ({VERSION} is the latest release).")
         return
-    print(f"{info['version']} is available (you have {VERSION}).")
-    if a.check:
+    print(f"{st['latest']} is available (you have {VERSION}).")
+    if st["notes"]:
+        print("\n" + st["notes"] + "\n")
+    if st["git"]:
+        print("This copy is a git checkout: update it with `git pull`.")
         return 2
-    print(f"Installed {updater.install(info)}.")
+    if a.check or not yesno(f"Install {st['latest']} now?", True, a.yes):
+        return 2
+    updater.install(updater.fetch_release(), log=say)
+    print("Done. Close the console if it's open and reopen it from the desktop shortcut.")
+
+
+def c_install(a):
+    from . import installer
+    installer.install(say)
+
+
+def c_uninstall(a):
+    from . import installer
+    print("  Removes the installed kit, its shortcuts and its PATH entry. Keeps your POVs, their secrets, and every "
+          "object in every tenant.\n  To remove a POV's objects from a tenant, hand it over first (pov-kit handover).")
+    if not yesno("Uninstall now?", True, a.yes):
+        print("Cancelled.")
+        return 1
+    installer.uninstall(say)
 
 
 def c_users(a):
@@ -616,9 +638,13 @@ def parser():
     s.add_argument("--include-adopted", action="store_true")
     s = cmd("diagnostics", c_diagnostics, "a zip for the kit owner (no secrets, no customer data)")
     s.add_argument("--out")
-    s = cmd("update", c_update, "self-update from GitHub releases")
+    s = cmd("update", c_update, "install the latest release from GitHub (--check: only check, --rollback: go back one)")
     s.add_argument("--check", action="store_true")
     s.add_argument("--rollback", action="store_true")
+    s.add_argument("--yes", action="store_true")
+    cmd("install", c_install, "install this copy on this computer, with a desktop shortcut (the installers run it)")
+    s = cmd("uninstall", c_uninstall, "remove the installed kit and its shortcuts (keeps POVs and tenant objects)")
+    s.add_argument("--yes", action="store_true")
     s = cmd("ai", c_ai, "ai connect|consent|status: Claude through AI Guard for use cases")
     s.add_argument("what", choices=["connect", "consent", "status"])
     s.add_argument("--by")

@@ -4,9 +4,18 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.7.0**: every product module, the identity step,
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.8.0**: every product module, the identity step,
 the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
+
+## Install
+
+Download `zscaler-pov-kit-<version>.zip` from the [latest release](https://github.com/Paulie631/zscaler-pov-kit/releases/latest),
+unzip it, and double-click **Install Zscaler POV Kit** (`.command` on Mac, `.cmd` on Windows). It installs uv if
+needed, copies the kit to `~/.zscaler-pov-kit/app`, adds a **Zscaler POV Console** shortcut and the `pov-kit` command,
+and opens the console. The **Updates** button in the console installs new releases (verified against their SHA-256)
+and rolls back. Details: [INSTALL.md](INSTALL.md). Each release also carries the SE deployment guide, a customer
+overview for the customer's security team, and a one-page quick start, as Word and Markdown.
 
 ## What it will and won't do in a customer tenant
 
@@ -197,6 +206,12 @@ Criteria live in `povkit/catalog/<product>.json` (24 in all). `pov-kit test --ap
 product has none, an attestation stands in and the report says so.
 
 ## For maintainers
+
+**Releasing:** bump `VERSION` in `povkit/__init__.py` (and the plugin's `plugin.json`), add a `## <version>` section to
+CHANGELOG.md, and push to main. The release workflow runs the tests, then publishes `zscaler-pov-kit-<v>.zip`, an
+email-safe zip, the plugin, SHA256SUMS.txt, latest.json (what the Updates button reads) and the three guides as Markdown
+and Word. `python tools/package.py` and `python tools/build_guide.py` build the same files locally into `dist/`.
+
 
 - Offline tests: `uv run --with pytest --with requests --with keyring pytest -q` (a fake tenant records every call, so
   the tests prove what the kit never touches). CI runs them on Windows, macOS and Linux.
