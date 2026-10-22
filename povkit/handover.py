@@ -49,6 +49,11 @@ def terraform(pov, led):
         blocks.append(f'{note}# {e["name"]} ({e["kind"]}, POV {pov.id})\nimport {{\n  to = {spec["type"]}.{addr}\n'
                       f'  id = "{e["id"]}"\n}}\n')
     (out / "imports.tf").write_text("\n".join(blocks), encoding="utf-8")
+    kept = ", ".join(e["name"] for e, _ in skipped) or "none"
+    zid = [e for e, _ in skipped if e["product"] == "zid"]
+    zid_note = (f"The kept rules apply to the ZIdentity group '{next((e['name'] for e in zid if e['kind'] == 'group'), '')}'"
+                " the POV made. Point them at one of your own groups when you widen them, then delete the POV's group "
+                "(and any users it created) in ZIdentity.\n") if zid else ""
     (out / "README.md").write_text(textwrap.dedent(f"""\
         # {pov.cfg['customer']}: POV configuration as Terraform
 
@@ -62,10 +67,15 @@ def terraform(pov, led):
            when you are ready. The `zpov:{pov.id}` text in descriptions can go too.
         5. `terraform apply` imports them. The first apply changes nothing in the tenant unless you edited the config.
 
-        Not exported (handle in the console): {', '.join(e['name'] for e, _ in skipped) or 'none'}.
-        """), encoding="utf-8")
-    for e, _ in exports:
+        Kept in place but not in Terraform (manage them in the console): {kept}.
+        {zid_note}"""), encoding="utf-8")
+    # Everything stays in the tenant as the customer's: exported or not, the kit never touches it again (its client
+    # and secrets are deleted next). That includes the POV's ZIdentity pilot group, which the kept rules apply to.
+    for e, _ in exports + skipped:
         led.mark(e, HANDED_OVER)
+    link = led.linked("zid.zia_group")
+    if link:
+        led.mark(link, HANDED_OVER)
     return out, exports, skipped
 
 

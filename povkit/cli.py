@@ -320,7 +320,8 @@ def c_handover(a):
             return 2
     else:
         out, exported, skipped = handover.terraform(p, led)
-        print(f"Terraform folder: {out} ({len(exported)} objects, {len(skipped)} not exportable). See its README.md.")
+        print(f"Terraform folder: {out} ({len(exported)} objects; {len(skipped)} more kept in place but "
+              "not in Terraform). See its README.md.")
     gone, purged = handover.finish(p)
     print(f"Deleted {len(gone)} secrets from the keychain and {', '.join(purged) or 'no'} customer data files. "
           "Remind the customer to delete the POV's two API clients in the console.")

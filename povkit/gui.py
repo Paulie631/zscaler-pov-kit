@@ -490,7 +490,7 @@ def api(method, path, body, q):
         if how == "terraform":
             def work(log):
                 out, exported, skipped = handover.terraform(p, lifecycle.ledger(p))
-                log("ok", f"Terraform folder: {out} ({len(exported)} objects; not exportable: "
+                log("ok", f"Terraform folder: {out} ({len(exported)} objects; kept in place but not in Terraform: "
                           f"{', '.join(e['name'] for e, _ in skipped) or 'none'})")
                 gone, purged = handover.finish(p)
                 log("ok", f"Deleted {len(gone)} secrets and {', '.join(purged) or 'no'} customer data files.")

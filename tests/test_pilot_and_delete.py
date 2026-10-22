@@ -143,3 +143,17 @@ def test_console_delete_flow(pov, tenant, monkeypatch):
         gui.api("POST", "/api/pov/delete", {"id": pov.id, "confirm": ""}, {})
     code, r = gui.api("POST", "/api/pov/delete", {"id": pov.id, "confirm": pov.id}, {})
     assert code == 200 and gui.state()["povs"] == []
+
+
+def test_terraform_handover_keeps_the_zidentity_group_and_allows_delete(zpov, tenant, tenant_for):
+    from povkit import handover
+    approve(zpov, tenant_for)
+    lifecycle.apply(zpov, tenant_for, log)
+    out, exported, skipped = handover.terraform(zpov, lifecycle.ledger(zpov))
+    assert {e["product"] for e, _ in skipped} >= {"zid"}
+    assert "ZPOV - pilot users" in (out / "README.md").read_text()
+    led = lifecycle.ledger(zpov)
+    assert not led.active() and not led.linked("zid.zia_group")
+    assert tenant.zid_groups                                   # kept in the tenant, the customer's now
+    v = delete_pov.verify(zpov, tenant_for)
+    assert v["ok"] and v["notes"]
