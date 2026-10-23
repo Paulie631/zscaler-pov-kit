@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.17
+
+- **A POV lab on CloudShare** ([docs/CLOUDSHARE.md](docs/CLOUDSHARE.md)): scripts to build a blueprint once with two
+  ZPA App Connectors (Zscaler's EL9 package source, its signing key checked against the fingerprint in Zscaler's
+  guide, left unenrolled), the test app, and a Windows pilot with the kit and the checked Client Connector installer.
+  No customer values in the blueprint: each POV enrolls its copy with **Next steps → ZPA App Connectors → CloudShare
+  commands**, filled in with the POV's provisioning key.
+
 ## 0.9.16
 
 - Preflight says the right place for a ZIdentity POV group's test users (ZIdentity, not ZIA). Seen live.

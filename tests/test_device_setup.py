@@ -99,3 +99,16 @@ def test_wait_for_zscaler(monkeypatch):
 def test_pins_are_well_formed():
     w = ds.PINS["windows"]
     assert len(w["sha256"]) == 64 and w["file"].endswith(".msi")
+
+
+def test_cloudshare_scripts_parse_and_keep_secrets_out_of_the_blueprint():
+    from pathlib import Path
+    d = Path(ds.__file__).parent / "cloudshare"
+    con = (d / "zpov-connector.sh").read_text()
+    assert "A6FE2422FCE7E8AC672E9E51644EA3158765E1DD" in con and "yum.private.zscaler.com" in con
+    prep = con.split("prepare)", 1)[1].split(";;", 1)[0]
+    assert "provision_key" not in prep.replace("/opt/zscaler/var/*", "")   # prepare never writes a key
+    if sys.platform != "win32":
+        for f in d.glob("*.sh"):
+            assert subprocess.run(["bash", "-n", str(f)]).returncode == 0, f
+    assert "msiexec" not in (d / "zpov-pilot-prepare.ps1").read_text()   # Client Connector itself is per POV

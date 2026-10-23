@@ -19,6 +19,8 @@ jobs:
         run: |
           bash -n install.sh
           bash -n povkit/zcc-setup.sh
+          for f in povkit/cloudshare/*.sh; do bash -n "$f"; done
+          pwsh -NoProfile -Command '$e=$null; [System.Management.Automation.Language.Parser]::ParseFile("povkit/cloudshare/zpov-pilot-prepare.ps1",[ref]$null,[ref]$e) | Out-Null; if ($e) { $e; exit 1 }'
           pwsh -NoProfile -Command '$e=$null; [System.Management.Automation.Language.Parser]::ParseFile("povkit/zcc-setup.ps1",[ref]$null,[ref]$e) | Out-Null; if ($e) { $e; exit 1 }'
           pwsh -NoProfile -Command '$e=$null; [System.Management.Automation.Language.Parser]::ParseFile("install.ps1",[ref]$null,[ref]$e) | Out-Null; if ($e) { $e; exit 1 }'
       - name: Lint

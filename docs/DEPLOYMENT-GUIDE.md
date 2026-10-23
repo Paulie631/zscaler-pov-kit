@@ -154,6 +154,12 @@ change list adds them. Everything below stays available step by step, to change 
 7. **Next steps**: the steps for people, the probe pack, the ZPA connector template (AWS or Azure) and its key, the AI
    Guard policy switch.
 
+### A POV lab on CloudShare
+
+No cloud account for the connectors? [CLOUDSHARE.md](CLOUDSHARE.md) builds a CloudShare blueprint once (two App
+Connectors, the test app, a Windows pilot) with no customer values in it; each POV starts a copy and enrolls it with
+the commands from **Next steps → ZPA App Connectors → CloudShare commands**.
+
 ### Setting up a pilot device
 
 **Next steps → Set up a pilot device** installs Client Connector already pointed at the customer's tenant, then the
