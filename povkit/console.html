@@ -424,7 +424,19 @@ async function deletePov(id){
     `<p style="margin:12px 0 0">Deleting removes, from this computer:</p>${list(v.removes)}<p class="muted" style="font-size:12px">It can't be undone. The customer's tenant isn't touched.</p>`+
     (v.ok?`<div class="form" style="margin-top:10px"><span class="lbl">Type <code>${esc(v.id)}</code> to confirm</span><input type="text" id="delconf" autocomplete="off"></div>
       <div class="row" style="margin-top:12px"><button class="danger" id="delgo" disabled>Delete this POV</button></div><div id="delmsg"></div>`:"");
-  if(!v.ok)return;
+  if(!v.ok){
+    if(!v.still_there.length)return;
+    b.insertAdjacentHTML("beforeend",`<div class="group-h" style="margin-top:14px">Remove its objects from the tenant first</div>
+      <p class="muted" style="margin:4px 0 8px">Deletes the ${v.still_there.length} objects above from the customer's tenant (only what this POV's ledger says it created; adopted objects stay), then its secrets. The same as Handover → Remove the POV. To leave them in place for the customer instead, use Handover → Terraform.</p>
+      <div class="row" style="gap:8px"><input type="text" id="deltd" placeholder="Type DELETE" autocomplete="off" style="width:140px"><button class="danger" id="deltdgo" disabled>Remove them from the tenant</button></div>
+      <div class="log" id="deltdlog" style="display:none;margin-top:8px"></div>`);
+    $("#deltd").oninput=()=>{$("#deltdgo").disabled=$("#deltd").value.trim()!=="DELETE"};
+    $("#deltdgo").onclick=async()=>{const g=$("#deltdgo");g.disabled=true;$("#deltdlog").style.display="block";
+      try{await api("/api/pov/use",{id});const r=await runJob((await api("/api/handover",{how:"teardown",confirm:"DELETE"})).job,$("#deltdlog"));
+        S=null;await load();
+        if(r&&r.finished)deletePov(id);else $("#deltdlog").insertAdjacentHTML("beforeend",`<div class="fail">Some objects are still there: the lines above say why. Fix that, then try again.</div>`)}
+      catch(e){$("#deltdlog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`);g.disabled=false}};
+    return}
   $("#delconf").oninput=()=>{$("#delgo").disabled=$("#delconf").value.trim()!==v.id};
   $("#delgo").onclick=async()=>{try{await api("/api/pov/delete",{id,confirm:$("#delconf").value});m.classList.remove("on");
     S=null;await load();W.step=0;wizard()}catch(e){$("#delmsg").innerHTML=note(e.message,"bad")}};

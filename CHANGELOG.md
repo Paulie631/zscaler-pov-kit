@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.27
+
+- **Deleting a POV that still has objects in the tenant** no longer stops at a dead end. The Delete dialog lists
+  them and offers **Remove them from the tenant** (the same teardown as Handover → Remove the POV, confirmed by typing
+  DELETE). Once they're gone it shows the delete confirmation.
+
 ## 0.9.26
 
 - **Two POVs in one tenant no longer collide.** A new POV takes the prefix ZPOV2 (ZPOV3...) when another POV on this
