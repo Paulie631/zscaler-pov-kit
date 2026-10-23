@@ -1,0 +1,40 @@
+name: zcc-installer
+# Keeps the zcc-installer pre-release in step with povkit/zcc_installers.json: each pinned installer with a 'source'
+# is downloaded, checked against its SHA-256, and attached if it isn't there yet. The pilot-device setup scripts
+# download from that pre-release and check the hash and Zscaler's signature again on the device.
+on:
+  push:
+    branches: [main]
+    paths: [povkit/zcc_installers.json, .github/workflows/zcc-installer.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - env: {GH_TOKEN: "${{ github.token }}"}
+        run: |
+          set -euo pipefail
+          TAG=$(python3 -c "import json;print(json.load(open('povkit/zcc_installers.json'))['release_tag'])")
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --prerelease --title "Client Connector installers (POV kit pilot-device setup)" \
+              --notes "Copies of Zscaler Client Connector installers for the POV kit's pilot-device setup, pinned in povkit/zcc_installers.json. The setup installs a file only if its SHA-256 matches and it carries a valid Zscaler, Inc. signature. A pre-release, so the kit's update check never sees it."
+          fi
+          have=$(gh release view "$TAG" --json assets --jq '.assets[].name')
+          python3 - > todo.txt <<'EOF'
+          import json
+          d = json.load(open("povkit/zcc_installers.json"))
+          for os_ in ("windows", "macos"):
+              e = d.get(os_)
+              if e and e.get("source"):
+                  print(e["file"], e["sha256"], e["source"])
+          EOF
+          while read -r file sha src; do
+            if grep -qxF "$file" <<<"$have"; then echo "$file: already attached"; continue; fi
+            curl -fsSL "$src" -o "$file"
+            echo "$sha  $file" | sha256sum -c -
+            gh release upload "$TAG" "$file"
+            echo "$file: attached"
+          done < todo.txt

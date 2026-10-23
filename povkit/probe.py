@@ -169,9 +169,7 @@ def run_spec(spec, run_id, s):
             spec = dict(spec, expect="running")
         elif kind == "via_zscaler":
             # the demo kit's via_zscaler(): ip.zscaler.com says whether the request came through Zscaler
-            low = re.sub(r"<[^>]+>", " ", s.get("https://ip.zscaler.com/", timeout=TIMEOUT).text).lower()
-            through = (not re.search(r"not (going|accessing|connected)[^.]{0,40}zscaler|not using zscaler", low)
-                       and re.search(r"(via|through|using)[^.]{0,30}zscaler", low))
+            through, low = via_zscaler(s)
             got = "zscaler" if through else "direct"
             clouds = sorted(set(re.findall(r"\b(zscaler[a-z]*\.net)\b", low)))
             detail = "ip.zscaler.com" + (f": {', '.join(clouds)}" if clouds else "")
@@ -182,6 +180,37 @@ def run_spec(spec, run_id, s):
         got, detail = classify(error=e), str(e)[:160]
     return {"spec": spec, "outcome": got, "expect": spec.get("expect"), "pass": got == spec.get("expect"),
             "detail": detail, "ms": int((time.time() - t0) * 1000)}
+
+
+def via_zscaler(s):
+    """-> (True if ip.zscaler.com says this request came through Zscaler, the page text)."""
+    low = re.sub(r"<[^>]+>", " ", s.get("https://ip.zscaler.com/", timeout=TIMEOUT).text).lower()
+    through = (not re.search(r"not (going|accessing|connected)[^.]{0,40}zscaler|not using zscaler", low)
+               and re.search(r"(via|through|using)[^.]{0,30}zscaler", low))
+    return bool(through), low
+
+
+def wait_for_zscaler(minutes, say=print, session=None, sleep=time.sleep, every=15):
+    """Wait until traffic goes through Zscaler (Client Connector signed in and connected). -> True, or False on
+    timeout. For a freshly set-up pilot device: the probe runs only once its results would mean something."""
+    import requests
+    s = session or requests.Session()
+    s.headers.update({"User-Agent": UA})
+    deadline = time.time() + minutes * 60
+    told = False
+    while True:
+        try:
+            if via_zscaler(s)[0]:
+                say("Traffic goes through Zscaler.")
+                return True
+        except Exception:   # noqa: BLE001 - offline while Client Connector connects; keep waiting
+            pass
+        if time.time() >= deadline:
+            return False
+        if not told:
+            say("Waiting for Client Connector: sign in, and check it shows Internet Security On...")
+            told = True
+        sleep(every)
 
 
 def run(criteria, session=None):

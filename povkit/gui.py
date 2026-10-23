@@ -207,6 +207,9 @@ def api(method, path, body, q):
             from . import manual
             p = current()
             return 200, {"steps": manual.guide(p), "console": manual.GUIDE["console"]}
+        if path == "/api/device":
+            from . import device_setup
+            return 200, device_setup.info(current())
         if path == "/api/manual/sheet":
             from . import manual
             return 200, {"text": manual.sheet_md(current())}
@@ -376,6 +379,27 @@ def api(method, path, body, q):
         p = current()
         rec = evidence.attest(p, body.get("criterion"), body.get("note") or "", body.get("by") or "SE")
         return 200, {"attestation": rec}
+    if path == "/api/device/cloud":
+        from . import device_setup
+        from .core.guard import ReadOnlyTenant
+        p = current()
+        c = body.get("cloud")
+        if body.get("detect"):
+            c = device_setup.detect_cloud(ReadOnlyTenant(tf(p, "discovery")))
+            if not c:
+                raise KitError("ZIdentity didn't say which cloud: type it (the Zscaler console's address or Client "
+                               "Connector's About page shows it, such as zscalertwo).")
+        return 200, {"cloud": settings.set_value(p, "zcc.cloud", c)}
+    if path == "/api/device/setup":
+        from . import device_setup
+        p = current()
+        os_, email = body.get("os"), str(body.get("email") or "").strip().lower()
+        if body.get("what") == "script":
+            pack = evidence.probe_pack(p) if body.get("pack", True) else None
+            name, text = device_setup.script(p, os_, email, pack)
+            p.log("device", f"device setup script for {email} ({os_})")
+            return 200, {"name": name, "text": text}
+        return 200, {"line": device_setup.one_liner(p, os_, email)}
     if path == "/api/probe-pack":
         return 200, evidence.probe_pack(current())
     if path == "/api/backup":

@@ -55,6 +55,7 @@ try {
   Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue
 }
 
+if ($env:ZPOV_NO_GUI) { Say "Installed."; return }
 Write-Host ""
 Say "Opening the console. Keep this window open while you use it; close it to stop the console."
 Say "Next time, open 'Zscaler POV Console' from your desktop or Start menu."

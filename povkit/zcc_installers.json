@@ -1,0 +1,12 @@
+{
+  "about": "Client Connector installers the pilot-device setup downloads, pinned by SHA-256. They live on this repository's zcc-installer pre-release (the zcc-installer workflow copies each 'source' there and checks the hash). The setup scripts install a file only if its SHA-256 matches and it carries a valid Zscaler, Inc. signature. To change versions: update an entry here (file, version, sha256, source) and push; the workflow attaches the new file. 'source' may be empty if the file was attached to the pre-release by hand.",
+  "release_tag": "zcc-installer",
+  "repo": "Paulie631/zscaler-pov-kit",
+  "windows": {
+    "version": "4.10.0.477",
+    "file": "Zscaler-windows-4.10.0.477-installer.msi",
+    "sha256": "793fc24713c26e0d6ac5a9f0371d844d438972f5f68c4e05c531d02948eba2ef",
+    "source": "https://github.com/Paulie631/aiguard-se-kit/releases/download/zcc-installer/Zscaler-windows-4.10.0.477-installer.msi"
+  },
+  "macos": null
+}

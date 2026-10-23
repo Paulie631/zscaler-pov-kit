@@ -373,7 +373,8 @@ class ZCC(Product):
                 devs = items(t.call("zcc.devices", "list_devices", query_params={"page_size": 500}))
             except KitError as e:
                 return {"status": "incomplete", "detail": f"device list unreadable: {str(e)[:100]}"}
-            emails = {x.lower() for x in pov.cfg.get("pilot_emails") or []}
+            from ..device_setup import users   # named pilot users and the POV's own test users
+            emails = set(users(pov))
             mine = [d for d in devs if str(g(d, "user_name") or g(d, "user") or "").lower() in emails] if emails else []
             on = [d for d in mine if re.search(r"registered|^1$", str(g(d, "registration_state") or ""), re.I)]
             if not emails:

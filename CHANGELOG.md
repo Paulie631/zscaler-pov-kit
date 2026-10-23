@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.11
+
+- **Set up a pilot device from the console.** Next steps → **Set up a pilot device** gives, for a pilot user on macOS
+  or Windows, a one-line command or a setup script for the customer's IT. It installs Client Connector with this
+  tenant's cloud, the user's domain and name filled in (Windows: CLOUDNAME, USERDOMAIN, UNAME; macOS: a settings
+  profile the user approves once), then the kit's probe. The script carries the POV's probe pack and runs the tests
+  once traffic goes through Zscaler.
+- **Client Connector from the kit**, like the SE demo kit: a pinned copy on the kit's `zcc-installer` pre-release,
+  installed only if its SHA-256 matches and it's signed by Zscaler. The customer's own version works too.
+- **Detect the cloud** from ZIdentity's Internet & SaaS entitlement (read-only), or type it (`pov-kit set zcc.cloud`).
+- `pov-kit probe --wait N` waits up to N minutes for traffic to go through Zscaler before testing.
+- The pilot-devices check counts the POV's own test users, not only named pilot users.
+
 ## 0.9.10
 
 From running the new checks against the lab tenant:

@@ -9,7 +9,7 @@ SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_email
             "zpa.scope", "zpa.saml_attribute", "zpa.saml_value", "zdx.app", "casb.tenant", "aiguard.competitor",
             "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain",
             "identity.pilot", "identity.create_users", "identity.users_in", "ai.model", "ai.share", "ends", "lab",
-            "customer_id", "mcp.version"}
+            "customer_id", "mcp.version", "zcc.cloud"}
 LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports", "identity.bypass_domains"}
 CHOICES = {"lab": ("yes", "no"), "identity.pilot": ("existing", "create", "test"),
            "identity.users_in": ("auto", "zia", "zidentity"), "identity.create_users": ("yes", "no"), "ai.share": ("full", "names_only"),
@@ -42,6 +42,8 @@ def parse(key, raw):
     if key == "ends":
         from .remind import parse_date
         v = parse_date(v)
+    if key == "zcc.cloud" and v and not __import__("re").fullmatch(r"[a-z0-9]+", v):
+        raise KitError("zcc.cloud is the Zscaler cloud's name, such as zscalertwo or zscaler.")
     if key == "pilot_emails":
         bad = [x for x in v if "@" not in x]
         if bad:

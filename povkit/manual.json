@@ -105,14 +105,17 @@
       "title": "Pilot devices run Client Connector, signed in as pilot users",
       "who": "customer (pilot users or IT)",
       "when": "before the tests",
-      "search": "Client Connector",
+      "search": "Platform Releases",
       "steps": [
-        "Install Zscaler Client Connector on each pilot device (from the Client Connector portal's downloads, or the customer's software deployment).",
-        "Sign in as a member of the pilot group (with test users made by the kit: Next steps > Test users > Show password).",
-        "In Client Connector, open More > Update Policy, and check that Internet Security shows On with Tunnel 2.0."
+        "In the POV console, Next steps > Set up a pilot device: pick the pilot user and the OS, then copy the one-line command or download the setup script (it has the POV's probe pack inside).",
+        "On the device: macOS, paste it into Terminal (approve the settings profile in System Settings when asked); Windows, paste it into PowerShell opened with Run as administrator.",
+        "It installs Client Connector for this tenant (cloud, domain and user filled in) from the kit's pinned, signature-checked copy. To use the customer's own version instead, download it from Platform Releases and give it to the setup (--pkg FILE on macOS, -Msi FILE on Windows).",
+        "Sign in to Client Connector as the pilot user, then check Internet Security shows On (More > Update Policy if not).",
+        "With the setup script, the POV's tests run by themselves once traffic goes through Zscaler; send the results file from the Desktop to the SE."
       ],
-      "done": "The kit's check finds each pilot device registered.",
-      "check": "zcc_devices"
+      "done": "The kit's check finds each pilot device registered, and the probe results are imported.",
+      "check": "zcc_devices",
+      "path": "Infrastructure > Common Resources > Deployment > Platform Releases (installers; per Zscaler Help)"
     },
     "zcc.by_hand": {
       "title": "Build the POV's Client Connector profiles by hand",

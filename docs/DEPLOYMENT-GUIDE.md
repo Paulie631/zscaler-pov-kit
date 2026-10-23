@@ -146,6 +146,25 @@ checking its SHA-256, and **Roll back** goes back one version.
 7. **Next steps**: the steps for people, the probe pack, the ZPA connector template (AWS or Azure) and its key, the AI
    Guard policy switch.
 
+### Setting up a pilot device
+
+**Next steps → Set up a pilot device** installs Client Connector already pointed at the customer's tenant, then the
+kit's probe. Pick the pilot user and macOS or Windows, then either:
+
+- **Copy the one-line command** and paste it on the device: in Terminal on a Mac, or in PowerShell opened with
+  **Run as administrator** on Windows; or
+- **Download the setup script** for the customer's IT to read or push with their own tools. It has the POV's probe
+  pack inside, so once the user signs in and traffic goes through Zscaler, the POV's tests run by themselves and the
+  results land on the Desktop for you to import.
+
+The cloud (**Detect** reads it from ZIdentity, or type it, such as `zscalertwo`), the user's domain and the user name
+are filled in: `CLOUDNAME`, `USERDOMAIN` and `UNAME` on Windows; on macOS, a settings profile with the same values
+(`com.zscaler.installparams`, what an MDM would push) that the user approves once in System Settings → General →
+Device Management. The installer is the kit's pinned copy from its `zcc-installer` pre-release, and the device checks
+its SHA-256 and that it's signed by Zscaler before installing. To use the customer's own version, download it from
+**Infrastructure → Common Resources → Deployment → Platform Releases** and give it to the setup (`--pkg FILE` on
+macOS, `-Msi FILE` on Windows). Remove the settings profile from a Mac after the POV.
+
 ### Steps the API can't do
 
 Some steps need a person in the Zscaler console: creating the API client, giving it a ZDX role, granting an

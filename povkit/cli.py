@@ -196,6 +196,9 @@ def c_probe(a):
     if a.criteria:
         want = set(a.criteria.split(","))
         crit = [c for c in crit if c["id"] in want]
+    if a.wait and not probe.wait_for_zscaler(a.wait, print):
+        raise KitError(f"Traffic still doesn't go through Zscaler after {a.wait} minutes, so the tests would mean "
+                       "nothing. Check Client Connector is signed in with Internet Security On, then run this again.")
     res = probe.run(crit)
     out = Path(a.out or f"pov-probe-{res['run_id']}.json")
     probe.save(res, out)
@@ -675,6 +678,7 @@ def parser():
     s.add_argument("--out")
     s = cmd("probe", c_probe, "on a pilot device: run the probe tests (no keys)")
     s.add_argument("--pack")
+    s.add_argument("--wait", type=int, default=0, help="minutes to wait for traffic to go through Zscaler first")
     s.add_argument("--criteria")
     s.add_argument("--out")
     s = cmd("import-probe", c_import_probe, "import a probe results file")
