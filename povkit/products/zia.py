@@ -548,7 +548,7 @@ class ZIA(Product):
         for ca in tpl["customer_actions"]:
             out.append(item("zia", "customer_action", ca["key"], ca["name"], action="customer_action",
                             criteria=ca["criteria"], why=ca["why"], console=ca["console"]))
-        if snap.get("zidentity"):
+        if snap.get("zidentity") and not snap.get("test_users"):   # ZIA's own test users need no ZIdentity entitlement
             out.append(item("zia", "customer_action", "zia.ca.entitlement",
                             f"Every member of '{grp['name']}' has the Internet & SaaS entitlement in ZIdentity",
                             action="customer_action", console="zid.entitlements",

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.5
+
+From the live lab test (ZIA, Client Connector and AI Guard, with test users made in ZIA):
+- **Apply no longer stops when there's no default Client Connector profile to copy.** Preflight warned, but apply
+  then failed with "the forwarding profile the change list copies is gone", so AI Guard was never reached. It now
+  prints the spec to build the profiles by hand (Fix drift adopts them) and carries on.
+- ZIA's own test users no longer get the customer action "has the Internet & SaaS entitlement in ZIdentity".
+
 ## 0.9.4
 
 From the live lab test, and mirroring the SE demo kit:

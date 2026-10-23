@@ -269,3 +269,13 @@ def test_teardown_takes_members_out_before_deleting_the_group(zpov, tenant, tena
     lifecycle.teardown(zpov, tenant_for, log)
     assert not tenant.zid_groups
     assert any(u["id"] == "z1" for u in tenant.zid_users)        # Jane herself is untouched
+
+
+def test_no_default_profile_to_copy_doesnt_stop_apply(tpov, tenant, tenant_for):
+    tenant.fwds, tenant.apps = [], []                            # as the live lab tenant: nothing to copy
+    items, _ = approve(tpov, tenant_for)
+    assert not [i for i in items if i["key"] == "zia.ca.entitlement"]   # ZIA's own test users need no ZIdentity entitlement
+    lines = []
+    lifecycle.apply(tpov, tenant_for, lambda lvl, msg: lines.append((lvl, msg)))
+    assert any(lvl == "warn" and "built by hand" in msg for lvl, msg in lines)
+    assert tenant.by_name("url_filtering", "ZPOV: Block gambling")

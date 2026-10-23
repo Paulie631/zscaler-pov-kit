@@ -212,6 +212,10 @@ class ZCC(Product):
                             "ledger, so the kit won't create another. If it was built for this POV, `pov-kit status "
                             "--fix` adopts it; otherwise rename or delete it.")
                 return
+            if not fwd_it["body"].get("copy_of"):   # discovery found no default profile to copy (preflight warned)
+                log("warn", "No default forwarding profile to copy, so the Client Connector profiles are built by "
+                            "hand to this spec, then Status → Fix drift adopts them by name. " + fwd_it["spec"])
+                return
             src = next((f for f in fwds if str(g(f, "id")) == str(fwd_it["body"]["copy_of"])), None)
             if not src:
                 raise KitError("The forwarding profile the change list copies is gone. Run `pov-kit plan` again.")
