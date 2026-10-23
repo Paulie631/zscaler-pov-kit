@@ -171,6 +171,20 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
 </div></div>
 
 <div class="view" id="v-criteria"><div class="wrap stack">
+  <div class="panel" id="ccpanel">
+    <h2>The customer's success criteria</h2>
+    <p class="muted" style="margin-top:0">Paste their list, or upload their document (Word, PDF, Excel, CSV). The kit maps each criterion to the catalog, and writes the configuration and tests for the rest as use cases. It all lands in one change list for the customer to approve.</p>
+    <textarea id="cctext" placeholder="One criterion per line, e.g.&#10;Block access to gambling and anonymizer sites for the pilot group&#10;Prevent upload of credit card numbers to personal webmail&#10;Detect prompt injection against our support chatbot" style="min-height:110px"></textarea>
+    <div class="row" style="margin-top:8px;gap:8px">
+      <button id="ccread">Read the list</button>
+      <label class="chk"><input type="file" id="ccfile" accept=".docx,.pdf,.xlsx,.csv,.txt,.md" style="display:none">Upload their document…</label>
+      <button id="ccpick">Pick from the catalog…</button>
+      <span class="hint" id="cchint"></span>
+    </div>
+    <div id="ccpickbox" style="display:none;margin-top:8px"></div>
+    <div id="ccbody"></div>
+    <div class="log" id="cclog" style="display:none"></div>
+  </div>
   <div class="panel">
     <h2>Success criteria</h2>
     <div class="stat" id="crstat"></div>
@@ -329,7 +343,7 @@ $("#updroll").onclick=async()=>{if(!confirm("Go back to the previously installed
   try{const r=await api("/api/update/rollback",{});updLine("ok",`Rolled back to ${r.version}.`);await api("/api/update/restart",{});await waitForRestart()}
   catch(e){updLine("fail",e.message)}};
 setTimeout(()=>checkUpd(false),1500);
-function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria")criteria();if(t=="logs")logs();if(t=="usecases")usecases()}
+function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria"){criteria();ccInit()}if(t=="logs")logs();if(t=="usecases")usecases()}
 
 /* ---------------- setup wizard ---------------- */
 const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Approval","Apply","Next steps"];
@@ -680,6 +694,47 @@ function bindDevice(d,redraw){
       download(r.name,r.text,"text/plain");
       out(note(DEV_OS=="macos"?`Saved ${r.name}. On the Mac: bash ${r.name} (in Terminal). The customer's IT can read it first, or push it with their own tools.`:`Saved ${r.name}. On the PC, in PowerShell with Run as administrator: powershell -ExecutionPolicy Bypass -File .\\${r.name}. The customer's IT can read it first, or push it with their own tools.`,"good"))}
     catch(e){out(note(e.message,"bad"))}};
+}
+
+
+/* ---------------- the customer's success criteria in ---------------- */
+let CC={items:[],rows:null,catalog:[]};
+async function ccInit(){
+  try{const d=await api("/api/criteria/import");CC.catalog=d.catalog||[];CC.rows=d.rows||null;CC.source=d.source}catch(e){CC.catalog=[]}
+  ccDraw();
+  $("#ccread").onclick=async()=>{try{CC.items=(await api("/api/criteria/read",{text:$("#cctext").value})).items;CC.source="pasted text";CC.rows=null;ccDraw()}catch(e){$("#cchint").textContent=e.message}};
+  $("#ccfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;$("#cchint").textContent="Reading "+f.name+"…";
+    try{const b64=await new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(",")[1]);r.onerror=no;r.readAsDataURL(f)});
+      CC.items=(await api("/api/criteria/read",{name:f.name,b64})).items;CC.source=f.name;CC.rows=null;$("#cchint").textContent="";ccDraw()}
+    catch(err){$("#cchint").textContent=err.message}e.target.value=""};
+  $("#ccpick").onclick=()=>{const b=$("#ccpickbox");if(b.style.display=="none"){b.innerHTML=`<div class="cards">${[...new Set(CC.catalog.map(c=>c.product))].map(p=>`<div class="card"><h4>${esc(PSHORT[p]||p)}</h4>${CC.catalog.filter(c=>c.product==p).map(c=>`<label class="chk" style="display:block;margin:3px 0"><input type="checkbox" class="ccpk" value="${esc(c.id)}"> <code>${esc(c.id)}</code> ${esc(c.title)}</label>`).join("")}</div>`).join("")}</div><div class="row" style="margin-top:8px"><button id="ccpickadd">Add the ticked ones</button></div>`;b.style.display="";
+      $("#ccpickadd").onclick=()=>{const ids=$$(".ccpk").filter(x=>x.checked).map(x=>x.value);const rows=CC.rows||[];let n=rows.length;
+        for(const id of ids){const c=CC.catalog.find(x=>x.id==id);rows.push({n:++n,text:c.title,catalog:[id],usecase:"",out_of_scope:false,note:"picked from the catalog",include:true,how:"picked"})}
+        CC.rows=rows;b.style.display="none";ccDraw()}}else b.style.display="none"};
+}
+function ccDraw(){const el=$("#ccbody");
+  if(CC.rows){const ids=CC.catalog.map(c=>c.id);
+    el.innerHTML=`<div class="group-h">${CC.rows.length} criteria${CC.source?" from "+esc(CC.source):""}</div><div class="tablewrap"><table><thead><tr><th></th><th>Their criterion</th><th>Proved by</th></tr></thead><tbody>${CC.rows.map((r,i)=>`<tr>
+      <td><input type="checkbox" class="ccinc" data-i="${i}" ${r.include!==false?"checked":""}></td>
+      <td>${esc(r.text)}${r.note?`<div class="muted" style="font-size:12px">${esc(r.note)}</div>`:""}</td>
+      <td style="min-width:300px">${r.usecase_id?`<span class="chip">${esc(r.usecase_id)}</span> `:""}<select class="ccsel" data-i="${i}"><option value="">a use case (the kit writes it)</option><option value="-" ${r.out_of_scope?"selected":""}>out of scope</option>${ids.map(id=>`<option ${r.catalog&&r.catalog[0]==id?"selected":""}>${esc(id)}</option>`).join("")}</select>${(r.catalog||[]).slice(1).map(x=>` <span class="chip">${esc(x)}</span>`).join("")}
+        <textarea class="ccuc" data-i="${i}" style="margin-top:6px;min-height:44px;${r.catalog&&r.catalog.length||r.out_of_scope?"display:none":""}" placeholder="What to set up and how to show it">${esc(r.usecase||r.text)}</textarea></td></tr>`).join("")}</tbody></table></div>
+      <div class="row" style="margin-top:10px;gap:10px"><button class="primary" id="ccbuild">Build the POV from these ›</button><button id="ccremap">Map again</button><span class="hint">Catalog criteria are chosen for the POV; each use case gets its configuration and tests from Claude (through AI Guard), then joins the change list for the customer to approve.</span></div>`;
+    $$(".ccinc").forEach(x=>x.onchange=()=>{CC.rows[+x.dataset.i].include=x.checked});
+    $$(".ccsel").forEach(x=>x.onchange=()=>{const r=CC.rows[+x.dataset.i];r.out_of_scope=x.value=="-";r.catalog=x.value&&x.value!="-"?[x.value]:[];if(!r.catalog.length&&!r.out_of_scope)r.usecase=r.usecase||r.text;else r.usecase="";ccDraw()});
+    $$(".ccuc").forEach(x=>x.oninput=()=>{CC.rows[+x.dataset.i].usecase=x.value});
+    $("#ccremap").onclick=()=>{CC.items=CC.rows.map(r=>r.text);CC.rows=null;ccDraw();$("#ccmap")&&$("#ccmap").click()};
+    $("#ccbuild").onclick=async()=>{const b=$("#ccbuild");b.disabled=true;$("#cclog").style.display="block";
+      try{const r=await runJob((await api("/api/criteria/build",{rows:CC.rows})).job,$("#cclog"));
+        $("#cclog").insertAdjacentHTML("beforeend",`<div class="ok">Next: Setup → Change list to review it with the customer, then Approval.</div>`);await load();criteria()}
+      catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
+  } else if(CC.items.length){
+    el.innerHTML=`<div class="group-h">${CC.items.length} criteria found${CC.source?" in "+esc(CC.source):""}</div><ol style="margin:4px 0 8px 18px">${CC.items.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>
+      <div class="row" style="gap:10px"><button class="primary" id="ccmap">Map them ›</button><span class="hint">With the customer's agreement recorded (Use cases tab), Claude maps them through AI Guard; otherwise the kit matches keywords.</span></div>`;
+  } else el.innerHTML="";
+  $("#ccmap")&&($("#ccmap").onclick=async()=>{const b=$("#ccmap");b.disabled=true;$("#cclog").style.display="block";
+    try{const r=await runJob((await api("/api/criteria/map",{items:CC.items,source:CC.source})).job,$("#cclog"));CC.rows=r.rows;ccDraw()}
+    catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
 }
 
 /* ---------------- use cases ---------------- */

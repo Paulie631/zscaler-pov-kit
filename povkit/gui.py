@@ -271,6 +271,11 @@ def api(method, path, body, q):
         if path == "/api/device":
             from . import device_setup
             return 200, device_setup.info(current())
+        if path == "/api/criteria/import":
+            from . import criteria_import
+            p = current()
+            return 200, dict(criteria_import.load(p), catalog=[{"id": c["id"], "product": c["product"], "title": c["title"]}
+                                                                for c in criteria_import.catalog(p)])
         if path == "/api/manual/sheet":
             from . import manual
             return 200, {"text": manual.sheet_md(current())}
@@ -416,6 +421,48 @@ def api(method, path, body, q):
         if body.get("lab") is not True:
             raise KitError("Tick the box to confirm this is your own lab tenant.")
         return 200, {"job": start_job("selftest", lambda log: selftest.run(p, tf, log, lab=True))}
+    if path == "/api/criteria/read":
+        import base64
+        from . import criteria_import
+        if body.get("b64"):
+            raw = base64.b64decode(body["b64"])
+            if len(raw) > 15_000_000:
+                raise KitError("That file is over 15 MB: paste the criteria instead.")
+            text = criteria_import.read(body.get("name") or "", raw)
+        else:
+            text = body.get("text") or ""
+        return 200, {"items": criteria_import.split(text)}
+    if path == "/api/criteria/map":
+        from . import ai, criteria_import
+        p = current()
+        items = [str(x).strip()[:600] for x in body.get("items") or [] if str(x).strip()][:criteria_import.MAX_ROWS]
+
+        def work(log):
+            claude = bool(ai.proxy_key()[0]) and bool(ai.consent(p)) and body.get("ai", True)
+            log("info", f"Mapping {len(items)} criteria " + ("with Claude, through AI Guard" if claude else
+                        "by keywords (Claude isn't set up for this POV: record the customer's agreement in Use cases)"))
+            rows = criteria_import.map_all(p, items, use_ai=claude)
+            criteria_import.save(p, rows, body.get("source") or "pasted text")
+            log("ok", f"{sum(1 for r in rows if r['catalog'])} map to the catalog, "
+                      f"{sum(1 for r in rows if r['usecase'])} become use cases, "
+                      f"{sum(1 for r in rows if r['out_of_scope'])} are out of scope")
+            return {"rows": rows}
+        return 200, {"job": start_job("criteria", work)}
+    if path == "/api/criteria/build":
+        from . import criteria_import
+        p = current()
+        rows = body.get("rows") or criteria_import.load(p).get("rows") or []
+        data = criteria_import.load(p)
+        data["rows"] = rows
+        p.write_json(criteria_import.FILE, data)
+
+        def work(log):
+            log("info", "Reading the tenant (read-only) for a fresh snapshot")
+            snaps, _ = lifecycle.discover(p, tf)
+            res = criteria_import.build(p, snaps, rows, log, by=body.get("by") or "SE")
+            log("ok", "Done. Review the change list, then the customer approves it.")
+            return res
+        return 200, {"job": start_job("criteria", work)}
     if path == "/api/manual/mark":
         from . import manual
         return 200, manual.mark(current(), body.get("key"), body.get("by"), undo=bool(body.get("undo")))

@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.10,<3.15"
-# dependencies = ["zscaler-sdk-python>=1.11", "requests>=2.31", "keyring>=24", "truststore>=0.9", "cryptography>=42"]
+# dependencies = ["zscaler-sdk-python>=1.11", "requests>=2.31", "keyring>=24", "truststore>=0.9", "cryptography>=42", "pypdf>=4"]
 # ///
 """Zscaler POV Kit: set up, prove and hand over a proof of value in a customer's tenant.
 

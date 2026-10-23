@@ -131,8 +131,12 @@ def render_report(pov, rows, approval):
     n = {s: sum(1 for r in rows if r["status"] == s) for s in ("pass", "fail", "incomplete")}
     summary = "".join(f"<tr><td><code>{e(r['criterion']['id'])}</code></td><td>{e(r['criterion']['title'])}</td>"
                       f"<td class='{r['status']}'>{e(r['status'])}</td></tr>" for r in rows)
+    from .criteria_import import customer_view
+    theirs = customer_view(pov)
+    asked = lambda cid: (f"<p class='meta'>Your criterion: {'; '.join(e(t) for t in theirs[cid])}</p>"  # noqa: E731
+                         if cid in theirs else "")
     detail = "".join(f"<h2>{e(r['criterion']['id'])} · {e(r['criterion']['title'])}</h2>"
-                     f"<p>{e(r['criterion'].get('statement', ''))}</p>"
+                     f"{asked(r['criterion']['id'])}<p>{e(r['criterion'].get('statement', ''))}</p>"
                      + "".join(_proof(k, v) for k, v in r["proofs"].items()) for r in rows)
     appr = (f"approved by {e(approval['by'])} on {e(approval['at'][:10])}, change list <code>{e(approval['hash'][:16])}</code>"
             if approval else "change list not approved")

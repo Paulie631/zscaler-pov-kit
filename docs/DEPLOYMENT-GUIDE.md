@@ -105,9 +105,14 @@ The **Updates** button at the top of the console tells you when a new version is
 
 ## Part 3: Before the POV
 
-1. Agree the success criteria with the customer from the catalog (**Success criteria** lists them for the POV's
-   products), and record the chosen ones with `pov-kit set criteria IS-URL-01,IS-SSL-01,...`. Until you do, the POV
-   uses every criterion for its products.
+1. Agree the success criteria with the customer. Once the POV exists, **Success criteria → The customer's success
+   criteria** takes their list: paste it, upload their document (Word, PDF, Excel or CSV), or pick from the catalog.
+   **Map them** matches each one to the catalog (with Claude through AI Guard once the customer's agreement is
+   recorded in Use cases; otherwise by keywords), and you can change any mapping. **Build the POV from these** chooses
+   the catalog criteria and, for the rest, has Claude write the configuration and tests as use cases. Everything
+   joins the change list for the customer to approve, and the report shows each of their criteria in their own words
+   next to its proof. (By hand: `pov-kit set criteria IS-URL-01,IS-SSL-01,...`; until criteria are chosen, the POV
+   uses every criterion for its products.)
 2. **Setup → Start a POV**: the customer's name and the products, then **Step by step** (the end date, prefix and two
    API clients are under **More options**). On **Connect**, **Copy the role spec** and send it to the customer's
    admin. They create the client at kickoff, or give you a temporary admin login to create it yourself. The optional

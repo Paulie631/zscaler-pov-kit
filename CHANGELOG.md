@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.20
+
+- **The customer's success criteria in, the POV out.** Success criteria → **The customer's success criteria**: paste
+  their list, upload their document (Word, PDF, Excel or CSV) or pick from the catalog. **Map them** matches each one
+  to the catalog (Claude through AI Guard, with the customer's agreement; otherwise keywords), editable row by row.
+  **Build the POV from these** chooses those catalog criteria and has Claude write the configuration and tests for
+  the rest as use cases (accepted when the kit can build them, or kept as steps to attest). It all joins one change
+  list for the customer to approve, and the report quotes each of their criteria next to its proof.
+
 ## 0.9.19
 
 - **AI Guard: the SE demo kit's full test library as success criteria.** Eight criteria, each proved automatically
