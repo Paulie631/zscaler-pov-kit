@@ -210,6 +210,30 @@ Zscaler settings: never use your own work laptop as a pilot device. To set up a 
 VM, say), add `--replace` (macOS) or `-Replace` (Windows). Remove the settings profile from a Mac after the
 POV.
 
+### Traffic for the dashboards (ZIA)
+
+The probe proves each criterion once; the **traffic generator** keeps the customer's ZIA dashboards, Insights and
+Shadow IT busy with the POV's policy at work, the way the SE demo kit does. It browses web categories, SaaS and GenAI
+apps, fetches the EICAR and Google Safe Browsing test pages, posts fake card numbers (published test ranges), uploads
+and downloads file types, makes DNS lookups and tries the POV's blocked ports. No keys; nothing in the tenant changes.
+Each round first asks ip.zscaler.com and sends nothing unless traffic goes through Zscaler.
+
+On a pilot device with the kit (the device setup installs it):
+
+```
+pov-kit traffic check                  # in the POV's tenant, as a pilot user? (the tenant-check page is blocked)
+pov-kit traffic run                    # one round now (--types web,saas,genai,threats,dlp,files,dns,ports, --count N)
+pov-kit traffic schedule --every 30    # a round every 30 minutes while signed in; --remove stops it
+```
+
+With no spare device: **Next steps → ZIA traffic generator → AWS generator template** writes a CloudFormation template
+for the pilot user chosen in **Set up a pilot device**: a Windows Server instance in its own VPC, no inbound ports, an
+SSM role (connect with Fleet Manager remote desktop), the kit's pinned Client Connector for the POV's cloud and user,
+and a scheduled round every 30 minutes; a weekday start and nightly stop keeps the cost down. Upload it in
+CloudFormation (**Create stack → Upload a template file**), sign in to Client Connector once over remote desktop, and
+read **POV traffic log** on its desktop. Delete the stack at the end of the POV (CLI: `pov-kit traffic aws`). On
+CloudShare, the Windows pilot from the blueprint runs `pov-kit traffic schedule` the same way.
+
 ### Steps the API can't do
 
 Some steps need a person in the Zscaler console: creating the API client, giving it a ZDX role, granting an
@@ -285,6 +309,8 @@ Any step can be revisited after Quick start.
 
 - **Before every customer session:** **Status → Check now**. It says whether the tenant still matches the approval,
   what drifted (and **Fix drift** repairs only the POV's own objects), the end date and the last backup.
+- **Dashboards:** keep the traffic generator running on a pilot device (`pov-kit traffic schedule`) or the AWS
+  generator, so ZIA, Insights and Shadow IT have the pilot group's traffic to show.
 - **Evidence:** run the probe on each pilot device (the setup script runs it for you), and import the results
   (**Success criteria → Import probe results**). **Run API proofs** checks what the API can see: the ZIA rules behind
   each criterion and its test sites' categories, connectors, AI Guard scans, ZDX scores and SaaS scans. Record what

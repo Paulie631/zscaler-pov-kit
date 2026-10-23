@@ -5,5 +5,8 @@ line-length = 150
 select = ["E", "F", "W", "B"]
 ignore = ["E731"]
 
+[tool.ruff.lint.per-file-ignores]
+"povkit/traffic_aws.py" = ["E501"]   # the instance's PowerShell first-boot script
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

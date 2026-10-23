@@ -577,6 +577,13 @@ def api(method, path, body, q):
             p.log("device", f"device setup script for {email} ({os_})")
             return 200, {"name": name, "text": text}
         return 200, {"line": device_setup.one_liner(p, os_, email)}
+    if path == "/api/traffic/aws":
+        from . import traffic_aws
+        p = current()
+        name, t = traffic_aws.for_pov(p, pilot_user=str(body.get("email") or "").strip() or None,
+                                      every=int(body.get("every") or 30), per_type=int(body.get("count") or 4))
+        p.log("traffic", f"AWS traffic generator template for {t['Parameters']['PilotUser']['Default']}")
+        return 200, {"name": name, "template": t}
     if path == "/api/probe-pack":
         return 200, evidence.probe_pack(current())
     if path == "/api/backup":

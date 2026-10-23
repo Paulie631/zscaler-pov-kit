@@ -629,6 +629,42 @@ def c_steps(a):
     return 0
 
 
+def c_traffic(a):
+    from . import traffic
+    if a.what == "check":
+        bad = 0
+        for c in traffic.check(cloud=a.cloud):
+            say({"ok": "ok", "fail": "fail"}.get(c["status"], "warn"), f"{c['label']}: {c['detail']}")
+            if c["fix"]:
+                print(f"        {c['fix']}")
+            bad += c["status"] == "fail"
+        return 1 if bad else 0
+    if a.what == "aws":
+        from . import traffic_aws
+        out = traffic_aws.write(a.out, _pov(a), pilot_user=a.user, every=a.every, per_type=a.count)
+        print(f"Wrote {out}. Upload it in the AWS CloudFormation console (Create stack > Upload a template file); "
+              "the stack's Outputs say how to connect and sign in. Delete the stack to remove everything.")
+        return 0
+    if a.what == "schedule":
+        if a.remove:
+            traffic.schedule_remove()
+            print("Scheduled traffic removed.")
+            return 0
+        types = [t for t in (a.types or "").split(",") if t] or None
+        print(f"Scheduled: {traffic.schedule_install(a.every, a.count, types)}. Each round sends nothing unless "
+              f"traffic goes through Zscaler. Results: {traffic.log_dir()}. Stop it: `pov-kit traffic schedule --remove`.")
+        return 0
+    types = [t for t in (a.types or "").split(",") if t] or None
+    bad = [t for t in types or [] if t not in traffic.TYPES]
+    if bad:
+        raise KitError(f"Unknown traffic type(s): {', '.join(bad)}. Use any of: {', '.join(traffic.TYPES)}.")
+    res = traffic.run(types=types, count=a.count, log_dir=traffic.log_dir())
+    if res.get("skipped"):
+        return 2
+    print(f"\n{res['summary']}")
+    return 0
+
+
 def c_version(a):
     print(VERSION)
 
@@ -721,6 +757,15 @@ def parser():
     s.add_argument("--done")
     s.add_argument("--by")
     s.add_argument("--sheet", action="store_true")
+    s = cmd("traffic", c_traffic, "traffic check | run | schedule on a pilot device (no keys); traffic aws: a generator for AWS")
+    s.add_argument("what", choices=["check", "run", "schedule", "aws"])
+    s.add_argument("--user", help="with aws: the pilot user the generator signs in as (default: the first)")
+    s.add_argument("--out", help="with aws: the template file to write")
+    s.add_argument("--types", help="any of: web,saas,genai,threats,dlp,files,dns,ports (default: all)")
+    s.add_argument("--count", type=int, default=4, help="requests per type")
+    s.add_argument("--every", type=int, default=30, help="with schedule: minutes between rounds (15 to 1440)")
+    s.add_argument("--remove", action="store_true", help="with schedule: stop the scheduled rounds")
+    s.add_argument("--cloud", help="with check: the Zscaler cloud traffic should reach (e.g. zscalertwo)")
     s = cmd("diagnostics", c_diagnostics, "a zip for the kit owner (no secrets, no customer data)")
     s.add_argument("--out")
     s = cmd("update", c_update, "install the latest release from GitHub (--check: only check, --rollback: go back one)")

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.23
+
+- **The SE demo kit's ZIA traffic generator**, for the customer's dashboards: `pov-kit traffic check | run | schedule`
+  on a pilot device (web categories, SaaS, GenAI, EICAR and phishing test pages, fake card numbers, file types, DNS,
+  the POV's blocked ports), matched to the POV policy (the tenant check is the POV's own blocked page). Each round
+  sends nothing unless ip.zscaler.com confirms traffic goes through Zscaler.
+- **An AWS generator** (Next steps → ZIA traffic generator, or `pov-kit traffic aws`): a CloudFormation template for a
+  Windows instance with the kit's pinned Client Connector for the POV's cloud and pilot user, no inbound ports, and a
+  round every 30 minutes.
+
 ## 0.9.22
 
 - **Guided demos in the AI Guard tab**, from the SE demo kit: six storylines with a Say/Show talk track, presenter
