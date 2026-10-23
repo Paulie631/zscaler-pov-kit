@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.28
+
+- **CloudShare for the traffic generator in the console:** Next steps → ZIA traffic generator → **CloudShare Windows
+  pilot script**. One PowerShell file with the POV's probe pack inside: it installs the probe if needed, checks the
+  device is in the POV's tenant and schedules a round every 30 minutes.
+
 ## 0.9.27
 
 - **Deleting a POV that still has objects in the tenant** no longer stops at a dead end. The Delete dialog lists

@@ -251,7 +251,8 @@ SSM role (connect with Fleet Manager remote desktop), the kit's pinned Client Co
 and a scheduled round every 30 minutes; a weekday start and nightly stop keeps the cost down. Upload it in
 CloudFormation (**Create stack → Upload a template file**), sign in to Client Connector once over remote desktop, and
 read **POV traffic log** on its desktop. Delete the stack at the end of the POV (CLI: `pov-kit traffic aws`). On
-CloudShare, the Windows pilot from the blueprint runs `pov-probe traffic schedule` the same way. The AWS template
+CloudShare, **CloudShare Windows pilot script** on the same card sets up the blueprint's Windows pilot the same way
+(the probe pack, a check, and a round every 30 minutes). The AWS template
 carries the POV's probe pack, so download it again after the criteria change.
 
 ### Steps the API can't do

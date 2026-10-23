@@ -150,3 +150,18 @@ def test_kit_commands_still_work(pov, monkeypatch, tmp_path, capsys):
     out = tmp_path / "res.json"
     assert cli.main(["probe", "--pack", str(f), "--out", str(out)]) in (0, None)
     assert json.loads(out.read_text())["pov"] == pov.id
+
+
+def test_cloudshare_traffic_script(pov):
+    from povkit.core import KitError as KE
+    with pytest.raises(KE, match="cloud"):
+        traffic_aws.cloudshare_script(pov)
+    pov.cfg["zcc"] = {"cloud": "zscalertwo"}
+    pov.save()
+    name, text = traffic_aws.cloudshare_script(pov, every=5)
+    assert name == f"zpov-traffic-{pov.id}.ps1"
+    assert "traffic schedule --every 15" in text and "traffic check --cloud zscalertwo" in text
+    assert "install-probe.ps1" in text and "pack install" in text and "{" in text and "{{" not in text
+    import base64
+    b64 = text.split('FromBase64String("')[1].split('"')[0]
+    assert json.loads(base64.b64decode(b64))["pov"] == pov.id

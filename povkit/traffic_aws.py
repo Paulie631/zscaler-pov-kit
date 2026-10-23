@@ -246,3 +246,47 @@ def write(path, pov, **kw):
     out = Path(path or name)
     out.write_text(json.dumps(t, indent=2), encoding="utf-8")
     return out
+
+
+CLOUDSHARE = r"""# Zscaler POV {pov}: the ZIA traffic generator on a CloudShare Windows pilot (or any Windows pilot device).
+# Run it after the pilot device setup (Client Connector signed in as a pilot user), in PowerShell:
+#   powershell -ExecutionPolicy Bypass -File .\{name}
+# It installs the POV probe if it isn't there, installs this POV's probe pack (so the traffic follows the POV's
+# criteria), checks this device is in the POV's tenant, then sends a round of traffic every {every} minutes while
+# you're signed in. No keys; nothing in the tenant changes. Stop it: pov-probe.cmd traffic schedule --remove
+$ErrorActionPreference = "Stop"
+$Repo = if ($env:ZPOV_KIT_REPO) {{ $env:ZPOV_KIT_REPO }} else {{ "{repo}" }}
+$home_ = if ($env:ZPOV_PROBE_HOME) {{ $env:ZPOV_PROBE_HOME }} else {{ Join-Path $env:USERPROFILE ".zscaler-pov-probe" }}
+New-Item -ItemType Directory -Force -Path $home_ | Out-Null
+$packf = Join-Path $home_ "pack-download-{pov}.json"
+[IO.File]::WriteAllBytes($packf, [Convert]::FromBase64String("{pack}"))
+$probe = Join-Path $home_ "app\pov-probe.cmd"
+if (-not (Test-Path $probe)) {{
+  $env:ZPOV_PACK_FILE = $packf
+  & ([scriptblock]::Create((Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/install-probe.ps1")))
+}} else {{
+  & $probe pack install $packf
+}}
+Write-Host ""
+Write-Host "  Checking this device is in the POV's tenant, as a pilot user..."
+& $probe traffic check --cloud {cloud}
+if ($LASTEXITCODE -ne 0) {{ Write-Host "  Not ready yet: sign in to Client Connector as a pilot user. Rounds wait until traffic goes through Zscaler." }}
+& $probe traffic schedule --every {every}
+& $probe traffic run --count 2
+"""
+
+
+def cloudshare_script(pov, every=30):
+    """-> (file name, PowerShell text) for the CloudShare Windows pilot: probe, this POV's pack, scheduled traffic."""
+    import base64
+    from . import device_setup, evidence
+    from .core import KitError
+    if "zia" not in pov.products:
+        raise KitError("The traffic generator is for ZIA, which isn't in this POV.")
+    cloud = device_setup.cloud(pov)
+    if not cloud:
+        raise KitError("Set the Zscaler cloud first (Next steps > Set up a pilot device > Detect).")
+    every = max(15, min(int(every), 1440))
+    pack = base64.b64encode(json.dumps(evidence.probe_pack(pov), separators=(",", ":")).encode()).decode()
+    name = f"zpov-traffic-{pov.id}.ps1"
+    return name, CLOUDSHARE.format(pov=pov.id, name=name, every=every, repo=REPO, pack=pack, cloud=cloud)

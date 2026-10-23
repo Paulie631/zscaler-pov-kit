@@ -587,6 +587,12 @@ def api(method, path, body, q):
                                       every=int(body.get("every") or 30), per_type=int(body.get("count") or 4))
         p.log("traffic", f"AWS traffic generator template for {t['Parameters']['PilotUser']['Default']}")
         return 200, {"name": name, "template": t}
+    if path == "/api/traffic/cloudshare":
+        from . import traffic_aws
+        p = current()
+        name, text = traffic_aws.cloudshare_script(p, int(body.get("every") or 30))
+        p.log("traffic", "CloudShare traffic generator script")
+        return 200, {"name": name, "text": text}
     if path == "/api/probe-pack":
         return 200, evidence.probe_pack(current())
     if path == "/api/backup":

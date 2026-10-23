@@ -50,7 +50,10 @@ Nothing here touches a Zscaler tenant except enrolling the connectors with the P
    `powershell -ExecutionPolicy Bypass -File .\<the script> -Msi C:\ZPOV\<the installer file>`. Sign in as the
    pilot user; the POV's tests run once traffic goes through Zscaler, and the results land on the Desktop.
    (The one-line command works too, without the tests: run the probe afterwards with the probe pack.)
-   For traffic on the customer's dashboards all through the POV, run `pov-probe traffic schedule --every 30` there too.
+   For traffic on the customer's dashboards all through the POV: **Next steps → ZIA traffic generator → CloudShare
+   Windows pilot script**. Copy it to the pilot and run `powershell -ExecutionPolicy Bypass -File .\<the script>`.
+   It installs this POV's probe pack, checks the device is in the POV's tenant, and sends a round every 30 minutes
+   while the pilot user is signed in to Windows. Download and run it again after the criteria change.
 5. When the POV ends: delete the CloudShare environment first (the connectors with it), then remove the POV in the
    console (**Handover → Remove the POV**): ZPA teardown keeps the connector group while connectors are enrolled.
 
