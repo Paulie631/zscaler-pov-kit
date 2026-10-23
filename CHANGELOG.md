@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.14
+
+- **The pilot-device setup never takes over a work laptop.** If Client Connector is already installed, or (macOS) an
+  MDM already sets Zscaler's install settings, it stops and changes nothing, rather than reinstalling Client Connector
+  for the POV's tenant and signing it out of the company's. `--replace` / `-Replace` is for a device meant only for
+  the POV.
+
 ## 0.9.13
 
 - **Cloud detection fix** (seen live): a PAC file's bypass lines mention `*.zscaler.net` whatever the cloud, so a

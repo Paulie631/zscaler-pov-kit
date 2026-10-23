@@ -16,7 +16,7 @@
 set -euo pipefail
 
 REPO="${ZPOV_KIT_REPO:-Paulie631/zscaler-pov-kit}"
-CLOUD="" DOMAIN="" ZUSER="" PKG="" PACK_B64="${ZPOV_PACK_B64:-}" POV="${ZPOV_POV:-pov}" WAIT=20
+CLOUD="" DOMAIN="" ZUSER="" PKG="" PACK_B64="${ZPOV_PACK_B64:-}" POV="${ZPOV_POV:-pov}" WAIT=20 REPLACE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --cloud) CLOUD="$2"; shift 2 ;;
@@ -24,6 +24,7 @@ while [ $# -gt 0 ]; do
     --user) ZUSER="$2"; shift 2 ;;
     --pkg) PKG="$2"; shift 2 ;;
     --wait) WAIT="$2"; shift 2 ;;
+    --replace) REPLACE=1; shift ;;
     *) echo "Unknown option $1"; exit 2 ;;
   esac
 done
@@ -36,6 +37,22 @@ fail() { printf '\n  %s\n\n' "$*" >&2; exit 1; }
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
 echo; say "Zscaler POV Kit - pilot device setup (macOS)"; say "============================================"
 
+# 0. never take over a device that already has Client Connector (a work laptop's corporate one, say)
+MANAGED="/Library/Managed Preferences/com.zscaler.installparams.plist"
+mine() { [ "$(plutil -extract installation-parameters.cloudName raw "$MANAGED" 2>/dev/null)" = "$CLOUD" ] &&
+         [ "$(plutil -extract installation-parameters.userDomain raw "$MANAGED" 2>/dev/null)" = "$DOMAIN" ]; }
+if [ -z "$REPLACE" ]; then
+  if [ -f "$MANAGED" ] && ! mine; then
+    fail "This Mac already has Zscaler settings from another organization (an MDM profile: your company's, most
+  likely). Installing here would fight them or take over the corporate Client Connector, so nothing was changed.
+  Use a spare Mac or a macOS virtual machine for the pilot device."
+  fi
+  if [ -d "/Applications/Zscaler/Zscaler.app" ] && ! mine; then
+    fail "Client Connector is already installed on this Mac (your company's, perhaps). This setup would reinstall it
+  for the POV's tenant and sign it out of its current one, so nothing was changed. Use a spare Mac or a macOS
+  virtual machine, or run again with --replace if this Mac is meant only for the POV."
+  fi
+fi
 # 1. the installer
 if [ -z "$PKG" ]; then
   curl -fsSL "https://github.com/$REPO/releases/latest/download/zcc_installers.json" -o "$TMP/pins.json" \
@@ -94,8 +111,7 @@ cat > "$PROFILE" <<EOF
   </dict></array>
 </dict></plist>
 EOF
-MANAGED="/Library/Managed Preferences/com.zscaler.installparams.plist"
-if [ ! -f "$MANAGED" ]; then
+if ! mine; then
   open "$PROFILE" </dev/null || true
   say ""
   say "Approve the settings profile: System Settings > General > Device Management (or Privacy & Security >"

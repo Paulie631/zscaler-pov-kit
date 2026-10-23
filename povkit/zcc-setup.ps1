@@ -18,6 +18,7 @@ param(
   [string]$User = "",
   [string]$Msi = "",
   [int]$Wait = 20,
+  [switch]$Replace,
   [string]$PackB64 = $env:ZPOV_PACK_B64,
   [string]$Pov = $(if ($env:ZPOV_POV) { $env:ZPOV_POV } else { "pov" })
 )
@@ -38,6 +39,12 @@ $Tmp = Join-Path ([IO.Path]::GetTempPath()) ("zpov-zcc-" + [Guid]::NewGuid().ToS
 New-Item -ItemType Directory -Path $Tmp | Out-Null
 
 try {
+  # 0. never take over a device that already has Client Connector (a work laptop's corporate one, say)
+  $have = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
+    Where-Object { $_.DisplayName -match '^Zscaler' }
+  if ($have -and -not $Replace) {
+    Fail "Client Connector is already installed on this PC (your company's, perhaps). This setup would reinstall it for the POV's tenant and sign it out of its current one, so nothing was changed. Use a spare PC or a virtual machine, or run again with -Replace if this PC is meant only for the POV."
+  }
   # 1. the installer
   if (-not $Msi) {
     try { $pins = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/zcc_installers.json" }

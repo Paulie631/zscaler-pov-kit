@@ -4,7 +4,7 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.9.13**: every product module, the identity step,
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.9.14**: every product module, the identity step,
 the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
