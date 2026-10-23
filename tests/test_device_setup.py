@@ -65,6 +65,15 @@ def test_detect_cloud_reads_the_entitlement(tenant):
                                  {"serviceName": "ZIA", "cloudName": "zscalertwo.net"}]}
     assert ds.detect_cloud(ReadOnlyTenant(T())) == "zscalertwo"
 
+    class P:   # no cloud in ZIdentity: ZIA's default PAC file names the gateway
+        def call(self, res, method, *a, **kw):
+            if res == "zid.users":
+                return [{"id": "u1"}]
+            if res == "pac_files":
+                return [{"pacContent": 'return "PROXY gateway.zscalerthree.net:80; DIRECT";'}]
+            return {"services": [{"serviceName": "ZIA"}]}
+    assert ds.detect_cloud(ReadOnlyTenant(P())) == "zscalerthree"
+
 
 def test_gui_endpoints(ready, tenant_for, monkeypatch):
     monkeypatch.setattr(gui, "tf", tenant_for)

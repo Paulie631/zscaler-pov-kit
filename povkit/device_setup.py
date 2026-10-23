@@ -38,14 +38,27 @@ def cloud(pov):
     return (pov.cfg.get("zcc") or {}).get("cloud") or ""
 
 
+CLOUD_RE = re.compile(r"\b(zscaler[a-z]*|zscloud|zscalergov|zscalerten)\.net\b", re.I)
+
+
 def detect_cloud(t):
-    """The Zscaler cloud name (zscalertwo...) from ZIdentity's Internet & SaaS entitlement, or None. Read-only."""
+    """The Zscaler cloud name (zscalertwo...), or None. Read-only: ZIdentity's Internet & SaaS entitlement of the
+    first entitled user, then ZIA's PAC files (which name the cloud's gateway, such as gateway.zscalertwo.net)."""
+    return _cloud_from_zid(t) or _cloud_from_pac(t)
+
+
+def _clean(c):
+    c = re.sub(r"\.net$", "", str(c or "").strip().lower())
+    return c if re.fullmatch(r"[a-z0-9]+", c) else None
+
+
+def _cloud_from_zid(t):
     from .identity import ZIA_SERVICE
     try:
-        users = items(t.call("zid.users", "list_users", query_params={"limit": 5}))
+        users = items(t.call("zid.users", "list_users", query_params={"limit": 25}))
     except KitError:
         return None
-    for u in users[:5]:
+    for u in users[:25]:
         try:
             body = t.call("zid.user_entitlement", "get_service_entitlement", g(u, "id"))
         except Exception:   # noqa: BLE001 - one unreadable user shouldn't stop the others
@@ -55,8 +68,8 @@ def detect_cloud(t):
         def walk(x, svc=None, found=found):
             if isinstance(x, dict):
                 name = next((x[k] for k in ("serviceName", "service_name") if isinstance(x.get(k), str)), svc)
-                for k in ("cloudName", "cloud_name"):
-                    if isinstance(x.get(k), str):
+                for k in ("cloudName", "cloud_name", "cloudDomainName", "cloud_domain_name"):
+                    if isinstance(x.get(k), str) and x[k]:
                         found.append((name or "", x[k]))
                 for v in x.values():
                     walk(v, name, found)
@@ -64,11 +77,21 @@ def detect_cloud(t):
                 for v in x:
                     walk(v, svc, found)
         walk(body)
-        zia = [c for n, c in found if ZIA_SERVICE.search(n)] or [c for _, c in found]
-        for c in zia:
-            c = re.sub(r"\.net$", "", c.strip().lower())
-            if re.fullmatch(r"[a-z0-9]+", c):
-                return c
+        for _, c in [f for f in found if ZIA_SERVICE.search(f[0])]:
+            if _clean(c):
+                return _clean(c)
+    return None
+
+
+def _cloud_from_pac(t):
+    try:
+        pacs = items(t.call("pac_files", "list_pac_files"))
+    except KitError:
+        return None
+    for pf in pacs:
+        m = CLOUD_RE.search(" ".join(str(g(pf, k) or "") for k in ("pac_content", "pac_url", "domain")))
+        if m:
+            return m.group(1).lower()
     return None
 
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.12
+
+- **Detect the cloud** also reads ZIA's PAC files (they name the cloud's gateway) when ZIdentity's entitlements
+  don't say, and looks further down ZIdentity's user list for an entitled user. Both read-only.
+
 ## 0.9.11
 
 - **Set up a pilot device from the console.** Next steps → **Set up a pilot device** gives, for a pilot user on macOS
