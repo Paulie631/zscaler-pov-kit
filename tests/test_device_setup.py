@@ -38,7 +38,7 @@ def test_scripts_carry_the_probe_pack_and_parse(ready, tmp_path):
     from povkit import evidence
     pack = evidence.probe_pack(ready)
     name, text = ds.script(ready, "macos", "jane@acme.com", pack)
-    assert name.endswith("-jane.sh") and "set -- --cloud zscalertwo --domain acme.com --user jane" in text
+    assert name.endswith("-jane.sh") and "set -- --cloud zscalertwo --domain acme.com --user jane \"$@\"" in text
     b64 = text.split("ZPOV_PACK_B64='", 1)[1].split("'", 1)[0]
     assert json.loads(base64.b64decode(b64)) == json.loads(json.dumps(pack))
     assert "\r" not in text

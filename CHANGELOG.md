@@ -11,6 +11,13 @@
 - **Quick start from here** on Connect carries on a POV started earlier (to send the customer the role spec before
   the kickoff), instead of starting a second one.
 - The hand-built Client Connector spec covers Mac pilot devices (a macOS app profile with the same settings).
+- An independent check of the guides against the code fixed 17 more points, among them: the safety net is set up
+  once a POV exists; success criteria are recorded with `pov-kit set criteria`; the CloudShare pilot uses the setup
+  script (with the probe pack) and the environment is deleted before teardown; macOS needs `--pkg` until a macOS
+  installer is pinned; the self-test writes only in ZIA, ZPA and AI Guard.
+- **ZDX no longer holds a POV back for want of named pilot users:** it uses the POV's test accounts too, and without
+  any pilot users it warns (deep traces wait for pilot devices anyway).
+- A downloaded setup script takes extra options (`--pkg FILE`, `-Msi FILE`, `--replace`), as the one-line command does.
 
 ## 0.9.17
 

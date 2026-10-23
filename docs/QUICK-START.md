@@ -13,10 +13,10 @@
 
 ## Once
 
-- **Status → Safety net:** turn on encrypted backups (a synced folder and a passphrase in your password manager) and
-  daily reminders.
 - Prove the kit in your own lab tenant: **Setup → Start a POV**, tick **More options → This is my own lab tenant**,
   **Quick start**, then **Logs → Lab tools → Run the self-test**.
+- Then **Status → Safety net:** turn on encrypted backups (a synced folder and a passphrase in your password manager)
+  and daily reminders. (The panel appears once a POV exists.)
 
 ## Your first POV
 

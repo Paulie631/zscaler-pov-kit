@@ -23,8 +23,8 @@ POV, a 60-minute kickoff with the customer's admin, then a few minutes before ea
 
 - **Read before you write.** Discovery is read-only, and nothing is written until the customer approves the exact
   change list. If the tenant changes after approval, apply refuses: make the change list again and ask again.
-- **The kit only touches what it created.** Every object carries the prefix and the `zpov:<pov-id>` stamp and sits in
-  the POV's ledger. The customer's own objects are never edited, reordered or deleted; changes to them are customer
+- **The kit only touches what it created.** Every object carries the prefix and sits in the POV's ledger, and most
+  also carry a `zpov:<pov-id>` stamp in their description. The customer's own objects are never edited, reordered or deleted; changes to them are customer
   steps, listed for them to make.
 - **Pilot users only.** Every rule applies to the pilot group (or a SAML attribute), never to everyone.
 - **Never activate someone else's work.** If ZIA has pending changes, the kit stops until the customer's admin
@@ -66,8 +66,8 @@ POV, a 60-minute kickoff with the customer's admin, then a few minutes before ea
 - [ ] Optional, and can come later: who the pilot users are (a group, or named people; until then the POV starts with
   a test account), the POV app for ZPA (until then, the kit's test app), and where the App Connectors run (their AWS
   or Azure, or your CloudShare lab).
-- [ ] CASB: a SaaS tenant they've connected for SaaS security (an OAuth grant only they can make). Until then, CASB is
-  added later.
+- [ ] CASB: a SaaS tenant they've connected for SaaS security (an OAuth grant only they can make). It's one of the
+  Steps for people; until it's done, the SaaS criteria can't be proved.
 
 ## Part 1: Install the kit (5 minutes)
 
@@ -89,35 +89,33 @@ POV, a 60-minute kickoff with the customer's admin, then a few minutes before ea
 
 The **Updates** button at the top of the console tells you when a new version is out (see *Updating* below).
 
-## Part 2: Your safety net (5 minutes, once)
-
-1. Console: **Status → Safety net → Encrypted ledger backup**. Choose your synced folder and a passphrase of 12+
-   characters, and save the passphrase in your password manager. (`pov-kit backup setup FOLDER`)
-2. **Turn on reminders** in the same panel: a daily notification when a POV is ending, overdue, or not backed up.
-   (`pov-kit remind install`)
-
-## Part 3: Prove the kit in your lab tenant (30 minutes, before your first POV)
+## Part 2: Prove the kit in your lab tenant (30 minutes, before your first POV)
 
 1. **Setup → Start a POV.** Customer: "Lab". Tick the products you sell. Under **More options**, tick **This is my own
    lab tenant**. For the API client, choose **The one Claude Desktop uses** if it's offered, or enter your lab
    client. Click **Quick start**.
-2. **Logs → Lab tools → Run the self-test**. It reads every product, then creates, reads back and deletes one harmless
-   object per product. All green means the kit's API access works from your laptop and network.
-3. Walk a whole POV once: review the change list, approve it, apply, set up your lab pilot device (Part 5), run the
+2. **Your safety net (once, for every POV):** **Status → Safety net → Encrypted ledger backup**. Choose your synced
+   folder and a passphrase of 12+ characters, and save the passphrase in your password manager
+   (`pov-kit backup setup FOLDER`). Then **Turn on reminders** in the same panel: a daily notification when a POV is
+   ending, overdue, or not backed up (`pov-kit remind install`). The panel appears once a POV exists.
+3. **Logs → Lab tools → Run the self-test**. It reads every product, then creates, reads back and deletes one harmless
+   object in ZIA, ZPA and AI Guard. All green means the kit's API access works from your laptop and network.
+4. Walk a whole POV once: review the change list, approve it, apply, set up your lab pilot device (Part 4), run the
    probe, build the report, then **Handover → Remove the POV**. The tenant should be exactly as before.
 
-## Part 4: Before the POV
+## Part 3: Before the POV
 
-1. Agree the success criteria with the customer from the catalog; record them in **Success criteria** (or
-   `pov-kit set criteria IS-URL-01,IS-SSL-01,...`).
+1. Agree the success criteria with the customer from the catalog (**Success criteria** lists them for the POV's
+   products), and record the chosen ones with `pov-kit set criteria IS-URL-01,IS-SSL-01,...`. Until you do, the POV
+   uses every criterion for its products.
 2. **Setup → Start a POV**: the customer's name and the products, then **Step by step** (the end date, prefix and two
    API clients are under **More options**). On **Connect**, **Copy the role spec** and send it to the customer's
    admin. They create the client at kickoff, or give you a temporary admin login to create it yourself. The optional
-   read-only client in the spec is for Claude Desktop's read-only access (Part 6).
+   read-only client in the spec is for Claude Desktop's read-only access (Part 5).
 3. Send the **Customer Overview** (attached to each release) to their security team: what the kit does and never does
    in their tenant, and how approval works.
 
-## Part 5: The kickoff (about 60 minutes, with the customer's admin)
+## Part 4: The kickoff (about 60 minutes, with the customer's admin)
 
 ### 1. Quick start
 
@@ -134,9 +132,10 @@ The kit signs in, then fills in the rest from the tenant, read-only:
 - **The Zscaler cloud** (for setting up pilot devices).
 - **ZPA:** the kit's test app when no app is named.
 
-It runs the preflight checks and opens the change list. Anything that needs fixing first shows under **Needs you**.
-Products that aren't ready yet (no ZDX role on the API client, no SaaS tenant connected, no ZPA group) are **added
-later**: the rest of the POV goes ahead, and once they're fixed, running the checks again and approving the new change
+It runs the preflight checks and opens the change list. If anything needs fixing first, the change list says so, and
+**Preflight** lists it under **Needs you**.
+Products that can't go ahead yet (for example no ZDX role on the API client, or no ZPA group or customer ID) are
+**added later**: the rest of the POV goes ahead, and once they're fixed, running the checks again and approving the new change
 list adds them.
 
 ### 2. Review and approve the change list
@@ -164,7 +163,8 @@ send you, and **Import their approval file** checks it's for this exact list.
   domain your IdP owns, such as Okta's, can't take a ZIdentity password).
 
 A line at the bottom says exactly who the POV's rules will apply to. **More options** has the identity provider (its
-sign-in and MFA sites stay out of SSL inspection), extra sites not to decrypt, and rule placement. The ZPA and CASB
+sign-in and MFA sites stay out of SSL inspection), your own list of sign-in sites not to decrypt (it replaces the
+IdP's list), and rule placement. The ZPA and CASB
 details are on the same page. Any change here means a new change list for the customer to approve.
 
 ### 4. Apply
@@ -195,12 +195,14 @@ kit's probe. Pick the pilot user and macOS or Windows, then either:
 The cloud (**Detect** reads it from the tenant, or type it, such as `zscalertwo`), the user's domain and the user name
 are filled in: `CLOUDNAME`, `USERDOMAIN` and `UNAME` on Windows; on macOS, a settings profile with the same values
 (`com.zscaler.installparams`, what an MDM would push) that the user approves once in System Settings → General →
-Device Management. The installer is the kit's pinned copy, and the device checks its SHA-256 and that it's signed by
-Zscaler before installing. To use the customer's own version, download it from **Infrastructure → Common Resources →
-Deployment → Platform Releases** and give it to the setup (`--pkg FILE` on macOS, `-Msi FILE` on Windows).
+Device Management. On Windows the installer is the kit's pinned copy, checked by SHA-256 and Zscaler's signature. The
+kit has no pinned macOS installer yet, so on a Mac download the `.pkg` from **Infrastructure → Common Resources →
+Deployment → Platform Releases → macOS** in the customer's console and add `--pkg FILE`; on Windows, `-Msi FILE` uses
+the customer's own version the same way. A file you give is checked for Zscaler's signature.
 
 The setup stops, and changes nothing, on a device that already has Client Connector or another organization's
-Zscaler settings: never use your own work laptop as a pilot device. Remove the settings profile from a Mac after the
+Zscaler settings: never use your own work laptop as a pilot device. To set up a dedicated pilot device again (a lab
+VM, say), add `--replace` (macOS) or `-Replace` (Windows). Remove the settings profile from a Mac after the
 POV.
 
 ### Steps the API can't do
@@ -229,18 +231,18 @@ the commands from **Next steps → ZPA App Connectors → CloudShare commands**.
 
 ### The step-by-step path
 
-**Step by step** on Start a POV opens the same work as eight steps (Connect, Pilot users, Preflight, Change list,
-Approval, Apply, Next steps), for two-client POVs or when you want to set everything before the first change list.
+**Step by step** on Start a POV opens the same work as eight steps (Start a POV, Connect, Pilot users, Preflight,
+Change list, Approval, Apply, Next steps), for two-client POVs or when you want to set everything before the first change list.
 Any step can be revisited after Quick start.
 
-## Part 6: During the POV
+## Part 5: During the POV
 
 - **Before every customer session:** **Status → Check now**. It says whether the tenant still matches the approval,
   what drifted (and **Fix drift** repairs only the POV's own objects), the end date and the last backup.
 - **Evidence:** run the probe on each pilot device (the setup script runs it for you), and import the results
   (**Success criteria → Import probe results**). **Run API proofs** checks what the API can see: the ZIA rules behind
   each criterion and its test sites' categories, connectors, AI Guard scans, ZDX scores and SaaS scans. Record what
-  people see as attestations, with a screenshot if you like.
+  people see as attestations (a screenshot can be attached with `pov-kit attest <criterion> --note ... --file`).
 - **New use cases:** check the library first (no AI call). Otherwise, in the **Use cases** tab, record the customer's
   agreement once (names are replaced before anything leaves your laptop, unless they agree to share them), describe
   the use case, refine it in words, and **Add to the change list**. The customer approves the new change list before
@@ -250,7 +252,7 @@ Any step can be revisited after Quick start.
 - **Ask Claude about the tenant:** with the customer's agreement, **Next steps → Ask Claude about this tenant → Add to
   Claude Desktop**. It is read-only: Claude can answer "why was Jane blocked?" but can't change anything.
 
-## Part 7: Closing
+## Part 6: Closing
 
 1. **Success criteria → Draft the summary**, then **Build the report**, and give the customer the report (print it to
    PDF from the browser).
@@ -259,7 +261,8 @@ Any step can be revisited after Quick start.
      the kit never touches it again.
    - **Remove it:** **Handover → Remove the POV**. ZPA: delete the connector stack in AWS or Azure (or the CloudShare
      environment) and the enrolled connectors first; teardown keeps the connector group until they're gone.
-3. Either way, the kit removes the POV's secrets, discovery data, recordings and Claude Desktop entry from your laptop.
+3. Either way, the kit removes the POV's secrets, discovery data, raw API recordings and Claude Desktop entry from
+   your laptop (a recording is first kept as a test fixture with customer names replaced).
    Remind the customer to delete the POV's API clients (the last of the Steps for people).
 4. **Delete the POV** when you no longer need its record: **Setup → Start a POV → Delete…** next to it (or
    `pov-kit delete <pov-id>`). The kit first checks, read-only, that nothing the POV created is still in the tenant;
@@ -269,13 +272,13 @@ Any step can be revisited after Quick start.
 ## Updating, rolling back and recovering
 
 **Update:** when a new version is out, the **Updates** button turns into **Update to x.y.z**. Click it, then **Install
-update**: it verifies the download, installs it and restarts the console (reload the page afterwards). Terminal:
+update**: it verifies the download, installs it and restarts the console; the page reloads itself. Terminal:
 `pov-kit update`.
 
 **Roll back one version:** **Roll back** in the same dialog, or `pov-kit update --rollback`.
 
-**New laptop, or a lost one:** install the kit, then `pov-kit backup restore <pov-id>` with your passphrase, and
-connect again. Without a backup, `pov-kit recover <pov-id> --customer "<name>" --products ...`, connect, then
+**New laptop, or a lost one:** install the kit, point it at the same synced folder (`pov-kit backup setup FOLDER`),
+then `pov-kit backup restore <pov-id>` with your passphrase (or give the `.zpovbak` file's path), and connect again. Without a backup, `pov-kit recover <pov-id> --customer "<name>" --products ...`, connect, then
 `pov-kit recover <pov-id>` finds the POV's objects in the tenant (read-only) and `--write` records them so teardown can
 remove them.
 
@@ -291,6 +294,7 @@ repository is public).
 | Connect: "rejected the API client's sign-in (401)" | Wrong client ID or secret, wrong vanity domain, or the secret was rotated. Re-enter them in Connect |
 | ZPA added later: ZPA customer ID | Copy it from **Administration → API → Legacy API → Private Access API → Copy ID** into Connect (`pov-kit set customer_id`) |
 | ZPA added later: no SCIM group | ZPA needs the pilot users as a group from the customer's IdP (SCIM) or a SAML attribute: set it in Pilot users (ZPA) |
+| ZDX: "Pilot users for ZDX: none known yet" | Deep traces need pilot devices: name the pilot users, or apply the test accounts, then run the checks again |
 | ZDX added later: ZDX readable (403) | The API client has no ZDX role: **Administration → API → OneAPI → API Clients**, edit the client and add one (view only is enough), or take ZDX out of the POV |
 | Preflight: pilot users not in ZIA | With SAML or SCIM, users appear after provisioning or their first sign-in: have each one sign in to Client Connector once |
 | Preflight: ZIdentity entitlements | ZIdentity's API can't grant them: the customer assigns the missing service to the pilot group (Steps for people) |
@@ -298,7 +302,7 @@ repository is public).
 | Apply stops: "don't have the Internet & SaaS entitlement" | The customer gives the POV's pilot group that entitlement, then click **Apply** again: it carries on and creates nothing twice. In a lab, **Test accounts** avoid it |
 | Apply stops: "keeps its users in ZIdentity" | Make the change list again (the test users now go in ZIdentity, on `<vanity>.zslogin.net`), get it approved, apply, then set their passwords in ZIdentity |
 | No option to set a user's password in ZIdentity | The user is on a domain your IdP (Okta, Entra…) owns, which signs them in. Use a user on `<vanity>.zslogin.net` |
-| Pilot device setup: "already has Client Connector" | It's protecting another organization's Client Connector (a work laptop). Use a spare device or a virtual machine |
+| Pilot device setup: "already has Client Connector" | It's protecting another organization's Client Connector (a work laptop). Use a spare device or a virtual machine; on a dedicated pilot device, add `--replace` / `-Replace` |
 | Self-test: "isn't marked as a lab POV" | Start a POV for your lab tenant with **More options → This is my own lab tenant** ticked |
 | Delete: "still in the customer's tenant" | Remove the POV first (**Handover → Remove the POV**) or export it to Terraform, then delete |
 | Apply: "ZIA has changes waiting to be activated" | Another admin's changes are pending. The customer activates or discards them; the kit never does |

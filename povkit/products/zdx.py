@@ -31,7 +31,8 @@ class ZDX(Product):
 
     def discover(self, t, pov):
         c, checks, snap = zcfg(pov), [], {}
-        emails = [e for e in pov.cfg.get("pilot_emails") or [] if e]
+        from ..device_setup import users   # named pilot users and the POV's own test accounts
+        emails = users(pov)
         try:
             apps = items(t.call("zdx.apps", "list_apps"))
         except KitError as e:
@@ -49,9 +50,10 @@ class ZDX(Product):
         snap["apps"] = [{"id": str(g(a, "id")), "name": g(a, "name")} for a in apps[:200] if g(a, "id")]
         checks.append(check("zdx-app", "A ZDX-monitored app to trace", OK if app else WARN,
                             g(app, "name") if app else "none", "" if app else "Monitor an app in ZDX first."))
-        if not emails:
-            checks.append(check("zdx-users", "Pilot users chosen for ZDX", FAIL, "none yet",
-                                "`pov-kit set pilot_emails jane@acme.com,raj@acme.com` (pilot users with Client Connector)."))
+        if not emails:   # deep traces wait for pilot devices anyway, so this doesn't hold ZDX back
+            checks.append(check("zdx-users", "Pilot users for ZDX", WARN, "none known yet",
+                                "Deep traces start once pilot devices report: name the pilot users, or apply the POV's "
+                                "test accounts, then run the checks again."))
             snap["devices"] = []
             return snap, checks
         devs = items(t.call("zdx.devices", "list_devices", query_params={"emails": emails, "since": 24}))

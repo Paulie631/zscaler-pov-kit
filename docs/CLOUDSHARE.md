@@ -45,14 +45,17 @@ Nothing here touches a Zscaler tenant except enrolling the connectors with the P
 3. On the test app machine, note its address (`ip -4 addr`, or CloudShare's machine details). On **each connector**,
    run the command from step 2 with that address at the end. It enrolls the connector, and points
    `pov-app.zpov.internal` at the test app on that connector.
-4. On the Windows pilot: **Next steps → Set up a pilot device → Windows → Copy the one-line command**, paste it
-   into PowerShell opened as administrator, and add `-Msi C:\ZPOV\<the installer file>` at the end. Sign in as the
-   pilot user; the POV's tests run once traffic goes through Zscaler.
-5. When the POV ends: tear it down in the console (Handover), then delete the CloudShare environment.
+4. On the Windows pilot: **Next steps → Set up a pilot device → Windows → Download the setup script** (it has the
+   POV's probe pack inside), copy it to the machine, and in PowerShell opened as administrator run
+   `powershell -ExecutionPolicy Bypass -File .\<the script> -Msi C:\ZPOV\<the installer file>`. Sign in as the
+   pilot user; the POV's tests run once traffic goes through Zscaler, and the results land on the Desktop.
+   (The one-line command works too, without the tests: run the probe afterwards with the probe pack.)
+5. When the POV ends: delete the CloudShare environment first (the connectors with it), then remove the POV in the
+   console (**Handover → Remove the POV**): ZPA teardown keeps the connector group while connectors are enrolled.
 
 ## Notes
 
-- Connectors take 10 to 15 minutes to appear in the POV's connector group; **Steps for people → Deploy the POV's App
+- Connectors take about 10 to 15 minutes to appear in the POV's connector group; **Steps for people → Deploy the POV's App
   Connectors → Check now** ticks once both are up.
 - If the customer names a real app instead of the test app, leave the address off the connector command; the
   connectors then need to reach that app from CloudShare, which usually isn't possible. CloudShare suits the test app.

@@ -154,17 +154,17 @@ def script(pov, os_, email, pack=None):
         body = body.split("\n", 1)[1]   # drop its shebang: this file has its own
         text = ("#!/bin/bash\n"
                 f"# Zscaler POV {pov.id}: pilot device setup for {email} (macOS). Review it, then run:\n"
-                f"#   bash \"<this file>\"\n"
+                f"#   bash \"<this file>\"   (add --pkg FILE to use a .pkg you downloaded)\n"
                 f"export ZPOV_PACK_B64='{b64}' ZPOV_POV='{pov.id}'\n"
-                f"set -- --cloud {c} --domain {domain} --user {name}\n" + body)
+                f"set -- --cloud {c} --domain {domain} --user {name} \"$@\"\n" + body)
         return f"zpov-device-setup-{pov.id}-{name}.sh", text
     if os_ == "windows":
         if "'@" in body:
             raise KitError("zcc-setup.ps1 can't be embedded.")
         text = (f"# Zscaler POV {pov.id}: pilot device setup for {email} (Windows). Review it, then in PowerShell\n"
                 f"# opened with 'Run as administrator':\n"
-                f"#   powershell -ExecutionPolicy Bypass -File \"<this file>\"\n"
+                f"#   powershell -ExecutionPolicy Bypass -File \"<this file>\"   (add -Msi FILE to use an installer you saved)\n"
                 f"$env:ZPOV_PACK_B64 = '{b64}'\n$env:ZPOV_POV = '{pov.id}'\n"
-                f"& ([scriptblock]::Create(@'\n{body}\n'@)) -Cloud {c} -Domain {domain} -User {name}\n")
+                f"& ([scriptblock]::Create(@'\n{body}\n'@)) -Cloud {c} -Domain {domain} -User {name} @args\n")
         return f"zpov-device-setup-{pov.id}-{name}.ps1", text
     raise KitError("The OS is macos or windows.")

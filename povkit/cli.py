@@ -756,7 +756,7 @@ def parser():
     s.add_argument("what", choices=["on", "off", "export"])
     s.add_argument("name", nargs="?")
     s.add_argument("--out")
-    s = cmd("selftest", c_selftest, "in YOUR LAB tenant: read, create, read back and delete one object per product")
+    s = cmd("selftest", c_selftest, "in your lab tenant: read every product; create, read back and delete one object in ZIA, ZPA and AI Guard")
     s.add_argument("--lab", action="store_true")
     s = cmd("mcp", c_mcp, "mcp consent|install|remove|config|status|serve: Claude Desktop's read-only access to the tenant")
     s.add_argument("what", choices=["consent", "install", "remove", "config", "status", "serve"])
