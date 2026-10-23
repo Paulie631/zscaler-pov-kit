@@ -15,7 +15,7 @@ import re
 
 from ..core import GuardError, KitError, naming, secrets
 from ..core.changelist import item
-from ..core.checks import FAIL, OK, WARN, check
+from ..core.checks import FAIL, INFO, OK, WARN, check
 from ..core.ledger import Ledger
 from ..tenant import g, items
 from .base import Product
@@ -49,6 +49,21 @@ def ledger_of(pov):
 
 def zcfg(pov):
     return pov.cfg.get("zpa") or {}
+
+
+# When the customer hasn't named an app, the POV brings its own: the connector template also starts a small private
+# web page (connector_template.py) at this name, in a private DNS zone only the connectors' network can resolve.
+TEST_APP = {"name": "POV test app", "domains": ["pov-app.zpov.internal"], "tcp_ports": ["80"]}
+
+
+def app_of(cfg):
+    """-> {name, domains, tcp_ports, test_app}: the customer's app when named, else the kit's test app."""
+    c = cfg.get("zpa") or {}
+    domains = [d for d in c.get("domains") or [] if d]
+    if domains:
+        return {"name": c.get("app_name") or "POV app", "domains": domains, "tcp_ports": c.get("tcp_ports") or ["443"],
+                "test_app": False}
+    return dict(TEST_APP, test_app=True)
 
 
 def args_for(entry, verb):
@@ -90,13 +105,14 @@ class ZPA(Product):
     def discover(self, t, pov):
         c, checks, snap = zcfg(pov), [], {}
         ledger = ledger_of(pov)
-        domains = [d for d in c.get("domains", []) if d]
-        snap["app"] = {"name": c.get("app_name") or "POV app", "domains": domains,
-                       "tcp_ports": c.get("tcp_ports") or ["443"]}
-        checks.append(check("zpa-app", "POV application chosen", OK if domains else FAIL,
-                            ", ".join(domains) or "no domains yet",
-                            "" if domains else "Set the app's domains or IPs: `pov-kit set zpa.domains app.acme.internal` "
-                            "(and `zpa.tcp_ports 443`)."))
+        app = app_of(pov.cfg)
+        domains = app["domains"]
+        snap["app"] = {k: app[k] for k in ("name", "domains", "tcp_ports")} | {"test_app": app["test_app"]}
+        checks.append(check("zpa-app", "POV application", OK if not app["test_app"] else INFO,
+                            ("the kit's test app, " if app["test_app"] else "") + ", ".join(domains),
+                            "No customer app named, so the connector template also starts a small private web page "
+                            "for the POV to reach. Name a real app any time: `pov-kit set zpa.domains app.acme.internal`."
+                            if app["test_app"] else ""))
         try:
             certs = items(t.call("zpa.enrollment_certificates", "list_enrolment"))
             cert = next((x for x in certs if str(g(x, "name")).lower() == "connector"), None)
@@ -106,8 +122,8 @@ class ZPA(Product):
             if nf and not pov.cfg.get("customer_id"):   # seen live: no customer ID gives a bare 404
                 return {"readable": False}, [check(
                     "zpa-read", "ZPA readable", FAIL, "ZPA answered 'not found': the ZPA customer ID isn't set",
-                    "Copy the customer ID from the ZPA console (Configuration & Control → Public API, or the company "
-                    "page) into Connect → ZPA customer ID (`pov-kit set customer_id 72…`), then run the checks again.",
+                    "Copy the customer ID from the Zscaler console (Administration → API → Legacy API → Private Access API "
+                    "→ Copy ID) into Connect → ZPA customer ID (`pov-kit set customer_id 72…`), then run the checks again.",
                     console="zpa.public_api")]
             return {"readable": False}, [check("zpa-read", "ZPA readable", FAIL, str(e)[:160],
                                                "Check the ZPA customer ID in Connect, and that the client has view "
@@ -115,8 +131,8 @@ class ZPA(Product):
         snap["readable"] = True
         if not pov.cfg.get("customer_id"):
             checks.append(check("zpa-customer-id", "ZPA customer ID", WARN, "not set",
-                                "ZPA through OneAPI needs the tenant's customer ID (ZPA console: Configuration & "
-                                "Control > Public API > API Keys, or the URL). `pov-kit set customer_id 2166...`, or "
+                                "ZPA through OneAPI needs the tenant's customer ID (Administration > API > Legacy "
+                                "API > Private Access API > Copy ID). `pov-kit set customer_id 2166...`, or "
                                 "the Connect step."))
         checks.append(check("zpa-cert", "Connector enrollment certificate", OK if snap["enrollment_cert"] else FAIL,
                             "found" if snap["enrollment_cert"] else "no certificate named 'Connector'",

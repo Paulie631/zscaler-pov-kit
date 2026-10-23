@@ -71,7 +71,9 @@ def state():
     from . import backup
     out = {"version": VERSION, "povs": [], "current": None, "backup_folder": str(backup.folder() or "") or None,
            "products": [{"name": n, "title": products.get(n).title, "phase": products.get(n).phase}
-                        for n in products.CHOOSABLE]}
+                        for n in products.CHOOSABLE],
+           "claude_desktop": (lambda c: {"server": c["server"], "vanity_domain": c["vanity_domain"]} if c else None)(
+               mcp.desktop_client())}
     for pid in povs.all_povs():
         p = povs.Pov(pid)
         out["povs"].append({"id": pid, "customer": p.cfg["customer"], "state": p.cfg.get("state")})
@@ -159,6 +161,60 @@ def start_job(kind, work):
     return jid
 
 
+# ---------------------------------------------------------------- quick start
+def quickstart(body):
+    """Start a POV from three answers (customer, products, API client): the kit fills in the rest from the tenant,
+    runs preflight and makes the change list, all read-only. -> {id, job}. The wizard stays for changing anything."""
+    _, r = api("POST", "/api/pov/new", {"customer": body.get("customer"), "products": body.get("products"),
+                                        "ends": body.get("ends")}, {})
+    p = povs.Pov(r["id"])
+    povs.use(p.id)
+    try:   # the API client first: a bad secret should show at once, not in a job
+        if body.get("from_claude_desktop"):
+            api("POST", "/api/connect/claude-desktop", {}, {})
+        else:
+            api("POST", "/api/connect", {k: body.get(k) for k in ("vanity_domain", "customer_id", "client_id",
+                                                                   "secret", "cloud")}, {})
+    except KitError as e:
+        raise KitError(f"The POV was created, but the API client didn't sign in: {e} Fix it in Connect.") from e
+
+    def work(log):
+        p = current()
+        ic = p.cfg.get("identity") or {}
+        if not (p.cfg.get("pilot_group") or p.cfg.get("pilot_emails") or ic.get("pilot")):
+            settings.set_value(p, "identity.pilot", "test")
+            settings.set_value(p, "identity.test_users", 1)
+            log("ok", "Pilot users: one test user made by the kit (name the customer's group or users any time)")
+        if {"zcc", "zia"} & set(p.products) and not (p.cfg.get("zcc") or {}).get("cloud"):
+            from . import device_setup
+            from .core.guard import ReadOnlyTenant
+            try:
+                c = device_setup.detect_cloud(ReadOnlyTenant(tf(p, "discovery")))
+            except Exception:   # noqa: BLE001 - the cloud is a convenience; Set up a pilot device asks for it if unknown
+                c = None
+            if c:
+                settings.set_value(p, "zcc.cloud", c)
+                log("ok", f"Zscaler cloud: {c}")
+        log("info", "Reading the tenant (read-only) and making the change list…")
+        before = (p.cfg.get("identity") or {}).get("users_in")
+        items, notes, h, checks = lifecycle.plan(p, tf)
+        p = current()
+        if (p.cfg.get("identity") or {}).get("users_in") != before:   # discovery learned where users live: again
+            log("info", "This tenant keeps its users in ZIdentity, so the test user goes there. Making the change "
+                        "list again…")
+            items, notes, h, checks = lifecycle.plan(p, tf)
+        fails = [c for c in checks if c["status"] == "fail"]
+        waiting = [c for c in checks if c.get("waiting") and c["id"].endswith("-waiting")]
+        for c in waiting:
+            log("warn", f"{c['label']}: {c['detail']}")
+        for c in fails:
+            log("fail", f"{c['label']}: {c['detail']}" + (f" Fix: {c['fix']}" if c.get("fix") else ""))
+        creates = sum(1 for i in items if i["action"] != "customer_action")
+        log("ok" if not fails else "warn", f"Change list: {creates} objects to create, ready for the customer to review")
+        return {"id": p.id, "fails": len(fails), "waiting": len(waiting), "creates": creates}
+    return {"id": p.id, "job": start_job("quickstart", work)}
+
+
 # ---------------------------------------------------------------- API
 def api(method, path, body, q):
     """-> (status, payload). Pure function of the request, so tests can call it without a server."""
@@ -232,6 +288,8 @@ def api(method, path, body, q):
                      remind.parse_date(body["ends"]) if body.get("ends") else None)
         settings.set_value(p, "client_mode", body.get("client_mode") or "single")
         return 200, {"id": p.id}
+    if path == "/api/quickstart":
+        return 200, quickstart(body)
     if path == "/api/pov/use":
         povs.Pov(body["id"])
         povs.use(body["id"])
@@ -447,8 +505,10 @@ def api(method, path, body, q):
         if not lifecycle.ledger(p).find("zpa.provisioning_key"):
             raise KitError("No POV provisioning key yet: apply the change list with ZPA in scope first.")
         cloud = body.get("cloud") or "aws"
-        return 200, {"template": connector_template.build_azure(p.id, p.prefix) if cloud == "azure"
-                     else connector_template.build(p.id, p.prefix), "cloud": cloud}
+        from .products.zpa import app_of
+        ta = app_of(p.cfg)["test_app"]
+        return 200, {"template": connector_template.build_azure(p.id, p.prefix, ta) if cloud == "azure"
+                     else connector_template.build(p.id, p.prefix, test_app=ta), "cloud": cloud, "test_app": ta}
     if path == "/api/reveal":   # a secret the SE asks for by name, shown once on their own screen
         p = current()
         what = body.get("what")

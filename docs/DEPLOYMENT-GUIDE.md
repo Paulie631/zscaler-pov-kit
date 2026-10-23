@@ -117,6 +117,14 @@ checking its SHA-256, and **Roll back** goes back one version.
 
 ## Part 5: The kickoff (60 to 90 minutes, with the customer's admin)
 
+**Quick start** (Setup → Start a POV): enter the customer, tick the products, and give the API client (or use the one
+Claude Desktop uses, for your own lab). The kit fills in the rest from the tenant, read-only: one test account as
+the pilot user if nobody's named yet, the Zscaler cloud, and the ZPA test app if no app is named. It runs preflight and
+opens the change list. Products that aren't ready yet (no ZDX role, no SaaS tenant connected, no ZPA customer ID) are
+**added later**: the rest of the POV goes ahead, and once they're fixed, running the checks again and approving the new
+change list adds them. Everything below stays available step by step, to change anything.
+
+
 1. **Connect**: the vanity domain, the client ID and secret (straight to your keychain) and, with ZPA, the customer ID.
 2. **Pilot users**: the pilot group, its members, their identity provider (so its sign-in and MFA sites stay out of
    SSL inspection), and per-product details: the ZPA app, SCIM group or SAML attribute, the CASB tenant.

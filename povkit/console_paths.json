@@ -98,9 +98,10 @@
     },
     "zpa.public_api": {
       "page": "ZPA Public API (shows the customer ID)",
-      "path": null,
-      "verified": null,
-      "search": "ZPA Public API"
+      "path": "Administration > API > Legacy API > Private Access API (Copy ID)",
+      "verified": "2026-10",
+      "search": "ZPA Public API",
+      "source": "live console, pyite lab"
     },
     "zcc.entitlement": {
       "page": "Client Connector Entitlement (Internet & SaaS)",

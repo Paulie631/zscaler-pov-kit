@@ -38,7 +38,7 @@ class ZDX(Product):
             denied = bool(re.search(r"\b403\b|not authori", str(e), re.I))
             return {"readable": False}, [check(
                 "zdx-read", "ZDX readable", FAIL, "the API client has no ZDX role" if denied else str(e)[:160],
-                "In ZIdentity → Integration → API Clients, edit this POV's client and add a ZDX role (view only is "
+                "In the Zscaler console, Administration → API → OneAPI → API Clients, edit this POV's client and add a ZDX role (view only is "
                 "enough for preflight), then run the checks again. The kit never changes its own client's roles. "
                 "Or take ZDX out of the POV's products (Start a POV)." if denied else
                 "Give the discovery client view access to ZDX.", console="oneapi.clients")]

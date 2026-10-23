@@ -207,12 +207,16 @@ class FakeTenant:
         if resource == "zpa.scim_groups":
             q = (kw.get("query_params") or {}).get("search", "")
             return [x for x in self.scim if q.lower() in x["name"].lower()]
+        if resource.startswith("zdx.") and getattr(self, "zdx_forbidden", False):
+            raise KitError("zdx.apps.list_apps failed: 403 Forbidden")
         if resource == "zdx.apps":
             return [{"id": "app7", "name": "Microsoft 365"}]
         if resource == "zdx.devices":
             if method == "get_device_apps":
                 return [{"id": "app7", "score": 87}]
             return copy.deepcopy(self.zdx_devices)
+        if resource == "pac_files":
+            return [{"pacUrl": "https://pac.zscalertwo.net/acme.com/proxy.pac"}]
         if resource == "malware_protection_policy":
             return dict(self.malware)
         if resource == "zcc.devices":

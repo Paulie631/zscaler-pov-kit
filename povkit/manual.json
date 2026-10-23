@@ -36,13 +36,15 @@
       "title": "Find the ZPA customer ID",
       "who": "SE or customer admin",
       "when": "kickoff, with ZPA",
-      "search": "Public API",
+      "search": "Private Access API",
       "steps": [
-        "In the Zscaler console, open ZPA's Public API page: Configuration & Control > Public API > API Keys (or search the menu for Public API). The customer ID is shown there, and also in the ZPA admin URL.",
+        "In the Zscaler console, go to Administration > API > Legacy API > Private Access API, and click Copy ID (top right): it shows the Customer ID with a copy button.",
         "Copy the Customer ID (a long number, all of it). It isn't a secret.",
         "Paste it into Connect > ZPA customer ID (or `pov-kit set customer_id <number>`), then click Check now here."
       ],
-      "done": "Check now says ZPA is readable."
+      "done": "Check now says ZPA is readable.",
+      "path": "Administration > API > Legacy API > Private Access API > Copy ID",
+      "verified": true
     },
     "zid.ca.entitlement": {
       "title": "Entitle the POV's pilot group (Internet & SaaS)",

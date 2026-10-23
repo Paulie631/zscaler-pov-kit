@@ -38,10 +38,18 @@ def ident(cfg):
     return cfg.get("identity") or {}
 
 
+def named(cfg):
+    return [e.strip().lower() for e in cfg.get("pilot_emails") or [] if str(e).strip()]
+
+
 def test_mode(cfg):
-    """Test users made by the kit: chosen in the Pilot users step, or an older POV's identity.test_users count."""
+    """Test users made by the kit: chosen in the Pilot users step, an older POV's identity.test_users count, or a
+    POV group in ZIdentity with nobody named yet (the kit fills it with test users on ZIdentity's own domain, so the
+    POV can start; the customer's real users can be named any time and the next change list adds them)."""
     ic = ident(cfg)
-    return ic.get("pilot") == "test" or (ic.get("pilot") != "create" and int(ic.get("test_users") or 0) > 0)
+    if ic.get("pilot") == "create":
+        return not named(cfg)
+    return ic.get("pilot") == "test" or int(ic.get("test_users") or 0) > 0
 
 
 def test_count(cfg):

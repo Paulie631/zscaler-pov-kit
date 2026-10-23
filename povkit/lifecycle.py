@@ -29,6 +29,31 @@ def in_play(pov, led=None):
     return products.selected(set(pov.products) | {e["product"] for e in led.active()})
 
 
+NEEDS = {"zcc": ("zia",), "casb": ("zia",), "zia": ("zid",)}   # what a product's change-list items build on
+
+
+def wait_for(pov, checks, ran=None):
+    """{product: why} for the products that can't go ahead yet (a failing check of their own, or a product they build
+    on that's waiting), as long as something else can: a POV with nothing ready keeps its failures as failures."""
+    selected = [p.name for p in products.selected(pov.products) if p.ready and (ran is None or p.name in ran)]
+    waiting = {}
+    for name in selected:
+        fails = [c for c in checks if c.get("product") == name and c["status"] == FAIL]
+        if fails:
+            waiting[name] = "; ".join(c["label"].split(": ", 1)[-1] for c in fails)
+    changed = True
+    while changed:
+        changed = False
+        for name in selected:
+            dep = next((d for d in NEEDS.get(name, ()) if d in waiting and d in selected), None)
+            if dep and name not in waiting:
+                waiting[name] = f"{SHORT.get(dep, dep)} first"
+                changed = True
+    if not waiting or all(n in waiting for n in selected):
+        return {}
+    return waiting
+
+
 def discover(pov, tenant_for):
     t = ReadOnlyTenant(tenant_for(pov, "discovery"))
     snaps, checks = {}, []
@@ -41,7 +66,7 @@ def discover(pov, tenant_for):
         except KitError as e:
             s, c = {}, [check(f"{p.name}-discover", f"{p.title} discovery", FAIL, str(e)[:200])]
         snaps[p.name] = s
-        checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}") for x in c]
+        checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}", product=p.name) for x in c]
     # the identity step: who the pilot users are and how they sign in, across products (read-only too)
     from . import identity
     try:
@@ -50,13 +75,28 @@ def discover(pov, tenant_for):
         ident, ic = {}, [check("id-read", "Pilot users readable", FAIL, str(e)[:200])]
     snaps["identity"] = ident
     checks += [dict(x, label=f"Identity: {x['label']}") for x in ic]
-    pov.write_json("discovery.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "products": snaps})
+    waiting = wait_for(pov, checks, [n for n in snaps if n != "identity"])
+    if waiting:   # these products sit out this change list; the rest of the POV goes ahead
+        for x in checks:
+            if x.get("product") in waiting and x["status"] == FAIL:
+                x.update(status=WARN, waiting=True)
+        for name, why in waiting.items():
+            checks.append(check(f"{name}-waiting", f"{SHORT.get(name, name)}: added later", INFO, "waiting on: " + why,
+                                "The rest of the POV goes ahead without it. Once that's done, run the checks again "
+                                "and approve the new change list, which adds it.") | {"waiting": True, "product": name})
+            snaps.pop(name, None)
+    if waiting:
+        snaps["_waiting"] = waiting
+    snaps_out = snaps
+    pov.write_json("discovery.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "products": snaps_out})
     pov.log("discover", f"discovery: {len(checks)} checks")
     return snaps, checks
 
 
 def make_plan(pov, snaps):
     items, notes = [], []
+    for name, why in (snaps.get("_waiting") or {}).items():
+        notes.append(f"{SHORT.get(name, name)} is added later (waiting on: {why}).")
     if "zia" in snaps:   # ZIA keeps the identity step's sign-in sites out of SSL inspection
         snaps = dict(snaps, zia=dict(snaps["zia"], identity=snaps.get("identity") or {}))
     for p in products.selected(pov.products):
@@ -92,7 +132,7 @@ def apply(pov, tenant_for, log):
     from . import backup
     try:
         for p in products.selected(pov.products):
-            if p.ready:
+            if p.ready and p.name in snaps:   # a product waiting on something sits this apply out
                 p.apply(t, pov, items, log)
                 backup.save(pov)   # after each product, so an apply that stops halfway is still backed up
     finally:

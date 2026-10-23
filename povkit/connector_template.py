@@ -45,7 +45,35 @@ def param(type_, default=None, desc="", **kw):
     return p
 
 
-def build(pov_id, prefix="ZPOV", instance_type="m5.large"):
+TEST_ZONE, TEST_HOST = "zpov.internal", "pov-app"   # pov-app.zpov.internal, as products/zpa.py's TEST_APP
+TEST_PAGE = ("<!doctype html><title>Zscaler POV test app</title><h1>Zscaler POV test app</h1>"
+             "<p>You reached this private page through Zscaler Private Access. POV {pov}.</p>")
+TEST_APP_BOOT = """#!/bin/bash
+# Zscaler POV {pov}: a small private web page on port 80 for the POV to reach through ZPA. Nothing else.
+mkdir -p /srv/pov-app
+cat > /srv/pov-app/index.html <<'ZPOV_PAGE'
+{page}
+ZPOV_PAGE
+cat > /etc/systemd/system/pov-app.service <<'ZPOV_UNIT'
+[Unit]
+Description=Zscaler POV test app
+After=network-online.target
+[Service]
+ExecStart=/usr/bin/python3 -m http.server 80 --directory /srv/pov-app
+Restart=always
+[Install]
+WantedBy=multi-user.target
+ZPOV_UNIT
+systemctl daemon-reload
+systemctl enable --now pov-app
+"""
+
+
+def test_app_boot(pov_id):
+    return TEST_APP_BOOT.format(pov=pov_id, page=TEST_PAGE.format(pov=pov_id))
+
+
+def build(pov_id, prefix="ZPOV", instance_type="m5.large", test_app=False):
     tag = [{"Key": "Name", "Value": {"Fn::Sub": f"{prefix} App Connector ${{AWS::StackName}}"}},
            {"Key": "zpov", "Value": pov_id}]
     instance = lambda n: {  # noqa: E731
@@ -56,7 +84,7 @@ def build(pov_id, prefix="ZPOV", instance_type="m5.large"):
                        "MetadataOptions": {"HttpTokens": "required"},
                        "UserData": {"Fn::Base64": {"Fn::Sub": [USER_DATA, {"PovId": pov_id}]}},
                        "Tags": tag + [{"Key": "zpov-connector", "Value": str(n)}]}}
-    return {
+    tpl = {
         "AWSTemplateFormatVersion": "2010-09-09",
         "Description": f"Zscaler POV {pov_id}: two ZPA App Connectors for the POV connector group. Delete the stack to "
                        f"remove them.",
@@ -93,6 +121,40 @@ def build(pov_id, prefix="ZPOV", instance_type="m5.large"):
                                           "about 15 minutes."},
         },
     }
+    if test_app:
+        add_test_app_aws(tpl, pov_id, tag)
+    return tpl
+
+
+def add_test_app_aws(tpl, pov_id, tag):
+    """The kit's own POV app, when the customer hasn't named one: a small instance serving one page on port 80, which
+    only the connectors may reach, at pov-app.zpov.internal in a private zone for this VPC only."""
+    tpl["Description"] += " Also a small private test app (pov-app.zpov.internal) for the POV to reach."
+    tpl["Parameters"]["TestAppAmi"] = param("AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
+                                            "/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64",
+                                            "Amazon Linux 2023 for the POV test app (the latest, from AWS's own list).")
+    tpl["Metadata"]["AWS::CloudFormation::Interface"]["ParameterGroups"][1]["Parameters"].append("TestAppAmi")
+    r = tpl["Resources"]
+    r["TestAppOnlyFromConnectors"] = {"Type": "AWS::EC2::SecurityGroup", "Properties": {
+        "GroupDescription": f"POV {pov_id} test app: port 80 from the POV's App Connectors only",
+        "VpcId": {"Ref": "VpcId"},
+        "SecurityGroupIngress": [{"IpProtocol": "tcp", "FromPort": 80, "ToPort": 80,
+                                  "SourceSecurityGroupId": {"Ref": "NoInbound"}}],
+        "SecurityGroupEgress": [{"IpProtocol": "-1", "CidrIp": "0.0.0.0/0"}], "Tags": tag}}
+    r["TestApp"] = {"Type": "AWS::EC2::Instance", "Properties": {
+        "ImageId": {"Ref": "TestAppAmi"}, "InstanceType": "t3.micro", "SubnetId": {"Ref": "SubnetId"},
+        "SecurityGroupIds": [{"Ref": "TestAppOnlyFromConnectors"}], "IamInstanceProfile": {"Ref": "SsmProfile"},
+        "MetadataOptions": {"HttpTokens": "required"},
+        "UserData": {"Fn::Base64": test_app_boot(pov_id)},
+        "Tags": [{"Key": "Name", "Value": {"Fn::Sub": "ZPOV test app ${AWS::StackName}"}}, {"Key": "zpov", "Value": pov_id}]}}
+    r["TestAppZone"] = {"Type": "AWS::Route53::HostedZone", "Properties": {
+        "Name": TEST_ZONE, "VPCs": [{"VPCId": {"Ref": "VpcId"}, "VPCRegion": {"Ref": "AWS::Region"}}],
+        "HostedZoneConfig": {"Comment": f"Zscaler POV {pov_id}: the test app's private name"}}}
+    r["TestAppRecord"] = {"Type": "AWS::Route53::RecordSet", "Properties": {
+        "HostedZoneId": {"Ref": "TestAppZone"}, "Name": f"{TEST_HOST}.{TEST_ZONE}", "Type": "A", "TTL": "60",
+        "ResourceRecords": [{"Fn::GetAtt": ["TestApp", "PrivateIp"]}]}}
+    tpl["Outputs"]["TestApp"] = {"Value": f"http://{TEST_HOST}.{TEST_ZONE}/",
+                                 "Description": "The POV test app, reachable only through ZPA."}
 
 
 AZ_IMAGE = {"publisher": "zscaler", "offer": "zscaler-private-access", "sku": "zpa-con-azure"}
@@ -104,7 +166,7 @@ AZ_BOOT = ["#!/bin/bash\n# ZPA App Connector first boot for POV {pov}: enroll wi
            "systemctl start zpa-connector\nnohup yum update -y > /var/log/yum-update.log 2>&1 &\n"]
 
 
-def build_azure(pov_id, prefix="ZPOV"):
+def build_azure(pov_id, prefix="ZPOV", test_app=False):
     """An ARM template (deploy with 'Deploy a custom template' in the Azure portal, or az deployment group create).
     The Marketplace terms must be accepted once per subscription:
     az vm image terms accept --publisher zscaler --offer zscaler-private-access --plan zpa-con-azure"""
@@ -136,7 +198,7 @@ def build_azure(pov_id, prefix="ZPOV"):
              "networkProfile": {"networkInterfaces": [{
                  "id": f"[resourceId('Microsoft.Network/networkInterfaces', concat(parameters('namePrefix'), '-nic{n}'))]",
                  "properties": {"deleteOption": "Delete"}}]}}}]
-    return {
+    tpl = {
         "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
         "contentVersion": "1.0.0.0",
         "metadata": {"description": f"Zscaler POV {pov_id}: two ZPA App Connectors for the POV connector group. Delete "
@@ -168,9 +230,68 @@ def build_azure(pov_id, prefix="ZPOV"):
         "outputs": {"connectors": {"type": "string",
                                    "value": "[concat(parameters('namePrefix'), '-vm1, ', parameters('namePrefix'), '-vm2')]"}},
     }
+    if test_app:
+        add_test_app_azure(tpl, pov_id, tags)
+    return tpl
 
 
-def write(path, pov_id, prefix="ZPOV", cloud="aws"):
-    tpl = build_azure(pov_id, prefix) if cloud == "azure" else build(pov_id, prefix)
+def add_test_app_azure(tpl, pov_id, tags):
+    """As add_test_app_aws: a small Ubuntu VM serving one page on port 80 to the virtual network only, at
+    pov-app.zpov.internal in a private DNS zone linked to the connectors' virtual network."""
+    tpl["metadata"]["description"] += " Also a small private test app (pov-app.zpov.internal) for the POV to reach."
+    vnet = "[substring(parameters('subnetId'), 0, indexOf(parameters('subnetId'), '/subnets/'))]"
+    name = "[concat(parameters('namePrefix'), '-app')]"
+    nic = "[concat(parameters('namePrefix'), '-app-nic')]"
+    nsg = "[concat(parameters('namePrefix'), '-app-nsg')]"
+    boot = "[base64('" + test_app_boot(pov_id).replace("'", "''") + "')]"
+    tpl["resources"] += [
+        {"type": "Microsoft.Network/networkSecurityGroups", "apiVersion": "2023-09-01", "name": nsg,
+         "location": "[parameters('location')]", "tags": tags, "properties": {"securityRules": [
+             {"name": "http-from-vnet", "properties": {
+                 "priority": 1000, "direction": "Inbound", "access": "Allow", "protocol": "Tcp", "sourcePortRange": "*",
+                 "destinationPortRange": "80", "sourceAddressPrefix": "VirtualNetwork", "destinationAddressPrefix": "*",
+                 "description": "The POV's App Connectors reach the test app."}},
+             {"name": "deny-all-inbound", "properties": {
+                 "priority": 4000, "direction": "Inbound", "access": "Deny", "protocol": "*", "sourcePortRange": "*",
+                 "destinationPortRange": "*", "sourceAddressPrefix": "*", "destinationAddressPrefix": "*"}}]}},
+        {"type": "Microsoft.Network/networkInterfaces", "apiVersion": "2023-09-01", "name": nic,
+         "location": "[parameters('location')]", "tags": tags,
+         "dependsOn": [f"[resourceId('Microsoft.Network/networkSecurityGroups', {nsg[1:-1]})]"],
+         "properties": {"ipConfigurations": [{"name": "ipconfig1", "properties": {
+             "subnet": {"id": "[parameters('subnetId')]"}, "privateIPAllocationMethod": "Dynamic"}}],
+             "networkSecurityGroup": {"id": f"[resourceId('Microsoft.Network/networkSecurityGroups', {nsg[1:-1]})]"}}},
+        {"type": "Microsoft.Compute/virtualMachines", "apiVersion": "2023-09-01", "name": name,
+         "location": "[parameters('location')]", "tags": tags,
+         "dependsOn": [f"[resourceId('Microsoft.Network/networkInterfaces', {nic[1:-1]})]"],
+         "properties": {
+             "hardwareProfile": {"vmSize": "Standard_B1s"},
+             "storageProfile": {"imageReference": {"publisher": "Canonical", "offer": "0001-com-ubuntu-server-jammy",
+                                                   "sku": "22_04-lts-gen2", "version": "latest"},
+                                "osDisk": {"createOption": "FromImage", "deleteOption": "Delete",
+                                           "managedDisk": {"storageAccountType": "Standard_LRS"}}},
+             "osProfile": {"computerName": "pov-app", "adminUsername": "zpovadmin", "customData": boot,
+                           "linuxConfiguration": {"disablePasswordAuthentication": True, "ssh": {"publicKeys": [{
+                               "path": "/home/zpovadmin/.ssh/authorized_keys",
+                               "keyData": "[parameters('sshPublicKey')]"}]}}},
+             "networkProfile": {"networkInterfaces": [{
+                 "id": f"[resourceId('Microsoft.Network/networkInterfaces', {nic[1:-1]})]",
+                 "properties": {"deleteOption": "Delete"}}]}}},
+        {"type": "Microsoft.Network/privateDnsZones", "apiVersion": "2020-06-01", "name": TEST_ZONE,
+         "location": "global", "tags": tags},
+        {"type": "Microsoft.Network/privateDnsZones/virtualNetworkLinks", "apiVersion": "2020-06-01",
+         "name": f"[concat('{TEST_ZONE}/', parameters('namePrefix'), '-link')]", "location": "global",
+         "dependsOn": [f"[resourceId('Microsoft.Network/privateDnsZones', '{TEST_ZONE}')]"],
+         "properties": {"registrationEnabled": False, "virtualNetwork": {"id": vnet}}},
+        {"type": "Microsoft.Network/privateDnsZones/A", "apiVersion": "2020-06-01", "name": f"{TEST_ZONE}/{TEST_HOST}",
+         "dependsOn": [f"[resourceId('Microsoft.Network/privateDnsZones', '{TEST_ZONE}')]",
+                       f"[resourceId('Microsoft.Network/networkInterfaces', {nic[1:-1]})]"],
+         "properties": {"ttl": 60, "aRecords": [{"ipv4Address":
+             f"[reference(resourceId('Microsoft.Network/networkInterfaces', {nic[1:-1]})).ipConfigurations[0].properties.privateIPAddress]"}]}},
+    ]
+    tpl["outputs"]["testApp"] = {"type": "string", "value": f"http://{TEST_HOST}.{TEST_ZONE}/"}
+
+
+def write(path, pov_id, prefix="ZPOV", cloud="aws", test_app=False):
+    tpl = build_azure(pov_id, prefix, test_app) if cloud == "azure" else build(pov_id, prefix, test_app=test_app)
     path.write_text(json.dumps(tpl, indent=2), encoding="utf-8")
     return path

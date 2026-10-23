@@ -355,3 +355,12 @@ def test_firewall_use_case_validates_and_builds(pov, tenant, tenant_for):
     rule = by["zia.uc01.1"]
     assert rule["kind"] == "firewall" and rule["body"]["nw_services"] == ["{ref:zia.network_service.uc01-1}"]
     assert rule["body"]["groups"] == [77] and rule["body"]["dest_addresses"] == ["203.0.113.10"]
+
+
+def test_pov_group_with_nobody_named_gets_test_users(zpov, tenant_for):
+    zpov.cfg["pilot_emails"] = []
+    zpov.save()
+    items, checks = approve(zpov, tenant_for)
+    users = [i["body"]["login_name"] for i in items if i["product"] == "zid" and i["kind"] == "user"]
+    assert users == ["zpov-pilot-1@acme.zslogin.net"]
+    assert not [c for c in checks if c["status"] == "fail"]

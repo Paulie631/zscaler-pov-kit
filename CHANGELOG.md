@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.15
+
+- **Quick start.** Start a POV asks for the customer, the products and the API client (or the one Claude Desktop uses).
+  The kit fills in the rest from the tenant (read-only), runs preflight and opens the change list. The step-by-step
+  wizard stays for changing anything.
+- **Products that aren't ready are added later instead of blocking.** A product whose checks fail (no ZDX role, no
+  SaaS tenant, a ZPA app that overlaps the customer's) sits out the change list as "added later", with its fix; the
+  rest of the POV goes ahead. Products that build on it wait too (Client Connector and CASB on ZIA).
+- **Pilot users start themselves.** A POV group in ZIdentity with nobody named starts with a test user on ZIdentity's
+  own domain; Quick start defaults to one test account (in ZIA, or ZIdentity when that's where the tenant keeps users,
+  detected and re-planned automatically).
+- **ZPA brings its own test app.** With no app named, the AWS and Azure connector templates also start a small private
+  web page (`pov-app.zpov.internal`, port 80, reachable only from the connectors) and the kit makes it the POV app.
+- **Simpler screens.** Pilot users asks one question ("Who will test?") with a one-line summary of who the rules apply
+  to; extra options are folded away. Preflight groups what needs you, what's added later, and what's worth a look, with
+  passed checks folded away.
+- Console paths seen live: API clients (Administration → API → OneAPI → API Clients) and the ZPA customer ID
+  (Administration → API → Legacy API → Private Access API → Copy ID).
+
 ## 0.9.14
 
 - **The pilot-device setup never takes over a work laptop.** If Client Connector is already installed, or (macOS) an

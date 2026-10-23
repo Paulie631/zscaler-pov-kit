@@ -94,7 +94,7 @@ def test_record_export_replay_round_trip(pov_all, tenant, tmp_path):
     recs = load(out)
     assert contract(recs) == []                                                 # the fake agrees with itself
     snaps2, _ = lifecycle.discover(pov_all, lambda p, w: ReplayTenant(recs))
-    assert set(snaps2) >= {"zia", "zpa", "aiguard", "identity"}
+    assert set(snaps2) | set(snaps2.get("_waiting") or {}) >= {"zia", "zpa", "aiguard", "identity"}
 
 
 def test_selftest_creates_and_removes_one_object_per_product(pov_all, tenant, tenant_for):

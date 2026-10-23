@@ -238,7 +238,8 @@ def c_zpa_template(a):
     if not lifecycle.ledger(p).find("zpa.provisioning_key"):
         raise KitError("No POV provisioning key yet. Run `pov-kit apply` with ZPA in the POV first.")
     out = Path(a.out or f"pov-{p.id}-app-connectors{'-azure' if a.cloud == 'azure' else ''}.json")
-    connector_template.write(out, p.id, p.prefix, a.cloud)
+    from .products.zpa import app_of
+    connector_template.write(out, p.id, p.prefix, a.cloud, test_app=app_of(p.cfg)["test_app"])
     if a.cloud == "azure":
         print(f"Azure template: {out}. In the customer's subscription, accept the image terms once (az vm image terms "
               "accept --publisher zscaler --offer zscaler-private-access --plan zpa-con-azure), then Deploy a custom "

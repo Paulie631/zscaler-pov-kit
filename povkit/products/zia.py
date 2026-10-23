@@ -237,7 +237,8 @@ class ZIA(Product):
     def role_scopes(self, pov=None):
         # Placeholders: the exact ZIA role scope names are an open question in the design (confirm in a lab tenant).
         from .zid import test_mode, users_in_zidentity
-        users = bool(pov and test_mode(pov.cfg) and not users_in_zidentity(pov.cfg))
+        users = bool(pov and test_mode(pov.cfg) and not users_in_zidentity(pov.cfg)
+                     and (pov.cfg.get("identity") or {}).get("pilot") != "create")
         return {"discovery": [("ZIA: all policy and administration areas", "view only")],
                 "apply": [("ZIA policy: URL filtering, SSL inspection, Cloud App Control, file type control, DLP web "
                            "rules, firewall and DNS control, rule labels, custom URL categories, network services",

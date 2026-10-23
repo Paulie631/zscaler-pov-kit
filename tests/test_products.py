@@ -1,10 +1,9 @@
 """Every product module through the full lifecycle against the fake tenant, with the same safety checks as ZIA."""
 import json
 
-import pytest
 
 from povkit import connector_template, evidence, handover, lifecycle, products
-from povkit.core import KitError, secrets
+from povkit.core import secrets
 from povkit.core.changelist import ChangeList
 from povkit.core.guard import LedgerTenant
 
@@ -78,11 +77,12 @@ def test_zpa_refuses_an_app_the_customer_already_publishes(pov_all, tenant, tena
     pov_all.cfg["zpa"]["domains"] = ["intranet.acme.com"]
     pov_all.save()
     _, _, _, checks = lifecycle.plan(pov_all, tenant_for)
-    assert {c["id"]: c["status"] for c in checks}["zpa-overlap"] == "fail"
+    c = {c["id"]: c for c in checks}["zpa-overlap"]
+    assert c["status"] == "fail" or c.get("waiting")   # ZPA sits out; the rest of the POV goes ahead
     ChangeList(pov_all.dir).approve("Jane Doe")
-    with pytest.raises(KitError, match="Discovery found problems"):
-        lifecycle.apply(pov_all, tenant_for, log)
-    assert not [w for w in tenant.writes if w[0].startswith("zpa.")]
+    lifecycle.apply(pov_all, tenant_for, log)                     # everything else goes ahead...
+    assert not [w for w in tenant.writes if w[0].startswith("zpa.")]  # ...and ZPA is never touched
+    assert tenant.by_name("url_filtering", "ZPOV: Block gambling")
 
 
 def test_zpa_broad_customer_rule_fails_the_deny_proof(pov_all, tenant, tenant_for):
@@ -220,3 +220,36 @@ def test_plan_is_unchanged_by_apply_for_every_product(pov_all, tenant, tenant_fo
     checks = {c["id"]: c for c in lifecycle.status(pov_all, tenant_for)}
     assert checks["plan-approved"]["status"] == "ok"
     assert not [c for c in checks.values() if c["status"] == "fail"]
+
+
+def test_connector_templates_bring_a_test_app_when_no_app_is_named(pov_all):
+    from povkit.products.zpa import app_of
+    pov_all.cfg["zpa"]["domains"] = []
+    app = app_of(pov_all.cfg)
+    assert app["test_app"] and app["domains"] == ["pov-app.zpov.internal"] and app["tcp_ports"] == ["80"]
+    aws = connector_template.build("acme-1234", test_app=True)
+    r = aws["Resources"]
+    assert r["TestApp"]["Properties"]["InstanceType"] == "t3.micro"
+    ing = r["TestAppOnlyFromConnectors"]["Properties"]["SecurityGroupIngress"]
+    assert ing == [{"IpProtocol": "tcp", "FromPort": 80, "ToPort": 80, "SourceSecurityGroupId": {"Ref": "NoInbound"}}]
+    assert r["TestAppRecord"]["Properties"]["Name"] == "pov-app.zpov.internal"
+    assert "TestApp" not in connector_template.build("acme-1234")["Resources"]
+    az = connector_template.build_azure("acme-1234", test_app=True)
+    kinds = [x["type"] for x in az["resources"]]
+    assert "Microsoft.Network/privateDnsZones/A" in kinds and kinds.count("Microsoft.Compute/virtualMachines") == 3
+    json.dumps(az)
+    from povkit import evidence
+    pack = json.dumps(evidence.probe_pack(pov_all))
+    assert "pov-app.zpov.internal" in pack or "{zpa.domain}" not in pack
+
+
+def test_a_product_that_isnt_ready_waits_and_the_rest_goes_ahead(pov_all, tenant, tenant_for):
+    pov_all.cfg["zdx"] = {}
+    tenant.zdx_forbidden = True
+    items, notes, _, checks = lifecycle.plan(pov_all, tenant_for)
+    waiting = [c for c in checks if c.get("waiting")]
+    assert any(c.get("product") == "zdx" for c in waiting)
+    assert not [i for i in items if i["product"] == "zdx"]
+    assert any("ZDX is added later" in n for n in notes)
+    assert [i for i in items if i["product"] == "zia"]
+    assert not [c for c in checks if c["status"] == "fail"]

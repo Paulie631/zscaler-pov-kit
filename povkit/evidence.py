@@ -102,9 +102,10 @@ def evaluate(pov, ids=None):
 
 def probe_pack(pov, ids=None):
     """The probe tests for this POV, with its values filled in ({zpa.domain}...), for `pov-kit probe --pack`."""
-    zpa = pov.cfg.get("zpa") or {}
-    port = str((zpa.get("tcp_ports") or ["443"])[0]).split("-")[0]
-    values = {"{zpa.domain}": (zpa.get("domains") or [""])[0], "{zpa.port}": port}
+    from .products.zpa import app_of
+    app = app_of(pov.cfg)
+    port = str(app["tcp_ports"][0]).split("-")[0]
+    values = {"{zpa.domain}": app["domains"][0], "{zpa.port}": port}
     crit = []
     for c in selected_criteria(pov, ids):
         if not c.get("probe"):
