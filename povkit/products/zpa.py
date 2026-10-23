@@ -102,8 +102,16 @@ class ZPA(Product):
             cert = next((x for x in certs if str(g(x, "name")).lower() == "connector"), None)
             snap["enrollment_cert"] = g(cert, "id") if cert else None
         except KitError as e:
+            nf = bool(re.search(r"\b404\b|resource\.not\.found", str(e)))
+            if nf and not pov.cfg.get("customer_id"):   # seen live: no customer ID gives a bare 404
+                return {"readable": False}, [check(
+                    "zpa-read", "ZPA readable", FAIL, "ZPA answered 'not found': the ZPA customer ID isn't set",
+                    "Copy the customer ID from the ZPA console (Configuration & Control → Public API, or the company "
+                    "page) into Connect → ZPA customer ID (`pov-kit set customer_id 72…`), then run the checks again.",
+                    console="zpa.public_api")]
             return {"readable": False}, [check("zpa-read", "ZPA readable", FAIL, str(e)[:160],
-                                               "Give the discovery client view access to ZPA.")]
+                                               "Check the ZPA customer ID in Connect, and that the client has view "
+                                               "access to ZPA.")]
         snap["readable"] = True
         if not pov.cfg.get("customer_id"):
             checks.append(check("zpa-customer-id", "ZPA customer ID", WARN, "not set",

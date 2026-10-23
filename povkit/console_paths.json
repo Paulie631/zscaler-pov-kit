@@ -83,6 +83,11 @@
       "page": "ZIdentity user groups",
       "path": null,
       "verified": null
+    },
+    "zpa.public_api": {
+      "page": "ZPA Public API (shows the customer ID)",
+      "path": null,
+      "verified": null
     }
   }
 }
