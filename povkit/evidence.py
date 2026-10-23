@@ -24,6 +24,9 @@ def selected_criteria(pov, ids=None):
     (`pov-kit set criteria ...`), or the ids asked for."""
     from . import usecases
     out = [c for p in products.selected(pov.products) for c in p.criteria()] + usecases.criteria(pov)
+    if "aiguard" in pov.products:   # the customer's own prompt packs (AI Guard tab)
+        from . import aiguard_runner
+        out += aiguard_runner.criteria(pov)
     if ids:
         return [c for c in out if c["id"] in ids]
     chosen = set(pov.cfg.get("criteria") or [])

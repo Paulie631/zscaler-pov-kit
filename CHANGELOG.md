@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.21
+
+- **An AI Guard tab, like the SE demo kit**, on the POV's own app, keys and policy:
+  - policy profiles: Monitor, Block attacks, + data leakage, **Block everything risky**, and **Custom** (per detector,
+    prompts and replies separately);
+  - the demo kit's **test runner** (72 tests, presets, industry packs, users and rounds, detectors fired and missed,
+    hide-missed for demos), a **live prompt** box, and a **one-page report**;
+  - **the customer's own prompts** from CSV, as a pack and a success criterion (AI-AIG-C1…);
+  - **proxy mode** with the customer's model key or the SE's own (kept out of the change list; removed at teardown).
+- Keyword mapping of imported criteria is smarter (word stems; AI criteria only for AI wording).
+
 ## 0.9.20
 
 - **The customer's success criteria in, the POV out.** Success criteria → **The customer's success criteria**: paste

@@ -241,6 +241,20 @@ The competitor named in the responsible-AI tests is `aiguard.competitor` (`pov-k
 Results show which tests behaved as expected, and the AI Guard policy switch (Monitor, Block attacks, + data leakage)
 shows detection turning into blocking.
 
+The **AI Guard tab** brings the SE demo kit's tools to the POV, always on the POV's own app, keys and policy:
+
+- **Policy:** Monitor, Block attacks, Block attacks + data leakage, Block everything risky, or **Custom** (Block or
+  Detect per detector, for prompts and replies separately).
+- **Test runner:** the demo kit's 72 tests by preset, industry pack or one by one, as several users and rounds, with
+  the detectors that fired (and expected-but-missed ones, which you can hide for a customer demo). **Live prompt**
+  scans anything you type. **One-page report** summarizes the runs for the customer.
+- **The customer's own prompts:** import a CSV (a `prompt` column; optional `direction`, `name`, `expect`). It becomes
+  a pack and a success criterion (AI-AIG-C1…) proved through the Detection API. It stays in the POV folder.
+- **Proxy mode:** real prompts to a model through AI Guard, with **the customer's model key** already in their AI
+  Guard, or **your own key** (it goes to your keychain; the change list adds it to their AI Guard as a POV object, and
+  teardown removes it). Save the choice, run the checks again and get the new change list approved; then **Send to
+  the model** works in the runner and the live prompt.
+
 **AI Endpoint Security (Endpoint AI)** is a *draft* product in the kit: Zscaler announced it in October 2026, and it
 has no API in the Zscaler SDK yet, so the kit creates nothing for it. Tick it on Start a POV to add five draft
 criteria (EP-AIE-01 to 05: shadow AI inventoried, a malicious skill file blocked, dangerous agent commands stopped,

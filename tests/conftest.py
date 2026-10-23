@@ -56,6 +56,8 @@ class FakeTenant:
             "aiguard.policies": [{"id": 501, "name": "Corp AI policy", "inputDetectorPolicies": [], "outputDetectorPolicies": []}],
             "aiguard.llm_applications": [{"id": 502, "name": "Corp chatbot"}],
             "aiguard.llm_application_credentials": [],
+            "aiguard.llm_providers": [{"id": 701, "name": "Anthropic", "type": "anthropic"}],
+            "aiguard.llm_provider_credentials": [{"id": 702, "name": "Acme Anthropic key", "providerId": 701}],
             "aiguard.policy_match_rules": [{"id": 503, "name": "Corp chatbot rule", "ruleOrder": 1}],
             "zdx.troubleshooting": [], "casb_dlp_rules": [{"id": 601, "name": "Corp SaaS DLP", "order": 1}],
         }

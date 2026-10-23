@@ -134,6 +134,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
   <button data-t="status">Status</button>
   <button data-t="usecases">Use cases</button>
   <button data-t="criteria">Success criteria</button>
+  <button data-t="aiguard">AI Guard</button>
   <button data-t="handover">Handover</button>
   <button data-t="logs">Logs</button>
 </nav>
@@ -155,6 +156,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
   </div>
   <div class="panel" id="stsafe"></div>
 </div></div>
+
+<div class="view" id="v-aiguard"><div class="wrap stack" id="agwrap"></div></div>
 
 <div class="view" id="v-usecases"><div class="wrap stack">
   <div class="panel" id="ucsetup"></div>
@@ -343,7 +346,7 @@ $("#updroll").onclick=async()=>{if(!confirm("Go back to the previously installed
   try{const r=await api("/api/update/rollback",{});updLine("ok",`Rolled back to ${r.version}.`);await api("/api/update/restart",{});await waitForRestart()}
   catch(e){updLine("fail",e.message)}};
 setTimeout(()=>checkUpd(false),1500);
-function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria"){criteria();ccInit()}if(t=="logs")logs();if(t=="usecases")usecases()}
+function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria"){criteria();ccInit()}if(t=="logs")logs();if(t=="usecases")usecases();if(t=="aiguard")aiguardTab()}
 
 /* ---------------- setup wizard ---------------- */
 const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Approval","Apply","Next steps"];
@@ -735,6 +738,84 @@ function ccDraw(){const el=$("#ccbody");
   $("#ccmap")&&($("#ccmap").onclick=async()=>{const b=$("#ccmap");b.disabled=true;$("#cclog").style.display="block";
     try{const r=await runJob((await api("/api/criteria/map",{items:CC.items,source:CC.source})).job,$("#cclog"));CC.rows=r.rows;ccDraw()}
     catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
+}
+
+
+/* ---------------- AI Guard tab (the demo kit's runner, profiles, proxy, customer prompts, report) ---------------- */
+let AG=null,AGsel=new Set(),AGhideMissed=false;
+async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
+  if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
+  if(!c.settings.products.includes("aiguard")){w.innerHTML='<div class="panel"><h2>AI Guard</h2><p class="muted">AI Guard isn\'t in this POV\'s products. Add it on Setup → Start a POV (Step by step), then make the change list again.</p></div>';return}
+  try{AG=await api("/api/aiguard")}catch(e){w.innerHTML=note(e.message,"bad");return}
+  const px=AG.proxy, det=AG.detectors, never=new Set(AG.never_block);
+  const custom=AG.custom||{};
+  w.innerHTML=`
+  <div class="panel"><h2>Policy</h2><p class="muted" style="margin-top:0">What the POV's own AI Guard policy blocks. Only the POV policy changes; the customer's apps and policies are untouched. Takes about 30 seconds to apply.</p>
+    <div class="seg" id="agprof">${Object.entries(AG.profiles).map(([k,v])=>`<button data-p="${k}" class="${AG.profile==k?"on":""}" title="${esc(v)}">${esc(v.split(":")[0])}</button>`).join("")}<button data-p="custom" class="${AG.profile=="custom"?"on":""}">Custom…</button></div>
+    <div id="agcustom" style="display:none;margin-top:10px"><div class="cards">${[["prompt","inputDetectorPolicies","Prompts"],["response","outputDetectorPolicies","Replies"]].map(([k,side,t])=>`<div class="card"><h4>${t}: block</h4>${det[side].filter(d=>!never.has(d)).map(d=>`<label class="chk" style="display:block;margin:2px 0"><input type="checkbox" class="agc" data-s="${k}" value="${esc(d)}"> ${esc(AG.panels[d]||d)}</label>`).join("")}</div>`).join("")}</div>
+      <label class="chk"><input type="checkbox" id="agregpii" checked> For PII, block only regulated data (cards, SSNs, bank, passport, ITIN)</label>
+      <div class="row" style="margin-top:8px"><button class="primary" id="agcustomgo">Apply the custom policy</button></div></div>
+    <div id="agpmsg" class="hint"></div></div>
+
+  <div class="panel"><h2>Test runner</h2><p class="muted" style="margin-top:0">The SE demo kit's tests (synthetic data), on the POV's own app and key. Detection only sends nothing to a model; proxy mode sends real prompts to the model through AI Guard.</p>
+    <div class="row" style="gap:8px;flex-wrap:wrap">${AG.presets.map(p=>`<button class="agpre" data-p="${esc(p.id)}">${esc(p.name)}</button>`).join("")}
+      ${Object.entries(AG.packs).map(([k,p])=>`<button class="agpack" data-k="${esc(k)}">${esc(p.name)}${p.customer?" ★":""}</button>`).join("")}<button id="agnone">Clear</button></div>
+    <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Pick tests one by one (${AG.tests.length})</summary><div class="cards" style="margin-top:6px">${AG.groups.map(g=>`<div class="card"><h4>${esc(g)}</h4>${AG.tests.filter(t=>t.group==g).map(t=>`<label class="chk" style="display:block;margin:2px 0"><input type="checkbox" class="agt" value="${esc(t.id)}"> ${esc(t.name)} <span class="muted">${t.direction=="OUT"?"(reply)":""}</span></label>`).join("")}</div>`).join("")}</div></details>
+    <div class="form" style="margin-top:10px"><span class="lbl">Mode</span><div class="seg" id="agmode"><button data-m="detect" class="on">Detection only</button><button data-m="proxy" ${AG.keys.proxy?"":"disabled title='Set up proxy mode below'"}>Send to the model</button></div>
+      <span class="lbl">Also tag detectors</span><label class="chk"><input type="checkbox" id="agtags"> scan the prompt and the model's reply too (proxy mode)</label>
+      <span class="lbl">Users</span><input type="text" id="agusers" value="${esc(AG.users.slice(0,2).join(", "))}">
+      <span class="lbl">Rounds</span><input type="number" id="agrounds" value="1" min="1" max="10" style="width:70px"></div>
+    <div class="row" style="margin-top:10px;gap:10px"><button class="primary" id="agrun" ${AG.keys.detection?"":"disabled"}>Run <span id="agn">0</span> tests</button><label class="chk"><input type="checkbox" id="aghide"> Hide expected-but-missed (for a customer demo)</label><a href="#" id="agrep">One-page report ↗</a></div>
+    ${AG.keys.detection?"":note("The POV's AI Guard app and key are made when the change list is applied.","bad")}
+    <div class="log" id="aglog" style="display:none"></div><div id="agres"></div></div>
+
+  <div class="panel"><h2>Live prompt</h2><div class="row" style="gap:8px"><textarea id="aglive" placeholder="Type anything to scan it, e.g. a prompt from the customer" style="flex:1;min-height:60px"></textarea></div>
+    <div class="row" style="margin-top:6px;gap:8px"><select id="aglivedir"><option value="IN">as a prompt</option><option value="OUT">as a model reply</option></select><button id="aglivego" ${AG.keys.detection?"":"disabled"}>Scan</button><button id="aglivemodel" ${AG.keys.proxy?"":"disabled"}>Send to the model</button></div><div id="aglivres"></div></div>
+
+  <div class="panel"><h2>The customer's own prompts</h2><p class="muted" style="margin-top:0">Import a CSV with a <code>prompt</code> column (optional: <code>direction</code> IN/OUT, <code>name</code>, <code>expect</code> detectors). It becomes a pack here and a success criterion (AI-AIG-C…) proved through the Detection API. Stays in the POV folder on this laptop.</p>
+    <div class="row" style="gap:8px"><input type="text" id="agpackname" placeholder="Pack name, e.g. Support chatbot prompts" style="flex:1"><label class="chk"><input type="file" id="agcsv" accept=".csv" style="display:none">Import CSV…</label></div><div id="agpackmsg"></div>
+    ${Object.values(AG.packs).filter(p=>p.customer).map(p=>`<div class="hint">★ ${esc(p.name)}: ${p.tests.length} prompts · criterion ${esc(p.criterion)}</div>`).join("")}</div>
+
+  <div class="panel"><h2>Proxy mode</h2><p class="muted" style="margin-top:0">Real prompts to an AI model through AI Guard, so the customer sees real replies and AI Guard's block message. Choose whose model key it uses; the change list then adds a POV proxy key (and your key, if yours) for the customer to approve, and teardown removes them.</p>
+    <div class="form"><span class="lbl">Model key</span><select id="agpx"><option value="none" ${px.mode=="none"?"selected":""}>Off (Detection API only)</option><option value="customer" ${px.mode=="customer"?"selected":""}>The customer's key in their AI Guard</option><option value="se" ${px.mode=="se"?"selected":""}>My own key</option></select>
+      <span class="lbl">Provider</span><select id="agprov"><option value="anthropic" ${px.provider=="anthropic"?"selected":""}>Anthropic</option><option value="openai" ${px.provider=="openai"?"selected":""}>OpenAI</option></select>
+      <span class="lbl">Model</span><input type="text" id="agmodel" value="${esc(px.model)}">
+      <span class="lbl agpxc">Their key</span><select id="agcred" class="agpxc">${px.creds.length?px.creds.map(k=>`<option value="${esc(k.id)}" ${String(px.cred)==String(k.id)?"selected":""}>${esc(k.name)}</option>`).join(""):'<option value="">(run the checks to list them)</option>'}</select>
+      <span class="lbl agpxs">Your key</span><div class="agpxs row" style="gap:8px"><input type="password" id="agsekey" autocomplete="new-password" placeholder="${px.se_key?"saved in the keychain (paste to replace)":"sk-ant-… (goes to this computer's keychain)"}" style="flex:1"></div>
+      <span class="lbl">Competitor (for the tests)</span><input type="text" id="agcomp" value="${esc(AG.competitor)}"></div>
+    <div class="row" style="margin-top:8px"><button id="agpxsave">Save</button></div><div id="agpxmsg"></div></div>
+  <div id="agstories"></div>`;
+  // policy
+  $$("#agprof button").forEach(b=>b.onclick=async()=>{if(b.dataset.p=="custom"){$("#agcustom").style.display="";return}
+    $("#agpmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#agprof button").forEach(x=>x.classList.toggle("on",x===b));$("#agpmsg").textContent=r.message}catch(e){$("#agpmsg").textContent=e.message}});
+  $$(".agc").forEach(x=>x.checked=(custom[x.dataset.s]||[]).includes(x.value));
+  $("#agcustomgo").onclick=async()=>{const prof={prompt:$$(".agc").filter(x=>x.checked&&x.dataset.s=="prompt").map(x=>x.value),response:$$(".agc").filter(x=>x.checked&&x.dataset.s=="response").map(x=>x.value),pii_regulated_only:$("#agregpii").checked};
+    $("#agpmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:prof});$$("#agprof button").forEach(x=>x.classList.toggle("on",x.dataset.p=="custom"));$("#agpmsg").textContent=r.message}catch(e){$("#agpmsg").textContent=e.message}};
+  // runner
+  const count=()=>{$("#agn").textContent=AGsel.size;$$(".agt").forEach(x=>x.checked=AGsel.has(x.value))};
+  $$(".agt").forEach(x=>x.onchange=()=>{x.checked?AGsel.add(x.value):AGsel.delete(x.value);count()});
+  $$(".agpre").forEach(b=>b.onclick=()=>{const pr=AG.presets.find(p=>p.id==b.dataset.p);AG.tests.filter(t=>pr.groups.includes(t.group)).forEach(t=>AGsel.add(t.id));count()});
+  $$(".agpack").forEach(b=>b.onclick=()=>{AG.packs[b.dataset.k].tests.forEach(t=>AGsel.add(t.id));count()});
+  $("#agnone").onclick=()=>{AGsel.clear();count()};count();
+  let mode="detect";$$("#agmode button").forEach(b=>b.onclick=()=>{if(b.disabled)return;mode=b.dataset.m;$$("#agmode button").forEach(x=>x.classList.toggle("on",x===b))});
+  $("#aghide").onchange=e=>{AGhideMissed=e.target.checked;drawRes(AG.last||[])};
+  const drawRes=rs=>{$("#agres").innerHTML=rs.length?`<div class="tablewrap" style="margin-top:8px"><table><tr><th>Test</th><th>User</th><th>Action</th><th>Detected</th>${mode=="proxy"?"<th>Reply</th>":""}</tr>${rs.map(r=>`<tr><td>${esc(r.name)}<div class="muted" style="font-size:12px">${esc((r.text||"").slice(0,90))}</div></td><td>${esc(r.user||"")}</td><td><b>${esc(r.action||r.error||"")}</b></td><td>${(r.detectors||[]).map(d=>`<span class="chip">${esc(AG.panels[d]||d)}</span>`).join(" ")}${!AGhideMissed&&r.missed&&r.missed.length?` <span style="color:var(--warn)">expected: ${esc(r.missed.join(", "))}</span>`:""}</td>${mode=="proxy"?`<td style="font-size:12px">${esc((r.reply||"").slice(0,200))}</td>`:""}</tr>`).join("")}</table></div>`:""};
+  $("#agrun").onclick=async()=>{if(!AGsel.size){$("#agres").innerHTML=note("Pick tests: a preset, a pack, or one by one.");return}const b=$("#agrun");b.disabled=true;$("#aglog").style.display="block";
+    try{const r=await runJob((await api("/api/aiguard/run",{ids:[...AGsel],mode,tags:$("#agtags").checked,users:$("#agusers").value.split(",").map(x=>x.trim()).filter(Boolean),rounds:+$("#agrounds").value||1})).job,$("#aglog"));AG.last=r.results;drawRes(r.results)}
+    catch(e){$("#agres").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
+  $("#agrep").onclick=e=>{e.preventDefault();window.open(`/aiguard-report?t=${encodeURIComponent(TOKEN)}`,"_blank")};
+  // live
+  const live=async m=>{$("#aglivres").innerHTML='<div class="notice">Scanning…</div>';try{const r=(await runJob((await api("/api/aiguard/run",{text:$("#aglive").value,direction:$("#aglivedir").value,mode:m,tags:true})).job,document.createElement("div"))).results[0];
+      $("#aglivres").innerHTML=`<p><b>${esc(r.action||r.error||"")}</b> ${(r.detectors||[]).map(d=>`<span class="chip">${esc(AG.panels[d]||d)}</span>`).join(" ")||'<span class="muted">nothing detected</span>'}</p>${r.reply?`<pre class="log" style="white-space:pre-wrap">${esc(r.reply)}</pre>`:""}`}catch(e){$("#aglivres").innerHTML=note(e.message,"bad")}};
+  $("#aglivego").onclick=()=>live("detect");$("#aglivemodel").onclick=()=>live("proxy");
+  // customer prompts
+  $("#agcsv").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const r=await api("/api/aiguard/pack",{name:$("#agpackname").value||f.name.replace(/\.csv$/i,""),csv:await f.text()});$("#agpackmsg").innerHTML=note(`${r.count} prompts imported: criterion ${r.criterion}. It's in Success criteria; Run API proofs proves it.`,"good");aiguardTab()}catch(err){$("#agpackmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
+  // proxy
+  const pxShow=()=>{const m=$("#agpx").value;$$(".agpxc").forEach(x=>x.style.display=m=="customer"?"":"none");$$(".agpxs").forEach(x=>x.style.display=m=="se"?"":"none")};$("#agpx").onchange=pxShow;pxShow();
+  $("#agpxsave").onclick=async()=>{try{if($("#agsekey").value)await api("/api/aiguard/provider-key",{key:$("#agsekey").value});$("#agsekey").value="";
+    const r=await api("/api/aiguard/settings",{proxy:$("#agpx").value,provider:$("#agprov").value,model:$("#agmodel").value,competitor:$("#agcomp").value,...($("#agpx").value=="customer"&&$("#agcred").value?{provider_credential:$("#agcred").value}:{})});
+    $("#agpxmsg").innerHTML=note("Saved. "+(r.note||""),"good")}catch(e){$("#agpxmsg").innerHTML=note(e.message,"bad")}};
+  if(typeof storiesHTML=="function")storiesHTML();
 }
 
 /* ---------------- use cases ---------------- */

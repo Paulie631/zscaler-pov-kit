@@ -271,6 +271,31 @@ def api(method, path, body, q):
         if path == "/api/device":
             from . import device_setup
             return 200, device_setup.info(current())
+        if path == "/api/aiguard":
+            from . import aiguard_runner
+            from .products import aiguard as agm
+            p = current()
+            lib = aiguard_runner.library(p)
+            slim = lambda t: {k: t.get(k) for k in ("id", "name", "group", "category", "direction", "expect")}  # noqa: E731
+            dkey, pkey = aiguard_runner.keys(p)
+            mode, ptype, model = agm.proxy_cfg(p)
+            disc = ((p.read_json("discovery.json", {}) or {}).get("products") or {}).get("aiguard") or {}
+            px = disc.get("proxy") or {}
+            rs = aiguard_runner.runs(p, 200)
+            return 200, {"groups": lib["groups"], "presets": lib["presets"], "users": lib["users"],
+                         "tests": [slim(t) for t in lib["tests"]], "panels": lib["panels"],
+                         "packs": {k: {"name": v["name"], "description": v.get("description", ""), "customer": v["customer"],
+                                       "criterion": v.get("criterion"), "tests": [slim(t) for t in v["tests"]]}
+                                   for k, v in lib["packs"].items()},
+                         "stories": lib["stories"],
+                         "profile": (p.cfg.get("aiguard") or {}).get("profile") or "monitor",
+                         "custom": (p.cfg.get("aiguard") or {}).get("custom") or {},
+                         "profiles": agm.PROFILES, "detectors": agm.template_detectors(), "never_block": sorted(agm.NEVER_BLOCK),
+                         "proxy": {"mode": mode, "provider": ptype, "model": model, "creds": px.get("creds") or [],
+                                   "cred": (p.cfg.get("aiguard") or {}).get("provider_credential"),
+                                   "se_key": bool(secrets.get(p.id, agm.PROVIDER_SECRET)), "has_provider": bool(px.get("provider"))},
+                         "keys": {"detection": bool(dkey), "proxy": bool(pkey)}, "runs": rs[-100:][::-1],
+                         "competitor": (p.cfg.get("aiguard") or {}).get("competitor") or "Competitor Inc"}
         if path == "/api/criteria/import":
             from . import criteria_import
             p = current()
@@ -421,6 +446,44 @@ def api(method, path, body, q):
         if body.get("lab") is not True:
             raise KitError("Tick the box to confirm this is your own lab tenant.")
         return 200, {"job": start_job("selftest", lambda log: selftest.run(p, tf, log, lab=True))}
+    if path == "/api/aiguard/run":
+        from . import aiguard_runner
+        p = current()
+        if body.get("text"):
+            tests = [{"id": "live", "name": "Live prompt", "group": "Live", "category": "Live",
+                      "direction": "OUT" if body.get("direction") == "OUT" else "IN", "text": str(body["text"])[:8000],
+                      "expect": []}]
+        else:
+            tests = aiguard_runner.find_tests(p, body.get("ids"), body.get("preset"), body.get("pack"))
+        mode = "proxy" if body.get("mode") == "proxy" else "detect"
+
+        def work(log):
+            return {"results": aiguard_runner.run(p, tests, mode, bool(body.get("tags")), body.get("users"),
+                                                  body.get("rounds") or 1, log)}
+        return 200, {"job": start_job("aiguard", work)}
+    if path == "/api/aiguard/settings":
+        p = current()
+        vals = {k: body[k] for k in ("proxy", "provider", "provider_credential", "model", "competitor") if k in body}
+        for k, v in vals.items():
+            settings.set_value(p, f"aiguard.{k}", v, save=False)
+        p.save()
+        return 200, {"ok": True, "note": "Run the checks again and approve the new change list to add the proxy key."
+                     if "proxy" in vals and vals["proxy"] != "none" else ""}
+    if path == "/api/aiguard/provider-key":
+        from .products import aiguard as agm
+        p = current()
+        k = (body.get("key") or "").strip()
+        if len(k) < 20:
+            raise KitError("Paste the whole provider API key.")
+        secrets.put(p.id, agm.PROVIDER_SECRET, k)
+        p.log("aiguard", "SE's model key saved to the keychain (proxy mode)")
+        return 200, {"ok": True}
+    if path == "/api/aiguard/pack":
+        from . import aiguard_runner
+        p = current()
+        rows = aiguard_runner.parse_csv(body.get("csv") or "")
+        pid, cid, n = aiguard_runner.import_pack(p, body.get("name"), rows)
+        return 200, {"pack": pid, "criterion": cid, "count": n}
     if path == "/api/criteria/read":
         import base64
         from . import criteria_import
@@ -531,7 +594,10 @@ def api(method, path, body, q):
         out = []
         products.get("aiguard").set_profile(LedgerTenant(tf(p, "apply"), led, []), p, led, body.get("profile"),
                                             lambda lv, m: out.append(m))
-        p.cfg.setdefault("aiguard", {})["profile"] = body.get("profile")
+        prof = body.get("profile")
+        p.cfg.setdefault("aiguard", {})["profile"] = prof if isinstance(prof, str) else "custom"
+        if isinstance(prof, dict):
+            p.cfg["aiguard"]["custom"] = prof
         p.save()
         return 200, {"message": " ".join(out)}
     if path == "/api/update/apply":
@@ -671,6 +737,9 @@ def page_file(path, q, token):
     if q.get("t") != token:
         return None
     p = current()
+    if path == "/aiguard-report":
+        from . import aiguard_runner
+        return aiguard_runner.report(p, q.get("customer")).encode("utf-8")
     f = {"/plan": p.path("plan.html"), "/report": p.path("report.html")}.get(path)
     return f.read_bytes() if f and f.exists() else None
 
@@ -728,7 +797,7 @@ def serve(port=8790, open_browser=True):
             if u.path == "/" and method == "GET":
                 html = (HERE / "console.html").read_text(encoding="utf-8").replace("__POV_TOKEN__", token)
                 return self._send(200, raw=html.encode(), ctype="text/html; charset=utf-8")
-            if u.path in ("/plan", "/report") and method == "GET":
+            if u.path in ("/plan", "/report", "/aiguard-report") and method == "GET":
                 data = page_file(u.path, q, token)
                 return self._send(200, raw=data, ctype="text/html; charset=utf-8") if data else \
                     self._send(404, {"error": "not found"})

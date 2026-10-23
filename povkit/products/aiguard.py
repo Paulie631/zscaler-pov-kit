@@ -36,7 +36,14 @@ KINDS = {
     "key": dict(res="aiguard.llm_application_credentials", get="get_credential", dele="delete_credential",
                 lst="list_credentials", title="App key"),
     "rule": dict(res="aiguard.policy_match_rules", get="get_rule", dele="delete_rule", lst="list_rules", title="Rule"),
+    "provider_credential": dict(res="aiguard.llm_provider_credentials", get="get_credential", dele="delete_credential",
+                                lst="list_credentials", title="Provider key"),
 }
+# Proxy mode (real prompts to the customer's model through AI Guard): the provider types the kit can drive, with how
+# AI Guard stores their key and a small default model. From the demo kit.
+PROVIDERS = {"anthropic": ("API_KEY", "key", "claude-haiku-5-5"), "openai": ("BEARER", "token", "gpt-4o-mini")}
+PROVIDER_SECRET = "aiguard-provider-key"   # the SE's own provider key (proxy mode 'se'), in the keychain only
+SECRET_REF = "{secret:" + PROVIDER_SECRET + "}"   # in the change list instead of the key itself
 
 # Blocking profiles, from the demo kit
 REGULATED_PII = {"CREDIT_CARD", "US_SSN", "US_BANK_NUMBER", "IBAN_CODE", "SWIFT_CODE", "US_PASSPORT", "US_ITIN"}
@@ -46,7 +53,9 @@ ATTACKS = {"inputDetectorPolicies": {"prompt_injection", "invisible_text", "toxi
 SIDES = ("inputDetectorPolicies", "outputDetectorPolicies")
 PROFILES = {"monitor": "Monitor: detect and log everything, block nothing",
             "attacks": "Block attacks: prompt injection, hidden text, toxicity, malicious URLs",
-            "data": "Block attacks + data leakage: also secrets and regulated PII"}
+            "data": "Block attacks + data leakage: also secrets and regulated PII",
+            "everything": "Block everything risky: every detector except topic and language classification"}
+SIDE_NAME = {"inputDetectorPolicies": "prompt", "outputDetectorPolicies": "response"}
 
 # Test prompts for the API proofs, from the demo kit's tests.json. '{_}' is removed at run time; it splits fake keys
 # so secret scanning doesn't flag the repository.
@@ -96,14 +105,35 @@ def _set_action(det, action, only=None):
     det["severity"] = "HIGH" if action == "BLOCK" else "LOW"
 
 
-def apply_profile(body, profile):
-    blocks = {side: {} for side in SIDES}
+def template_detectors():
+    tpl = template()
+    return {side: [d["detector"] for d in tpl.get(side, []) if d.get("enabled")] for side in SIDES}
+
+
+def profile_blocks(profile):
+    """{side: {detector: entity filter or None}} that a named profile blocks (the demo kit's profiles)."""
+    out = {side: {} for side in SIDES}
     if profile in ("attacks", "data"):
         for side in SIDES:
-            blocks[side].update({d: None for d in ATTACKS[side]})
+            out[side].update({d: None for d in ATTACKS[side]})
     if profile == "data":
         for side in SIDES:
-            blocks[side].update({"secrets": None, "pii": REGULATED_PII})
+            out[side].update({"secrets": None, "pii": REGULATED_PII})
+    if profile == "everything":
+        names = template_detectors()
+        for side in SIDES:
+            out[side].update({d: None for d in names[side] if d not in NEVER_BLOCK})
+    return out
+
+
+def apply_profile(body, profile):
+    """profile: a name in PROFILES, or a custom one: {"prompt": [detectors], "response": [detectors],
+    "pii_regulated_only": True} (Block for those, Detect for the rest)."""
+    if isinstance(profile, dict):
+        blocks = {side: {d: (REGULATED_PII if d == "pii" and profile.get("pii_regulated_only", True) else None)
+                         for d in profile.get(SIDE_NAME[side]) or [] if d not in NEVER_BLOCK} for side in SIDES}
+    else:
+        blocks = profile_blocks(profile)
     for side in SIDES:
         for d in body.get(side, []):
             if d.get("enabled") and d.get("detector") not in NEVER_BLOCK:
@@ -112,14 +142,74 @@ def apply_profile(body, profile):
     return body
 
 
-def das_scan(key, text, direction="IN", timeout=60):
+def blocked_map(body):
+    """{"prompt": [...], "response": [...]}: detectors with anything set to Block."""
+    def blocking(d):
+        cfg = d.get("configuration") or {}
+        return cfg.get("action") == "BLOCK" or any(
+            i.get("action") == "BLOCK" for k in ("entities", "secretTypes", "languages", "tags", "competitors")
+            for i in cfg.get(k, []) or [])
+    return {SIDE_NAME[side]: sorted(d["detector"] for d in body.get(side, []) if d.get("enabled") and blocking(d))
+            for side in SIDES}
+
+
+def current_profile(body):
+    have = blocked_map(body)
+    for name in PROFILES:
+        want = profile_blocks(name)
+        if all(sorted(want[side]) == have[SIDE_NAME[side]] for side in SIDES):
+            return name
+    return "custom"
+
+
+def proxy_cfg(pov):
+    """-> (mode 'none'|'customer'|'se', provider type, model)."""
+    ag = pov.cfg.get("aiguard") or {}
+    ptype = ag.get("provider") if ag.get("provider") in PROVIDERS else "anthropic"
+    return (ag.get("proxy") or "none"), ptype, ag.get("model") or PROVIDERS[ptype][2]
+
+
+def das_scan(key, text, direction="IN", timeout=60, user="pov-kit-proof"):
     import requests
-    body = {"content": text, "direction": direction, "transactionId": str(uuid.uuid4()), "user": "pov-kit-proof"}
+    body = {"content": text, "direction": direction, "transactionId": str(uuid.uuid4()), "user": user}
     r = requests.post(DAS_HOST + DAS_PATH, json=body, timeout=timeout,
                       headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"})
     if r.status_code >= 400:
         raise KitError(f"Detection API HTTP {r.status_code}: {r.text[:200]}".replace(key, "<key>"))
     return r.json()
+
+
+PROXY_HOST = os.getenv("AIGUARD_PROXY", "https://proxy.zseclipse.net").rstrip("/")
+
+
+def proxy_chat(ptype, key, model, prompt, user=None, max_tokens=300, timeout=90):
+    """A real prompt to the customer's model through AI Guard's proxy (from the demo kit). -> (reply, ms, blocked).
+    AI Guard answers a blocked prompt or reply with an HTTP error; that's blocked=True with its message."""
+    import requests
+    t0 = time.time()
+    if ptype == "anthropic":
+        r = requests.post(f"{PROXY_HOST}/v1/messages", timeout=timeout, json={
+            "model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}],
+            **({"metadata": {"user_id": re.sub(r"[^A-Za-z0-9_-]", "-", user)}} if user else {})},
+            headers={"X-ApiKey": key, "x-api-key": "unused", "anthropic-version": "2023-06-01",
+                     "content-type": "application/json"})
+    else:
+        r = requests.post(f"{PROXY_HOST}/v1/chat/completions", timeout=timeout, json={
+            "model": model, "max_tokens": max_tokens, "messages": [{"role": "user", "content": prompt}],
+            **({"user": user} if user else {})},
+            headers={"X-ApiKey": key, "Authorization": "Bearer unused", "content-type": "application/json"})
+    ms = int((time.time() - t0) * 1000)
+    if r.status_code >= 400:
+        text = (r.text or "")[:600].replace(key, "<key>")
+        if re.search(r"block|policy|guard|violat", text, re.I):
+            return text, ms, True
+        raise KitError(f"The AI Guard proxy answered HTTP {r.status_code}: {text[:300]}")
+    d = r.json()
+    if ptype == "anthropic":
+        reply = " ".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
+    else:
+        reply = ((d.get("choices") or [{}])[0].get("message") or {}).get("content", "")
+    return reply.strip(), ms, False
 
 
 def hits(d):
@@ -132,11 +222,15 @@ class AIGuard(Product):
 
     def role_scopes(self, pov=None):
         return {"discovery": [("ZGUARD (AI Guard)", "view only")],
-                "apply": [("ZGUARD (AI Guard): policies, apps, app keys, rules", "full")]}
+                "apply": [("ZGUARD (AI Guard): policies, apps, app keys, rules"
+                           + (", provider keys (proxy mode with the SE's key)"
+                              if pov and proxy_cfg(pov)[0] == "se" else ""), "full")]}
 
     def _names(self, P):
         return {"policy": naming.name(P, "AI Guard POV", 60), "app": naming.name(P, "POV app", 60),
-                "key": naming.name(P, "POV detection key", 60), "rule": naming.name(P, "POV app rule", 60)}
+                "key": naming.name(P, "POV detection key", 60), "rule": naming.name(P, "POV app rule", 60),
+                "proxy_key": naming.name(P, "POV proxy key", 60), "proxy_rule": naming.name(P, "POV proxy rule", 60),
+                "provider_cred": naming.name(P, "POV provider key", 60)}
 
     def discover(self, t, pov):
         from .. import usecases
@@ -157,6 +251,41 @@ class AIGuard(Product):
                     snap["customer_names"].append(n)
                 elif n in planned and not mine:
                     snap["taken"].append(f"'{n}' ({KINDS[kind]['title']})")
+        mode, ptype, model = proxy_cfg(pov)
+        provs = []
+        if mode != "none":
+            try:
+                provs = [{"id": o.get("id"), "name": o.get("name"), "type": str(o.get("type") or "").lower()}
+                         for o in items(t.call("aiguard.llm_providers", "list_providers"))]
+            except KitError as e:
+                checks.append(check("aiguard-proxy", "Proxy mode", WARN, f"providers unreadable: {str(e)[:120]}"))
+            prov = next((x for x in provs if x["type"] == ptype), None)
+            pcreds = [{"id": o.get("id"), "name": o.get("name")} for o in rows["provider_credential"]
+                      if prov and o.get("providerId") == prov["id"]]
+            snap["proxy"] = {"mode": mode, "provider": prov, "model": model, "creds": pcreds}
+            label = "Anthropic" if ptype == "anthropic" else "OpenAI"
+            if not prov:
+                checks.append(check("aiguard-proxy", "Proxy mode", WARN, f"no {label} provider in this AI Guard tenant",
+                                    f"The customer adds an {label} provider in AI Guard (or switch the POV's provider); "
+                                    "until then the tests run through the Detection API only."))
+            elif mode == "customer":
+                want = (pov.cfg.get("aiguard") or {}).get("provider_credential")
+                chosen = next((c for c in pcreds if str(c["id"]) == str(want)), None) or (
+                    pcreds[0] if len(pcreds) == 1 and not want else None)
+                snap["proxy"]["cred"] = chosen
+                checks.append(check("aiguard-proxy", "Proxy mode: the customer's model key", OK if chosen else WARN,
+                                    f"'{chosen['name']}' ({label})" if chosen else
+                                    (f"choose one of: {', '.join(c['name'] for c in pcreds)}" if pcreds else
+                                     f"no {label} key in their AI Guard yet"),
+                                    "" if chosen else "AI Guard tab → Proxy mode: pick the customer's key, or have their "
+                                    f"admin add their {label} key to AI Guard."))
+            else:
+                have = bool(secrets.get(pov.id, PROVIDER_SECRET))
+                snap["proxy"]["se_key"] = have
+                checks.append(check("aiguard-proxy", "Proxy mode: your own model key", OK if have else WARN,
+                                    f"{label} key in this computer's keychain" if have else "not entered yet",
+                                    "" if have else "AI Guard tab → Proxy mode: enter your key (it goes to the keychain, "
+                                    "and the change list adds it to the customer's AI Guard as a POV object)."))
         snap["rule_orders"] = sorted(int(r.get("ruleOrder") or 0) for r in rows["rule"]
                                      if not naming.has_prefix(r.get("name"), pov.prefix))
         # the detectors the POV's policies can switch to block, for use cases
@@ -182,7 +311,8 @@ class AIGuard(Product):
         order = (snap.get("rule_orders") or [0])[-1] + 1
         affects = "only traffic sent with the POV app's key"
         from .. import usecases   # each accepted use case gets its own policy, app, key and rule
-        uc_items, _ = usecases.aiguard_items(pov, snap, order + 1)
+        proxy = self._proxy_items(pov, snap, n, order + 1, affects)
+        uc_items, _ = usecases.aiguard_items(pov, snap, order + 1 + (1 if proxy else 0))
         return [
             item("aiguard", "policy", "aiguard.policy", n["policy"], criteria=AIG_CRITERIA, affects=affects,
                  why=f"Every detector on ({len(pol['inputDetectorPolicies'])} for prompts, "
@@ -198,11 +328,43 @@ class AIGuard(Product):
                  body={"name": n["rule"], "policyId": "{ref:aiguard.policy}", "enabled": True, "ruleOrder": order,
                        "matchCriteria": {"type": "DAS_APPLICATION", "llmApplications": [
                            {"applicationId": "{ref:aiguard.app}", "applicationCredentialsIds": ["{ref:aiguard.key}"]}]}}),
-        ] + uc_items, [f"Starts in Monitor. Switch with `pov-kit aiguard policy {'|'.join(PROFILES)}`; only the POV policy changes."]
+        ] + proxy + uc_items, [f"Starts in Monitor. Switch with `pov-kit aiguard policy {'|'.join(PROFILES)}`; only the POV policy changes."]
+
+    def _proxy_items(self, pov, snap, n, order, affects):
+        """Proxy mode: a PROXY key for the POV app (with the customer's model key, or the SE's, added as a POV object)
+        and a rule sending that key's traffic to the POV policy."""
+        px = snap.get("proxy") or {}
+        if not px.get("provider") or (px["mode"] == "customer" and not px.get("cred")) or \
+                (px["mode"] == "se" and not px.get("se_key")):
+            return []
+        ptype = px["provider"]["type"]
+        ctype, field, _ = PROVIDERS[ptype]
+        out = []
+        if px["mode"] == "se":
+            out.append(item("aiguard", "provider_credential", "aiguard.provider_cred", n["provider_cred"], affects=affects,
+                            why="Your own model key, so the POV can send real prompts; removed at teardown.",
+                            body={"name": n["provider_cred"], "providerId": px["provider"]["id"],
+                                  "apiCredentials": {"type": ctype, field: SECRET_REF}}))
+            cred = "{ref:aiguard.provider_cred}"
+        else:
+            cred = px["cred"]["id"]
+        out += [
+            item("aiguard", "key", "aiguard.proxy_key", n["proxy_key"], affects=affects,
+                 why=f"A proxy key for the POV app on the {'customer' if px['mode'] == 'customer' else 'SE'}'s "
+                     f"{ptype} key: real prompts to {px['model']} through AI Guard. Its secret goes to the keychain.",
+                 body={"name": n["proxy_key"], "applicationId": "{ref:aiguard.app}", "mode": "PROXY",
+                       "providerId": px["provider"]["id"], "providerCredentialsId": cred}),
+            item("aiguard", "rule", "aiguard.proxy_rule", n["proxy_rule"], affects=affects, placement="bottom",
+                 why="Sends the POV's proxy traffic to the POV policy, after the customer's rules.",
+                 body={"name": n["proxy_rule"], "policyId": "{ref:aiguard.policy}", "enabled": True, "ruleOrder": order,
+                       "matchCriteria": {"type": "APPLICATION", "llmApplications": [
+                           {"applicationId": "{ref:aiguard.app}", "applicationCredentialsIds": ["{ref:aiguard.proxy_key}"]}]}})]
+        return out
 
     def apply(self, t, pov, items_, log):
         from ..usecases import aiguard_secret
-        verbs = {"policy": "add_policy", "app": "add_application", "key": "add_credential", "rule": "add_rule"}
+        verbs = {"policy": "add_policy", "app": "add_application", "key": "add_credential", "rule": "add_rule",
+                 "provider_credential": "add_credential"}
         for it in [i for i in items_ if i["product"] == "aiguard" and i["action"] == "create"]:   # in plan order
             kind = it["kind"]
             if kind == "key":
@@ -213,6 +375,14 @@ class AIGuard(Product):
                         secrets.put(pov.id, name, r["key"])
                     return r.get("id")
                 t.create(it["key"], KINDS[kind]["res"], verbs[kind], extract_id=keep, stamped=False, **it["body"])
+            elif kind == "provider_credential":   # the SE's model key, from the keychain, never in the change list
+                body = copy.deepcopy(it["body"])
+                api = body["apiCredentials"]
+                for f in [f for f, v in api.items() if v == SECRET_REF]:
+                    api[f] = secrets.get(pov.id, PROVIDER_SECRET) or ""
+                if not all(api.values()):
+                    raise KitError("Your model key isn't in this computer's keychain: AI Guard tab → Proxy mode.")
+                t.create(it["key"], KINDS[kind]["res"], verbs[kind], stamped=False, **body)
             else:
                 t.create(it["key"], KINDS[kind]["res"], verbs[kind], stamped=False, **it["body"])
             log("ok", f"{'Already there:' if getattr(t, 'existed', False) else 'Created'} {it['name']}")
@@ -228,8 +398,8 @@ class AIGuard(Product):
         return o if isinstance(o, dict) and o else None
 
     def set_profile(self, t, pov, ledger, profile, log):
-        if profile not in PROFILES:
-            raise KitError(f"Profiles: {', '.join(PROFILES)}.")
+        if not isinstance(profile, dict) and profile not in PROFILES:
+            raise KitError(f"Profiles: {', '.join(PROFILES)}, or a custom one.")
         e = ledger.find("aiguard.policy")
         if not e:
             raise KitError("The POV has no AI Guard policy yet. Run `pov-kit apply` first.")
@@ -239,7 +409,9 @@ class AIGuard(Product):
         body = apply_profile(copy.deepcopy(live), profile)
         body = {k: v for k, v in body.items() if k not in ("id", "createdAt", "updatedAt", "lastModifiedBy")}
         t.update(e, live, KINDS["policy"]["res"], "update_policy", int(e["id"]), **body)
-        log("ok", f"POV policy: {PROFILES[profile]} (takes about 30 seconds)")
+        what = PROFILES[profile] if not isinstance(profile, dict) else (
+            "Custom: blocks " + (", ".join(f"{k}: {', '.join(v)}" for k, v in blocked_map(body).items() if v) or "nothing"))
+        log("ok", f"POV policy: {what} (takes about 30 seconds)")
 
     def drift(self, t, pov, ledger, items_):
         mine = [i for i in items_ if i["product"] == "aiguard" and i["action"] == "create"]
@@ -287,7 +459,11 @@ class AIGuard(Product):
         from ..usecases import aiguard_secret
         live, scan = scan is None, scan or das_scan
         tests, pkey = PROOF_TESTS.get(criterion["id"]), "aiguard.policy"
-        if criterion.get("usecase"):   # a use case's own prompts, through its own app if it has one
+        if criterion.get("customer_pack"):   # the customer's own prompts, through the POV's main app
+            from ..aiguard_runner import customer_packs
+            tests = (customer_packs(pov).get(criterion.get("pack")) or {}).get("tests") or []
+            key = secrets.get(pov.id, KEY_SECRET)
+        elif criterion.get("usecase"):   # a use case's own prompts, through its own app if it has one
             tests = criterion.get("aiguard") or []
             n = int(criterion["id"].split("-")[1])
             own = next((e for e in ledger.active("aiguard") if e["kind"] == "key"
