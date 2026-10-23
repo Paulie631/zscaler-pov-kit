@@ -93,8 +93,10 @@ Product extras: `./pov-kit set zpa.domains hr.acme.internal` (the POV app) and `
 azure]` (its App Connectors on AWS or Azure); `./pov-kit aiguard policy attacks` (what the POV's AI Guard policy blocks); `./pov-kit set
 pilot_emails jane@acme.com,raj@acme.com` (for ZDX and device checks).
 
-`./pov-kit probe-pack` writes this POV's probe tests. On a pilot device with Client Connector signed in:
-`./pov-kit probe --pack pov-probe-pack-<id>.json` (no keys), then send the results file to the SE:
+`./pov-kit probe-pack` writes this POV's probe pack: the tests for its chosen criteria. Pilot devices get the
+**POV probe**, a small separate download with only the tests and the traffic generator (no console, no keys; see
+[docs/PROBE.md](docs/PROBE.md)); the pilot device setup installs it. On a device with Client Connector signed in:
+`pov-probe pack install pov-probe-pack-<id>.json`, then `pov-probe test`, then send the results file to the SE:
 
 ```
 ./pov-kit import-probe pov-probe-ab12cd34.json

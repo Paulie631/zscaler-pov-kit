@@ -212,6 +212,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
       <span class="sp" style="flex:1"></span>
       <button class="primary" id="crreport">Build the report</button>
     </div>
+    <div id="crprobe"></div>
     <div id="crmsg"></div>
     <div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>ID</th><th>Criterion</th><th>Proofs</th><th>Result</th></tr></thead><tbody id="crrows"></tbody></table></div>
     <div class="hint">Click a row for its evidence, and to record what someone saw (an attestation).</div>
@@ -606,11 +607,11 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     st.innerHTML=head(7,"Next steps","What's left for the customer, and the things to hand to the pilot devices.")+
       manualHTML(man)+
       `<div class="group-h">For the pilot devices and you</div>`+deviceHTML(dev)+`<div class="cards">
-        <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The POV's own tests. On a pilot device signed in to Client Connector: <code>pov-kit probe --pack &lt;file&gt;</code>. No keys needed.</p><button id="npack">Download probe pack</button></div>
-        ${has("zia")?`<div class="card"><h4>ZIA traffic generator</h4><p class="muted" style="margin:4px 0 10px">Real traffic from a pilot device (web categories, SaaS, GenAI, EICAR and phishing test pages, fake card numbers, file types, DNS, unusual ports), so the customer's ZIA dashboards, Insights and Shadow IT show the POV's policy at work. Each round sends nothing unless ip.zscaler.com confirms traffic goes through Zscaler. On a pilot device with the kit (the setup above installs it):</p>
-          <pre class="log" style="white-space:pre-wrap">pov-kit traffic check                  # is this device in the POV's tenant, as a pilot user?
-pov-kit traffic run                    # one round now
-pov-kit traffic schedule --every 30    # a round every 30 minutes (--remove stops it)</pre>
+        <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The tests for the criteria the customer chose, and what the traffic generator sends for them. The device setup installs it with the POV probe (no keys, nothing in the tenant). After the criteria change, send the new pack: <code>pov-probe pack install &lt;file&gt;</code>, then <code>pov-probe test</code>.</p><button id="npack">Download probe pack</button><div id="npstat"></div></div>
+        ${has("zia")?`<div class="card"><h4>ZIA traffic generator</h4><p class="muted" style="margin:4px 0 10px">Real traffic from a pilot device (web categories, SaaS, GenAI, EICAR and phishing test pages, fake card numbers, file types, DNS, unusual ports), so the customer's ZIA dashboards, Insights and Shadow IT show the POV's policy at work. Each round sends nothing unless ip.zscaler.com confirms traffic goes through Zscaler. On a pilot device with the POV probe (the setup above installs it):</p>
+          <pre class="log" style="white-space:pre-wrap">pov-probe traffic check                  # is this device in the POV's tenant, as a pilot user?
+pov-probe traffic run                    # one round now, shaped by the probe pack
+pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove stops it)</pre>
           <div class="row" style="gap:8px;margin-top:8px"><button id="ntraws">AWS generator template</button><span class="hint">A Windows instance in the customer's (or your) AWS account, for the pilot user above: CloudFormation, no inbound ports, a weekday schedule. Sign in to Client Connector once over Fleet Manager.</span></div><div id="ntrmsg"></div></div>`:""}
         ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A template for two connectors in the customer's AWS account or Azure subscription, plus the provisioning key to paste into it.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>AWS template</button><button id="ntplaz" ${c.zpa_key?"":"disabled"}>Azure template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button><button id="ncs" ${c.zpa_key?"":"disabled"}>CloudShare commands</button></div><div id="nkeyv"></div></div>`:""}
         ${has("aiguard")?`<div class="card"><h4>AI Guard policy</h4><p class="muted" style="margin:4px 0 10px">What the POV's own policy blocks. Takes about 30 seconds to apply.</p><div class="seg" id="nag"><button data-p="monitor">Monitor</button><button data-p="attacks">Block attacks</button><button data-p="data">+ data leakage</button></div><div id="nagmsg" class="hint"></div></div>`:""}
@@ -624,6 +625,7 @@ pov-kit traffic schedule --every 30    # a round every 30 minutes (--remove stop
     bindDevice(dev,()=>wizard());
     $("#ntraws")&&($("#ntraws").onclick=async()=>{try{const r=await api("/api/traffic/aws",{email:($("#duser")||{}).value||""});download(r.name,JSON.stringify(r.template,null,2),"application/json");
       $("#ntrmsg").innerHTML=note(`Saved ${r.name} for ${esc(r.template.Parameters.PilotUser.Default)}. AWS console → CloudFormation → Create stack → Upload a template file. The stack's Outputs say how to connect; delete the stack to remove everything.`,"good")}catch(e){$("#ntrmsg").innerHTML=note(e.message,"bad")}});
+    api("/api/probe/status").then(ps=>{$("#npstat")&&($("#npstat").innerHTML=probeStatusHTML(ps))}).catch(()=>{});
     $("#npack").onclick=async()=>download(`pov-probe-pack-${c.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
     $("#ntpl")&&($("#ntpl").onclick=async()=>download(`pov-${c.id}-app-connectors.json`,JSON.stringify((await api("/api/zpa-template",{})).template,null,2),"application/json"));
     $("#ntplaz")&&($("#ntplaz").onclick=async()=>download(`pov-${c.id}-app-connectors-azure.json`,JSON.stringify((await api("/api/zpa-template",{cloud:"azure"})).template,null,2),"application/json"));
@@ -646,6 +648,16 @@ pov-kit traffic schedule --every 30    # a round every 30 minutes (--remove stop
   }catch(e){st.innerHTML=note(e.message,"bad")+nav(W.step>0,false);bindNav()}
 }
 
+
+/* ---------------- the probe pack and what still needs a run ---------------- */
+function probeStatusHTML(ps){
+  if(!ps||!ps.criteria)return "";
+  const left=ps.need.length+ps.stale.length;
+  return `<div class="hint" style="margin:10px 0 0">Probe pack <code>${esc(ps.pack_id)}</code>: ${ps.criteria} criteria with device tests${ps.traffic&&ps.traffic.types.length?`, traffic: ${esc(ps.traffic.types.join(", "))}`:""}. ${ps.runs?`${ps.runs} run${ps.runs==1?"":"s"} imported from ${esc(ps.devices.join(", "))}.`:"No device results imported yet."}</div>`+
+    (ps.stale.length?note(`Tests changed since the last run for ${ps.stale.map(esc).join(", ")}: download the probe pack again, install it on the pilot devices (pov-probe pack install FILE) and run pov-probe test.`,"bad"):"")+
+    (ps.need.length&&ps.runs?note(`No device run covers ${ps.need.map(esc).join(", ")} yet: the devices may have an older pack.`):"")+
+    (!left&&ps.runs?note("Every criterion with device tests has a current run.","good"):"");
+}
 
 /* ---------------- steps people do (the API can't) ---------------- */
 const PHASE_H={setup:"Before we start",customer:"During the POV",end:"When the POV ends"};
@@ -693,7 +705,7 @@ let DEV_OS="macos";
 function deviceHTML(d){
   const ins=d.installers[DEV_OS];
   return `<div class="card" style="margin:6px 0 12px"><h4>Set up a pilot device</h4>
-    <p class="muted" style="margin:4px 0 10px">Installs Client Connector signed in to this tenant (cloud, domain and user filled in, so nobody picks them by hand), then the kit's probe, which runs the POV's tests once traffic goes through Zscaler. The installer is the kit's pinned copy, checked on the device by SHA-256 and Zscaler's signature. Nothing changes in the tenant.</p>
+    <p class="muted" style="margin:4px 0 10px">Installs Client Connector signed in to this tenant (cloud, domain and user filled in, so nobody picks them by hand), then the POV probe (the kit's small pilot-device part: tests and traffic, no keys) with this POV's probe pack, which runs the POV's tests once traffic goes through Zscaler. The installer is the kit's pinned copy, checked on the device by SHA-256 and Zscaler's signature. Nothing changes in the tenant.</p>
     <div class="form"><span class="lbl">Zscaler cloud</span><div class="row" style="gap:8px"><input type="text" id="dcloud" value="${esc(d.cloud||"")}" placeholder="zscalertwo" style="width:160px"><button id="dcsave">Save</button><button id="dcdet">Detect</button></div>
       <span class="lbl">Pilot user</span><div><input type="text" id="duser" list="dusers" value="${esc(d.users[0]||"")}" placeholder="jane@acme.com" style="width:280px"><datalist id="dusers">${d.users.map(u=>`<option value="${esc(u)}">`).join("")}</datalist></div>
       <span class="lbl">Device</span><div class="seg" id="dos"><button data-o="macos" class="${DEV_OS=="macos"?"on":""}">macOS</button><button data-o="windows" class="${DEV_OS=="windows"?"on":""}">Windows</button></div></div>
@@ -1009,6 +1021,7 @@ async function criteria(){let R;try{R=await api("/api/criteria");CR=R.rows}catch
   const sm=R.summary,li=(t,xs)=>xs&&xs.length?`<div class="group-h">${t}</div><ul style="margin:4px 0 0 18px;padding:0">${xs.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
   $("#crsum").innerHTML=sm?`<p><b>${esc(sm.headline)}</b></p>${li("Proved",sm.proved)}${li("Not proved yet",sm.open)}${li("What it means",sm.value)}${li("Next steps",sm.next_steps)}<div class="hint">Drafted ${esc(sm.at.slice(0,16).replace("T"," "))} UTC${R.summary_stale?" · the results have changed since: draft it again":""}. It opens the report.</div>`:'<div class="empty">Not drafted yet.</div>';
   const n=s=>CR.filter(r=>r.status==s).length;
+  api("/api/probe/status").then(ps=>{$("#crprobe").innerHTML=probeStatusHTML(ps)}).catch(()=>{});
   $("#crstat").innerHTML=`<div><b>${n("pass")}</b>passed</div><div><b>${n("fail")}</b>failed</div><div><b>${n("incomplete")}</b>still to prove</div><div><b>${CR.length}</b>criteria</div>`;
   $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span></td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
   $$("#crrows tr.r").forEach(tr=>tr.onclick=()=>{open=open==+tr.dataset.i?null:+tr.dataset.i;criteria()});

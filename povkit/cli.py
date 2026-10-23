@@ -185,32 +185,13 @@ def c_probe_pack(a):
 
 
 def c_probe(a):
-    from . import probe
+    from . import device
     if a.cleanup:
-        print(f"Removed {probe.cleanup_ai()} Endpoint AI test item(s).")
-        return 0
-    if a.pack:
-        crit = json.loads(Path(a.pack).read_text(encoding="utf-8"))["criteria"]
-    else:   # no pack: the catalog's tests that need no POV values
-        crit = [c for c in products.base.load_catalog() if c.get("probe")]
-        crit = [dict(c, probe=[s for s in c["probe"] if not any("{" in str(v) and "{b64}" not in str(v) for v in s.values())])
-                for c in crit]
-        crit = [c for c in crit if c["probe"]]
-    if a.criteria:
-        want = set(a.criteria.split(","))
-        crit = [c for c in crit if c["id"] in want]
-    if a.wait and not probe.wait_for_zscaler(a.wait, print):
-        raise KitError(f"Traffic still doesn't go through Zscaler after {a.wait} minutes, so the tests would mean "
-                       "nothing. Check Client Connector is signed in with Internet Security On, then run this again.")
-    res = probe.run(crit)
-    out = Path(a.out or f"pov-probe-{res['run_id']}.json")
-    probe.save(res, out)
-    ok = sum(r["pass"] for r in res["results"])
-    for r in res["results"]:
-        say("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['outcome']} (expected {r['expect']}) {r['detail']}")
-    print(f"{ok} of {len(res['results'])} as expected. Send {out} to the SE: `pov-kit import-probe {out.name}`.")
-    if any(r["spec"]["type"] == "ai_artifacts" for r in res["results"]):
-        print("Endpoint AI test files stay for the console's inventory; remove them afterwards: `pov-kit probe --cleanup`.")
+        return device.c_cleanup(a)
+    try:
+        return device.c_test(a)
+    except device.DeviceError as e:
+        raise KitError(str(e)) from e
 
 
 def c_import_probe(a):
@@ -637,39 +618,17 @@ def c_steps(a):
 
 
 def c_traffic(a):
-    from . import traffic
-    if a.what == "check":
-        bad = 0
-        for c in traffic.check(cloud=a.cloud):
-            say({"ok": "ok", "fail": "fail"}.get(c["status"], "warn"), f"{c['label']}: {c['detail']}")
-            if c["fix"]:
-                print(f"        {c['fix']}")
-            bad += c["status"] == "fail"
-        return 1 if bad else 0
+    from . import device
     if a.what == "aws":
         from . import traffic_aws
         out = traffic_aws.write(a.out, _pov(a), pilot_user=a.user, every=a.every, per_type=a.count)
         print(f"Wrote {out}. Upload it in the AWS CloudFormation console (Create stack > Upload a template file); "
               "the stack's Outputs say how to connect and sign in. Delete the stack to remove everything.")
         return 0
-    if a.what == "schedule":
-        if a.remove:
-            traffic.schedule_remove()
-            print("Scheduled traffic removed.")
-            return 0
-        types = [t for t in (a.types or "").split(",") if t] or None
-        print(f"Scheduled: {traffic.schedule_install(a.every, a.count, types)}. Each round sends nothing unless "
-              f"traffic goes through Zscaler. Results: {traffic.log_dir()}. Stop it: `pov-kit traffic schedule --remove`.")
-        return 0
-    types = [t for t in (a.types or "").split(",") if t] or None
-    bad = [t for t in types or [] if t not in traffic.TYPES]
-    if bad:
-        raise KitError(f"Unknown traffic type(s): {', '.join(bad)}. Use any of: {', '.join(traffic.TYPES)}.")
-    res = traffic.run(types=types, count=a.count, log_dir=traffic.log_dir())
-    if res.get("skipped"):
-        return 2
-    print(f"\n{res['summary']}")
-    return 0
+    try:
+        return device.c_traffic(a)
+    except device.DeviceError as e:
+        raise KitError(str(e)) from e
 
 
 def c_version(a):

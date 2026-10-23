@@ -8,7 +8,7 @@ The stack: its own small VPC (or an existing subnet), a security group with no i
 through Fleet Manager remote desktop, nothing exposed), one Windows Server 2022 instance whose first-boot script runs
 the kit's pilot-device setup (the pinned Client Connector installer, checked by SHA-256 and Zscaler's signature,
 installed for the POV's cloud, domain and user, then the POV kit), and two scheduled tasks: a traffic round every N
-minutes (sent only once traffic is confirmed to go through Zscaler) and `pov-kit traffic check` at startup.
+minutes (sent only once traffic is confirmed to go through Zscaler) and `pov-probe traffic check` at startup.
 Optionally a weekday start / nightly stop to keep costs down.
 
 No secrets are in the template: you sign in to Client Connector once, by hand, as the pilot user.
@@ -31,19 +31,27 @@ Start-Transcript -Path "$root\setup.log" -Append
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 "Zscaler POV ${PovId} traffic generator: first-boot setup for pilot user ${PilotUser}"
 
-# 1. The kit's pilot-device setup: pinned Client Connector (SHA-256 + Zscaler signature) for this POV, then the kit.
-#    The kit lives under C:\ZPOV\home so the scheduled tasks (as SYSTEM) and a remote desktop user share it.
+# 1. The kit's pilot-device setup: pinned Client Connector (SHA-256 + Zscaler signature) for this POV, then the POV
+#    probe with the POV's probe pack (so the traffic follows the POV's criteria). The probe lives under C:\ZPOV\home
+#    so the scheduled tasks (as SYSTEM) and a remote desktop user share it.
 $env:USERPROFILE = "$root\home"; $env:HOME = "$root\home"
 $env:UV_INSTALL_DIR = "$root\home\.local\bin"; $env:UV_CACHE_DIR = "$root\uv-cache"; $env:UV_PYTHON_INSTALL_DIR = "$root\python"
 $env:ZPOV_KIT_REPO = "${KitRepo}"
+$env:ZPOV_PROBE_HOME = "$root\home\.zscaler-pov-probe"
+New-Item -ItemType Directory -Force -Path $env:ZPOV_PROBE_HOME | Out-Null
+$pack = "__PACK_B64__"
+if ($pack) {
+  $env:ZPOV_PACK_FILE = "$env:ZPOV_PROBE_HOME\pack-download.json"
+  [IO.File]::WriteAllBytes($env:ZPOV_PACK_FILE, [Convert]::FromBase64String($pack))
+}
 $name, $domain = "${PilotUser}".Split("@", 2)
 try {
   & ([scriptblock]::Create((Invoke-RestMethod "https://github.com/${KitRepo}/releases/latest/download/zcc-setup.ps1"))) -Cloud "${ZccCloudName}" -Domain $domain -User $name
 } catch { "Pilot device setup stopped: $_" }
 
-# 2. A wrapper so the tasks and the desktop shortcut run the kit from C:\ZPOV with its logs there too
-$kit = "$root\home\.zscaler-pov-kit\app\pov-kit.cmd"
-$envs = "@echo off`r`nset USERPROFILE=$root\home`r`nset ZPOV_HOME=$root\home\.zscaler-pov-kit`r`nset UV_CACHE_DIR=$root\uv-cache`r`nset UV_PYTHON_INSTALL_DIR=$root\python`r`nset PYTHONUTF8=1`r`nset NO_COLOR=1`r`n"
+# 2. A wrapper so the tasks and the desktop shortcut run the probe from C:\ZPOV with its logs there too
+$kit = "$root\home\.zscaler-pov-probe\app\pov-probe.cmd"
+$envs = "@echo off`r`nset USERPROFILE=$root\home`r`nset ZPOV_PROBE_HOME=$root\home\.zscaler-pov-probe`r`nset UV_CACHE_DIR=$root\uv-cache`r`nset UV_PYTHON_INSTALL_DIR=$root\python`r`nset PYTHONUTF8=1`r`nset NO_COLOR=1`r`n"
 Set-Content -Encoding ascii -Path "$root\traffic.cmd" -Value ($envs + "echo ==== %DATE% %TIME% >> `"$root\traffic.log`"`r`n`"$kit`" traffic %* >> `"$root\traffic.log`" 2>&1`r`n")
 
 # 3. Scheduled tasks (as SYSTEM, so they run with nobody signed in to Windows)
@@ -74,9 +82,16 @@ def param(type_, default, desc, **kw):
     return p
 
 
-def build(pov_id, cloud, pilot_user, every=30, per_type=4, schedule=True, repo=REPO):
+def build(pov_id, cloud, pilot_user, every=30, per_type=4, schedule=True, repo=REPO, pack=None):
+    """pack: the POV's probe pack, written into the first-boot script (no secrets in it), so the generator's traffic
+    follows the POV's criteria and `pov-probe test` can run there too."""
     if "@" not in (pilot_user or ""):
         raise ValueError("The pilot user is an email address.")
+    import base64
+    b64 = base64.b64encode(json.dumps(pack, separators=(",", ":")).encode()).decode() if pack else ""
+    if len(b64) > 9000:   # EC2 user data is 16 KB in all; a pack that large stays off (install it by hand)
+        b64 = ""
+    user_data = USER_DATA.replace("__PACK_B64__", b64)
     tags = [{"Key": "Name", "Value": f"{NAME} ({pov_id})"}, {"Key": "zpov", "Value": pov_id}]
     params = {
         "PovId": param("String", pov_id, "The POV this generator belongs to (for names and tags)."),
@@ -145,7 +160,7 @@ def build(pov_id, cloud, pilot_user, every=30, per_type=4, schedule=True, repo=R
                           "MetadataOptions": {"HttpTokens": "required"},
                           "BlockDeviceMappings": [{"DeviceName": "/dev/sda1", "Ebs": {"VolumeSize": 60, "VolumeType": "gp3",
                                                                                        "Encrypted": True}}],
-                          "UserData": {"Fn::Base64": {"Fn::Sub": USER_DATA}},
+                          "UserData": {"Fn::Base64": {"Fn::Sub": user_data}},
                           "Tags": tags}},
         "SchedulerRole": {"Type": "AWS::IAM::Role", "Condition": "Schedule",
                           "Properties": {"AssumeRolePolicyDocument": {"Version": "2012-10-17", "Statement": [
@@ -220,7 +235,9 @@ def for_pov(pov, pilot_user=None, every=30, per_type=4, schedule=True):
     if not user:
         raise KitError("This POV has no pilot users yet: name them, or Apply so its test users exist.")
     device_setup.split(user)
-    return f"zpov-traffic-{pov.id}.json", build(pov.id, cloud, user, every, per_type, schedule)
+    from . import evidence
+    return f"zpov-traffic-{pov.id}.json", build(pov.id, cloud, user, every, per_type, schedule,
+                                                 pack=evidence.probe_pack(pov))
 
 
 def write(path, pov, **kw):

@@ -347,6 +347,10 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setattr(povs, "BASE", tmp_path)
     monkeypatch.setattr(povs, "POVS", tmp_path / "povs")
     monkeypatch.setattr(povs, "CURRENT", tmp_path / "current")
+    from povkit import device, traffic   # the pilot-device side keeps its files apart too
+    monkeypatch.setattr(traffic, "DEVICE_HOME", tmp_path / "device")
+    monkeypatch.setattr(device, "HOME", tmp_path / "device")
+    monkeypatch.setattr(device, "PACK", tmp_path / "device" / "pack.json")
     store = {}
     monkeypatch.setattr(secrets, "get", lambda pid, n: store.get((pid, n)))
     monkeypatch.setattr(secrets, "put", lambda pid, n, v: store.__setitem__((pid, n), v))

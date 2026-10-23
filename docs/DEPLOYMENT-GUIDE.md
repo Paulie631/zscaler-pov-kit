@@ -15,7 +15,7 @@ POV, a 60-minute kickoff with the customer's admin, then a few minutes before ea
 | --- | --- | --- |
 | Zscaler POV Kit (`pov-kit`) | Your laptop | Reads the tenant, writes the change list, applies what the customer approved, proves the criteria, hands over |
 | The POV console | Your browser (this computer only) | Quick start and the step-by-step wizard, plus status, use cases, evidence and handover |
-| Pilot devices | The customer's laptops, a spare laptop, or a virtual machine | Client Connector signed in as a pilot user; the kit's probe proves blocks, inspection and access from there |
+| Pilot devices | The customer's laptops, a spare laptop, or a virtual machine | Client Connector signed in as a pilot user; the POV probe (tests and traffic only, no keys) proves blocks, inspection and access from there |
 | App Connectors (ZPA POVs) | The customer's AWS or Azure, or a CloudShare lab | Two connectors from the kit's template, plus the kit's test app when the customer hasn't named one |
 | The customer's tenant | Zscaler cloud | Holds the POV's objects: each one is named with the POV prefix (`ZPOV`) and removed or handed over at the end |
 
@@ -192,7 +192,9 @@ Mac pilot devices), and **Status → Fix drift** adopts them by name.
 ### Setting up a pilot device
 
 **Next steps → Set up a pilot device** installs Client Connector already pointed at the customer's tenant, then the
-kit's probe. Pick the pilot user and macOS or Windows, then either:
+**POV probe**. The probe is the kit's small pilot-device part: the POV's tests and the traffic generator, with no
+console, no API keys and no tenant access, so it's an easy install for the customer's security team to approve
+([PROBE.md](PROBE.md) is its one-page description). Pick the pilot user and macOS or Windows, then either:
 
 - **Copy the one-line command** and paste it on the device: in Terminal on a Mac, or in PowerShell opened with
   **Run as administrator** on Windows; or
@@ -208,6 +210,18 @@ kit has no pinned macOS installer yet, so on a Mac download the `.pkg` from **In
 Deployment → Platform Releases → macOS** in the customer's console and add `--pkg FILE`; on Windows, `-Msi FILE` uses
 the customer's own version the same way. A file you give is checked for Zscaler's signature.
 
+**The probe pack keeps the devices in step with the criteria.** It holds the tests for the criteria the customer
+chose (catalog criteria and use cases), each test's version, and what the traffic generator should send for them.
+The setup script installs it on the device (`pov-probe pack install FILE` does it by hand), and every results file
+says which pack and which test versions it ran. So when the criteria or a use case change:
+
+- **Success criteria** lists the criteria whose tests changed since the last run, and the ones no device has run
+  yet;
+- a criterion whose tests changed counts as still to prove until a device runs the new pack. Results from another
+  POV are refused.
+
+Send the new pack (**Download probe pack**), install it on the devices, and run `pov-probe test` again.
+
 The setup stops, and changes nothing, on a device that already has Client Connector or another organization's
 Zscaler settings: never use your own work laptop as a pilot device. To set up a dedicated pilot device again (a lab
 VM, say), add `--replace` (macOS) or `-Replace` (Windows). Remove the settings profile from a Mac after the
@@ -221,12 +235,14 @@ apps, fetches the EICAR and Google Safe Browsing test pages, posts fake card num
 and downloads file types, makes DNS lookups and tries the POV's blocked ports. No keys; nothing in the tenant changes.
 Each round first asks ip.zscaler.com and sends nothing unless traffic goes through Zscaler.
 
-On a pilot device with the kit (the device setup installs it):
+The probe pack shapes it: only the kinds of traffic the chosen criteria call for (no DLP posts without a DLP
+criterion, say), plus each use case's own sites and blocked ports. On a pilot device with the POV probe (the device
+setup installs it):
 
 ```
-pov-kit traffic check                  # in the POV's tenant, as a pilot user? (the tenant-check page is blocked)
-pov-kit traffic run                    # one round now (--types web,saas,genai,threats,dlp,files,dns,ports, --count N)
-pov-kit traffic schedule --every 30    # a round every 30 minutes while signed in; --remove stops it
+pov-probe traffic check                  # in the POV's tenant, as a pilot user? (the tenant-check page is blocked)
+pov-probe traffic run                    # one round now, shaped by the probe pack (--types, --count N to override)
+pov-probe traffic schedule --every 30    # a round every 30 minutes while signed in; --remove stops it
 ```
 
 With no spare device: **Next steps → ZIA traffic generator → AWS generator template** writes a CloudFormation template
@@ -235,7 +251,8 @@ SSM role (connect with Fleet Manager remote desktop), the kit's pinned Client Co
 and a scheduled round every 30 minutes; a weekday start and nightly stop keeps the cost down. Upload it in
 CloudFormation (**Create stack → Upload a template file**), sign in to Client Connector once over remote desktop, and
 read **POV traffic log** on its desktop. Delete the stack at the end of the POV (CLI: `pov-kit traffic aws`). On
-CloudShare, the Windows pilot from the blueprint runs `pov-kit traffic schedule` the same way.
+CloudShare, the Windows pilot from the blueprint runs `pov-probe traffic schedule` the same way. The AWS template
+carries the POV's probe pack, so download it again after the criteria change.
 
 ### Steps the API can't do
 
@@ -293,7 +310,7 @@ PII in a prompt to a local model flagged, agent activity visible per user and de
 side with harmless, clearly named test files: a local model file, an MCP server definition and an agent skill
 (`zpov-test-…`), an inert "risky" skill (`zpov-risky-…`, removed by the probe), and a prompt with synthetic PII to a
 local Ollama model if one is installed. A person records what the admin console shows. Afterwards, on the device:
-`pov-kit probe --cleanup`. Replace the draft criteria with Zscaler's internal POV plan for the product when you have
+`pov-probe cleanup`. Replace the draft criteria with Zscaler's internal POV plan for the product when you have
 it.
 
 ### A POV lab on CloudShare
@@ -312,7 +329,7 @@ Any step can be revisited after Quick start.
 
 - **Before every customer session:** **Status → Check now**. It says whether the tenant still matches the approval,
   what drifted (and **Fix drift** repairs only the POV's own objects), the end date and the last backup.
-- **Dashboards:** keep the traffic generator running on a pilot device (`pov-kit traffic schedule`) or the AWS
+- **Dashboards:** keep the traffic generator running on a pilot device (`pov-probe traffic schedule`) or the AWS
   generator, so ZIA, Insights and Shadow IT have the pilot group's traffic to show.
 - **Evidence:** run the probe on each pilot device (the setup script runs it for you), and import the results
   (**Success criteria → Import probe results**). **Run API proofs** checks what the API can see: the ZIA rules behind

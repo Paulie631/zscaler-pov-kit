@@ -269,6 +269,8 @@ def api(method, path, body, q):
             from . import manual
             p = current()
             return 200, {"steps": manual.guide(p), "console": manual.GUIDE["console"]}
+        if path == "/api/probe/status":
+            return 200, evidence.pack_status(current())
         if path == "/api/device":
             from . import device_setup
             return 200, device_setup.info(current())

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.25
+
+- **The POV probe: a separate small download for pilot devices.** It holds only the POV's tests and the traffic
+  generator: no console, no API keys, no tenant access, two small libraries. It installs with one line
+  (`install-probe.sh` / `install-probe.ps1`, SHA-256-checked), and gives a `pov-probe` command (`test`, `pack`,
+  `traffic`, `cleanup`). The pilot device setup, the CloudShare pilot and the AWS traffic generator now install it
+  instead of the whole kit. The kit's own `pov-kit probe` and `pov-kit traffic` still work.
+- **Probe packs follow the success criteria.**
+  - A pack holds the chosen criteria's tests (use cases included), each test's version, and a traffic profile: only
+    the traffic those criteria call for, plus the use cases' own sites and blocked ports.
+  - Results say which POV and which test versions they ran. Results from another POV are refused.
+  - A criterion whose tests changed counts as still to prove until a device runs the new pack. **Success criteria**
+    lists what's out of date and what no device has run yet.
+
 ## 0.9.24
 
 - **Claude without an AI Guard tenant.** SEs and partners with no AI Guard proxy key can save their own Anthropic API

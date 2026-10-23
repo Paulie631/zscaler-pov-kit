@@ -4,6 +4,7 @@
   zscaler-pov-kit-<v>-email.zip        without .cmd/.command files, so mail filters don't block it
   zscaler-pov-kit-<v>.plugin           the Claude plugin
   zscaler-pov-kit-<v>-email.plugin     the plugin without .cmd files
+  zscaler-pov-probe-<v>.zip            the probe for pilot devices: tests and traffic only (install-probe.sh/.ps1)
   SHA256SUMS.txt
   latest.json                          what the kit's update check reads (version, notes, zip link, SHA-256)
 
@@ -27,8 +28,14 @@ TOP = "zscaler-pov-kit/"
 SHIP = ["Install Zscaler POV Kit.cmd", "Install Zscaler POV Kit.command", "Uninstall Zscaler POV Kit.cmd",
         "Uninstall Zscaler POV Kit.command", "pov-kit", "pov-kit.cmd", "pov_kit.py", "povkit", "assets", "docs", "plugin",
         "tools/build_plugin.py", "README.md", "INSTALL.md", "SECURITY.md", "TESTPLAN.md", "CHANGELOG.md", "pyproject.toml"]
+# the probe package: only what a pilot device runs (no console, no tenant API, no secrets handling)
+PROBE_TOP = "zscaler-pov-probe/"
+PROBE_SHIP = {"pov-probe": "pov-probe", "pov-probe.cmd": "pov-probe.cmd", "pov_probe.py": "pov_probe.py",
+              "docs/PROBE.md": "README.md", "povkit/__init__.py": "povkit/__init__.py", "povkit/device.py": "povkit/device.py",
+              "povkit/probe.py": "povkit/probe.py", "povkit/traffic.py": "povkit/traffic.py",
+              "povkit/traffic.json": "povkit/traffic.json"}
 EMAIL_BLOCKED = re.compile(r"\.(cmd|command|bat|ps1|exe)$", re.I)
-EXECUTABLE = re.compile(r"(^|/)(pov-kit|[^/]+\.command)$")
+EXECUTABLE = re.compile(r"(^|/)(pov-kit|pov-probe|[^/]+\.command)$")
 
 
 def version():
@@ -47,6 +54,21 @@ def archive():
     return zipfile.ZipFile(io.BytesIO(data))
 
 
+def probe_zip(dest):
+    """The probe package from the committed files at HEAD, so it matches the kit's zip exactly."""
+    data = subprocess.run(["git", "-C", str(ROOT), "archive", "--format=zip", "HEAD", *PROBE_SHIP],
+                          capture_output=True, check=True).stdout
+    src = zipfile.ZipFile(io.BytesIO(data))
+    with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as out:
+        for info in src.infolist():
+            if info.is_dir():
+                continue
+            new = zipfile.ZipInfo(PROBE_TOP + PROBE_SHIP[info.filename], info.date_time)
+            new.compress_type = zipfile.ZIP_DEFLATED
+            new.external_attr = (0o100755 << 16) if EXECUTABLE.search(new.filename) else (0o100644 << 16)
+            out.writestr(new, src.read(info.filename))
+
+
 def rezip(src, dest, keep=lambda name: True):
     with zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as out:
         for info in src.infolist():
@@ -59,7 +81,7 @@ def rezip(src, dest, keep=lambda name: True):
 
 def check():
     v = version()
-    missing = [f for f in SHIP if not (ROOT / f).exists()]
+    missing = [f for f in [*SHIP, *PROBE_SHIP, "install-probe.sh", "install-probe.ps1"] if not (ROOT / f).exists()]
     assert not missing, f"missing shipped files: {missing}"
     assert changelog_notes(v), f"CHANGELOG.md has no section for {v}"
     print(f"release files ok for {v}")
@@ -85,13 +107,18 @@ def main():
     files += [DIST / f"zscaler-pov-kit-{v}.plugin", DIST / f"zscaler-pov-kit-{v}-email.plugin"]
     rezip(plugin, files[2])
     rezip(plugin, files[3], lambda n: not EMAIL_BLOCKED.search(n))
+    probe = DIST / f"zscaler-pov-probe-{v}.zip"
+    probe_zip(probe)
+    files.append(probe)
     (DIST / "SHA256SUMS.txt").write_text("".join(f"{hashlib.sha256(f.read_bytes()).hexdigest()}  {f.name}\n"
                                                  for f in files))
     repo = os.getenv("GITHUB_REPOSITORY", "Paulie631/zscaler-pov-kit")
     (DIST / "latest.json").write_text(json.dumps({
         "version": v, "tag": f"v{v}", "notes": changelog_notes(v),
         "zip_url": f"https://github.com/{repo}/releases/download/v{v}/{files[0].name}",
-        "sha256": hashlib.sha256(files[0].read_bytes()).hexdigest()}, indent=2))
+        "sha256": hashlib.sha256(files[0].read_bytes()).hexdigest(),
+        "probe_zip_url": f"https://github.com/{repo}/releases/download/v{v}/{probe.name}",
+        "probe_sha256": hashlib.sha256(probe.read_bytes()).hexdigest()}, indent=2))
     for f in files + [DIST / "SHA256SUMS.txt", DIST / "latest.json"]:
         print(f.relative_to(ROOT))
 

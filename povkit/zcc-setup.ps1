@@ -9,8 +9,9 @@
 #      page) and installs it only if its SHA-256 matches (pinned copy) and it's validly signed by Zscaler, Inc.;
 #   2. installs it silently with this tenant's cloud, user domain and user name (CLOUDNAME, USERDOMAIN, UNAME), so
 #      nobody picks the cloud by hand;
-#   3. installs the POV kit (for its probe) and, with a probe pack, waits until traffic goes through Zscaler and runs
-#      the POV's tests. Results go to the Desktop for the SE.
+#   3. installs the POV probe (the kit's small pilot-device part: tests and traffic, no keys) and, with a probe pack,
+#      keeps the pack on the device, waits until traffic goes through Zscaler and runs the POV's tests. Results go to
+#      the Desktop for the SE.
 # It changes nothing in any Zscaler tenant.
 param(
   [string]$Cloud = "",
@@ -74,21 +75,26 @@ try {
   if ($p.ExitCode -notin 0, 3010) { Fail "The installer failed (msiexec exit code $($p.ExitCode))." }
   Say "Client Connector installed. Sign in as $(if ($User) { "$User@$Domain" } else { 'a pilot user' }) when it opens."
 
-  # 3. the kit and the POV's tests
-  Say "Installing the POV kit for its probe (no keys, nothing in the tenant)..."
-  $env:ZPOV_NO_GUI = "1"
-  & ([scriptblock]::Create((Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/install.ps1"))) | Out-Null
-  $kit = Join-Path $env:USERPROFILE ".zscaler-pov-kit\app\pov-kit.cmd"
+  # 3. the POV probe and the POV's tests
+  Say "Installing the POV probe (tests and traffic only: no keys, nothing in the tenant)..."
+  $home_ = if ($env:ZPOV_PROBE_HOME) { $env:ZPOV_PROBE_HOME } else { Join-Path $env:USERPROFILE ".zscaler-pov-probe" }
+  New-Item -ItemType Directory -Force -Path $home_ | Out-Null
   if ($PackB64) {
-    $packf = Join-Path $env:USERPROFILE ".zscaler-pov-kit\probe-pack-$Pov.json"
+    $packf = Join-Path $home_ "pack-download-$Pov.json"
     [IO.File]::WriteAllBytes($packf, [Convert]::FromBase64String($PackB64))
+    $env:ZPOV_PACK_FILE = $packf
+  }
+  & ([scriptblock]::Create((Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/install-probe.ps1")))
+  $probe = Join-Path $home_ "app\pov-probe.cmd"
+  if ($PackB64) {
     $out = Join-Path ([Environment]::GetFolderPath("Desktop")) "pov-probe-$Pov-$(if ($User) { $User } else { 'device' }).json"
     Say "Once you're signed in, the POV's tests run (waiting up to $Wait minutes for Zscaler)..."
-    & $kit probe --pack $packf --wait $Wait --out $out
+    & $probe test --wait $Wait --out $out
     Say "Results: $out. Send them to the SE."
   } else {
-    Say "Next: once signed in, run the POV's tests with the probe pack the SE sends:"
-    Say "  $kit probe --pack <the pack file> --wait $Wait"
+    Say "Next: once signed in, install the probe pack the SE sends and run the POV's tests:"
+    Say "  $probe pack install <the pack file>"
+    Say "  $probe test --wait $Wait"
   }
 } finally {
   Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue

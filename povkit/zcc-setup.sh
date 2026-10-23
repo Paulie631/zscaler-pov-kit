@@ -10,8 +10,9 @@
 #      and installs it only if its SHA-256 matches (pinned copy) and Apple's check says it's signed by Zscaler;
 #   2. opens a settings profile (cloud, user domain, user name) for you to approve in System Settings, so Client
 #      Connector signs in to this tenant without anyone choosing the cloud by hand;
-#   3. installs Client Connector, then the POV kit (for its probe), and, with a probe pack, waits until traffic goes
-#      through Zscaler and runs the POV's tests. Results go to your Desktop for the SE.
+#   3. installs Client Connector, then the POV probe (the kit's small pilot-device part: tests and traffic, no keys),
+#      and, with a probe pack, keeps the pack on the device, waits until traffic goes through Zscaler and runs the
+#      POV's tests. Results go to your Desktop for the SE.
 # It changes nothing in any Zscaler tenant. It asks for your Mac password once (sudo), to install.
 set -euo pipefail
 
@@ -127,19 +128,25 @@ sudo installer -pkg "$PKG" -target / </dev/null >/dev/null || fail "The installe
 say "Client Connector installed. Sign in as ${ZUSER:-a pilot user}${ZUSER:+@$DOMAIN} when it opens."
 open -a "Zscaler" 2>/dev/null || true
 
-say "Installing the POV kit for its probe (no keys, nothing in the tenant)..."
-curl -fsSL "https://github.com/$REPO/releases/latest/download/install.sh" | ZPOV_NO_GUI=1 bash >/dev/null \
-  || fail "The POV kit didn't install; Client Connector is installed. Run the kit's one-line installer by hand."
-KIT="$HOME/.zscaler-pov-kit/app/pov-kit"
+say "Installing the POV probe (tests and traffic only: no keys, nothing in the tenant)..."
+PHOME="${ZPOV_PROBE_HOME:-$HOME/.zscaler-pov-probe}"
+mkdir -p "$PHOME"
+PACKF=""
 if [ -n "$PACK_B64" ]; then
-  PACKF="$HOME/.zscaler-pov-kit/probe-pack-$POV.json"
+  PACKF="$PHOME/pack-download-$POV.json"
   printf '%s' "$PACK_B64" | base64 -D > "$PACKF"
+fi
+curl -fsSL "https://github.com/$REPO/releases/latest/download/install-probe.sh" | bash -s -- ${PACKF:+"$PACKF"} \
+  || fail "The POV probe didn't install; Client Connector is installed. Run the probe's one-line installer by hand."
+PROBE="$PHOME/app/pov-probe"
+if [ -n "$PACKF" ]; then
   OUT="$HOME/Desktop/pov-probe-$POV-${ZUSER:-device}.json"
   say "Once you're signed in, the POV's tests run (waiting up to $WAIT minutes for Zscaler)..."
-  "$KIT" probe --pack "$PACKF" --wait "$WAIT" --out "$OUT" </dev/null || true
+  "$PROBE" test --wait "$WAIT" --out "$OUT" </dev/null || true
   say "Results: $OUT. Send them to the SE."
 else
-  say "Next: once signed in, run the POV's tests with the probe pack the SE sends:"
-  say "  $KIT probe --pack <the pack file> --wait $WAIT"
+  say "Next: once signed in, install the probe pack the SE sends and run the POV's tests:"
+  say "  $PROBE pack install <the pack file>"
+  say "  $PROBE test --wait $WAIT"
 fi
 echo; say "Done. After the POV: remove the settings profile (System Settings > Device Management)."

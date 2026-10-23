@@ -5,9 +5,9 @@ Run it on a pilot device whose Client Connector is signed in as a pilot user (a 
 pilot or the kit's AWS generator), never on someone's everyday laptop. It needs no API keys: it only browses, and it
 sends nothing unless ip.zscaler.com confirms the traffic goes through Zscaler.
 
-  pov-kit traffic check       is this device's traffic reaching the POV's tenant, as a pilot user?
-  pov-kit traffic run         one round: --types web,saas,genai,threats,dlp,files,dns,ports  --count N
-  pov-kit traffic schedule    a round every N minutes on this device (install / remove)
+  pov-probe traffic check     is this device's traffic reaching the POV's tenant, as a pilot user?
+  pov-probe traffic run       one round: --types web,saas,genai,threats,dlp,files,dns,ports  --count N
+  pov-probe traffic schedule  a round every N minutes on this device (install / remove)
 
 Safe test data only: the EICAR test string (assembled at runtime so the kit's own files never trip antivirus),
 Google's Safe Browsing test pages, and generated fake card numbers, SSNs and keys.
@@ -17,6 +17,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+import os
 import random
 import re
 import socket
@@ -41,8 +42,18 @@ def eicar():
     return "".join(_EICAR_PARTS)
 
 
-def catalog():
-    return json.loads((HERE / "traffic.json").read_text(encoding="utf-8"))
+def catalog(profile=None):
+    """The traffic catalog, with a POV's profile (from its probe pack) merged in: the use cases' own sites, ports and
+    expectations. Without a profile: the catalog as shipped (the POV template's policy)."""
+    cat = json.loads((HERE / "traffic.json").read_text(encoding="utf-8"))
+    prof = profile or {}
+    extra = [w for w in prof.get("web") or [] if isinstance(w, dict) and str(w.get("url", "")).startswith("http")]
+    cat["must_web"] = extra[:40]
+    for port in prof.get("block_ports") or []:
+        if isinstance(port, int) and 0 < port < 65536:
+            cat["ports"]["tcp"] = list(dict.fromkeys(cat["ports"]["tcp"] + [port]))
+            cat["ports"]["blocked_by_pov"] = list(dict.fromkeys(cat["ports"]["blocked_by_pov"] + [port]))
+    return cat
 
 
 # ---------------------------------------------------------------- fake data (never real)
@@ -228,7 +239,7 @@ def _sample(seq, n, rnd):
 
 
 def gen_web(s, cat, n, rnd):
-    must = [w for w in cat["web"] if w["expect"] == "block"][:1]   # always the tenant check
+    must = [w for w in cat["web"] if w["expect"] == "block"][:1] + cat.get("must_web", [])   # tenant check, use cases
     rest = _sample([w for w in cat["web"] if w not in must], max(0, n * 3 - 1), rnd)
     for w in must + rest:
         yield dict(fetch(s, "GET", w["url"]), type="web", category=w["category"], expect=w["expect"])
@@ -344,12 +355,19 @@ GENERATORS = {"web": gen_web, "saas": gen_saas, "genai": gen_genai, "threats": g
 
 
 def run(types=None, count=4, log=None, log_dir=None, stop=None, quiet=False, seed=None, sess=None,
-        require_zscaler=True):
+        require_zscaler=True, profile=None):
     """One round of test traffic. Returns {"results", "summary", "total", "errors"}.
     require_zscaler: first confirm (ip.zscaler.com) that this machine's traffic goes through Zscaler, and send
     nothing otherwise, so a generator that isn't signed in yet, or a laptop, never sends test traffic directly."""
     rnd = random.Random(seed)
-    cat = catalog()
+    cat = catalog(profile)
+    if types is None and profile and profile.get("types") is not None:
+        types = profile["types"]
+        if not types:
+            msg = "skipped: this POV's criteria have nothing for the traffic generator (no Internet Access tests)."
+            (log or (lambda lv, m: None if quiet else print("  " + m)))("warn", msg)
+            return {"time": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "summary": msg, "total": 0, "errors": 0,
+                    "by_type": {}, "results": [], "skipped": True}
     s = sess or session()
     if require_zscaler:
         try:
@@ -512,9 +530,22 @@ TASK = "Zscaler POV traffic"
 LAUNCH_ID = "com.zscaler.povkit.traffic"
 
 
+DEVICE_HOME = Path(os.getenv("ZPOV_PROBE_HOME") or (Path.home() / ".zscaler-pov-probe"))
+
+
 def log_dir():
-    from .core.pov import BASE
-    return BASE / "traffic"
+    return DEVICE_HOME / "traffic"
+
+
+def launcher() -> Path:
+    """The command the schedule runs: the probe package's pov-probe, or the full kit's pov-kit."""
+    import platform
+    root = HERE.parent
+    win = platform.system() == "Windows"
+    for name in (("pov-probe.cmd", "pov-kit.cmd") if win else ("pov-probe", "pov-kit")):
+        if (root / name).exists():
+            return root / name
+    return root / ("pov-kit.cmd" if win else "pov-kit")
 
 
 def last():
@@ -526,7 +557,6 @@ def last():
 
 
 def schedule_command(count=4, types=None):
-    from .remind import launcher
     args = [str(launcher()), "traffic", "run", "--count", str(int(count))]
     if types:
         args += ["--types", ",".join(types)]
@@ -534,7 +564,7 @@ def schedule_command(count=4, types=None):
 
 
 def schedule_install(every=30, count=4, types=None, system=None, run=None):
-    """Runs `pov-kit traffic run` every `every` minutes as the signed-in user. Each round first checks
+    """Runs `pov-probe traffic run` (or `pov-kit traffic run`) every `every` minutes as the signed-in user. Each round first checks
     ip.zscaler.com and sends nothing if traffic doesn't go through Zscaler."""
     import platform
     import shlex

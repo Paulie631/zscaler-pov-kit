@@ -33,7 +33,7 @@ Nothing here touches a Zscaler tenant except enrolling the connectors with the P
    ```
    irm https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/zpov-pilot-prepare.ps1 | iex
    ```
-   It installs the POV kit (for its probe) and saves the kit's checked Client Connector installer in `C:\ZPOV`. It
+   It installs the POV probe (tests and traffic, no keys) and saves the kit's checked Client Connector installer in `C:\ZPOV`. It
    doesn't install Client Connector, because its cloud, domain and user are per POV.
 5. Save the environment as a blueprint, for example **Zscaler POV lab**, and share it with your SE team.
 
@@ -50,7 +50,7 @@ Nothing here touches a Zscaler tenant except enrolling the connectors with the P
    `powershell -ExecutionPolicy Bypass -File .\<the script> -Msi C:\ZPOV\<the installer file>`. Sign in as the
    pilot user; the POV's tests run once traffic goes through Zscaler, and the results land on the Desktop.
    (The one-line command works too, without the tests: run the probe afterwards with the probe pack.)
-   For traffic on the customer's dashboards all through the POV, run `pov-kit traffic schedule --every 30` there too.
+   For traffic on the customer's dashboards all through the POV, run `pov-probe traffic schedule --every 30` there too.
 5. When the POV ends: delete the CloudShare environment first (the connectors with it), then remove the POV in the
    console (**Handover → Remove the POV**): ZPA teardown keeps the connector group while connectors are enrolled.
 

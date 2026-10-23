@@ -1,0 +1,213 @@
+"""Pilot-device commands: the POV's tests and the traffic generator. No API keys, nothing in any tenant changes.
+
+This is the whole of the POV probe package (`pov-probe`), the small download a customer installs on pilot devices,
+and the same code behind the full kit's `pov-kit probe` and `pov-kit traffic`. It imports only probe.py and
+traffic.py, so the probe package carries no console, no tenant API code and no secrets handling.
+
+  pov-probe pack install FILE   keep the POV's probe pack on this device (the setup script does this)
+  pov-probe pack show           which POV and which criteria the pack on this device tests
+  pov-probe test [--wait N]     run the pack's tests; writes a results file for the SE
+  pov-probe traffic check|run|schedule   the ZIA traffic generator, shaped by the pack's traffic profile
+  pov-probe cleanup             remove the Endpoint AI test items a test left
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import sys
+from pathlib import Path
+
+from . import VERSION, probe, traffic
+
+HOME = traffic.DEVICE_HOME
+PACK = HOME / "pack.json"
+
+
+class DeviceError(Exception):
+    pass
+
+
+# ---------------------------------------------------------------- the probe pack on this device
+def read_pack(src) -> dict:
+    try:
+        data = json.loads(Path(src).read_text(encoding="utf-8")) if not isinstance(src, dict) else src
+    except (OSError, ValueError) as e:
+        raise DeviceError(f"Couldn't read the probe pack {src}: {e}") from e
+    if not isinstance(data, dict) or not isinstance(data.get("criteria"), list):
+        raise DeviceError(f"{src} isn't a POV probe pack (the SE's console: Next steps > Download probe pack).")
+    return data
+
+
+def install_pack(src) -> dict:
+    data = read_pack(src)
+    HOME.mkdir(parents=True, exist_ok=True)
+    old = current_pack()
+    if old and old.get("pov") and data.get("pov") and old["pov"] != data["pov"]:
+        shutil.copyfile(PACK, HOME / f"pack-{old['pov']}.json")   # another POV's pack: keep a copy
+    PACK.write_text(json.dumps(data, indent=1), encoding="utf-8")
+    return data
+
+
+def current_pack():
+    try:
+        return read_pack(PACK) if PACK.exists() else None
+    except DeviceError:
+        return None
+
+
+def describe(p) -> str:
+    if not p:
+        return "No probe pack on this device yet. `pov-probe pack install FILE` (the SE sends the file)."
+    n = sum(len(c.get("probe") or []) for c in p["criteria"])
+    return (f"POV {p.get('pov')} ({p.get('customer')}), pack {p.get('pack_id') or '(no ID: an older kit made it)'}, "
+            f"made {str(p.get('generated_at') or '?')[:16]}: {len(p['criteria'])} criteria, {n} tests"
+            + (f"; traffic: {', '.join((p.get('traffic') or {}).get('types') or []) or 'none'}"
+               if p.get("traffic") is not None else ""))
+
+
+# ---------------------------------------------------------------- the tests
+def base_criteria():
+    """Without a pack: the full kit's catalog tests that need no POV values (the probe package has no catalog)."""
+    try:
+        from .products import base
+    except ImportError as e:
+        raise DeviceError("No probe pack on this device: `pov-probe pack install FILE` first.") from e
+    crit = [c for c in base.load_catalog() if c.get("probe")]
+    crit = [dict(c, probe=[s for s in c["probe"] if not any("{" in str(v) and "{b64}" not in str(v) for v in s.values())])
+            for c in crit]
+    return [c for c in crit if c["probe"]]
+
+
+def test(pack=None, wait=0, out=None, only=None, say=print):
+    """-> (results, file written)"""
+    p = read_pack(pack) if pack else current_pack()
+    crit = p["criteria"] if p else base_criteria()
+    if only:
+        want = set(only)
+        crit = [c for c in crit if c["id"] in want]
+    if wait and not probe.wait_for_zscaler(wait, say):
+        raise DeviceError(f"Traffic still doesn't go through Zscaler after {wait} minutes, so the tests would mean "
+                          "nothing. Check Client Connector is signed in with Internet Security On, then run this again.")
+    res = probe.run(crit, pack=p)
+    path = Path(out or (HOME / "results" / f"pov-probe-{(p or {}).get('pov', 'device')}-{res['run_id']}.json"))
+    path.parent.mkdir(parents=True, exist_ok=True)
+    probe.save(res, path)
+    return res, path
+
+
+# ---------------------------------------------------------------- command line (pov-probe)
+def _say(level, msg):
+    mark = {"ok": "✓", "warn": "!", "fail": "✗"}.get(level, "·")
+    try:
+        print(f"  {mark} {msg}")
+    except UnicodeEncodeError:
+        print(f"  {level}: {msg}")
+
+
+def c_test(a):
+    res, path = test(a.pack, a.wait, a.out, [x for x in (a.criteria or "").split(",") if x] or None)
+    ok = sum(r["pass"] for r in res["results"])
+    for r in res["results"]:
+        _say("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['outcome']} (expected {r['expect']}) {r['detail']}")
+    print(f"\n{ok} of {len(res['results'])} as expected. Send this file to the SE: {path}")
+    if any(r["spec"]["type"] == "ai_artifacts" for r in res["results"]):
+        print("Endpoint AI test files stay for the console's inventory; remove them afterwards: `cleanup`.")
+    return 0
+
+
+def c_pack(a):
+    if a.what == "install":
+        if not a.file:
+            raise DeviceError("Say which file: `pack install FILE`.")
+        print(f"Installed. {describe(install_pack(a.file))}")
+    else:
+        print(describe(current_pack()))
+    return 0
+
+
+def c_traffic(a):
+    p = current_pack()
+    prof = (p or {}).get("traffic")
+    if a.what == "check":
+        bad = 0
+        for c in traffic.check(cloud=a.cloud):
+            _say({"ok": "ok", "fail": "fail"}.get(c["status"], "warn"), f"{c['label']}: {c['detail']}")
+            if c["fix"]:
+                print(f"        {c['fix']}")
+            bad += c["status"] == "fail"
+        return 1 if bad else 0
+    if a.what == "schedule":
+        if a.remove:
+            traffic.schedule_remove()
+            print("Scheduled traffic removed.")
+            return 0
+        types = [t for t in (a.types or "").split(",") if t] or None
+        print(f"Scheduled: {traffic.schedule_install(a.every, a.count, types)}. Each round sends nothing unless "
+              f"traffic goes through Zscaler, and follows the probe pack on this device. Results: {traffic.log_dir()}. "
+              "Stop it: `traffic schedule --remove`.")
+        return 0
+    types = [t for t in (a.types or "").split(",") if t] or None
+    bad = [t for t in types or [] if t not in traffic.TYPES]
+    if bad:
+        raise DeviceError(f"Unknown traffic type(s): {', '.join(bad)}. Use any of: {', '.join(traffic.TYPES)}.")
+    if prof is not None and not types:
+        print(f"Following the probe pack for POV {p.get('pov')}: {', '.join(prof.get('types') or []) or 'nothing'}.")
+    res = traffic.run(types=types, count=a.count, log_dir=traffic.log_dir(), profile=prof)
+    if res.get("skipped"):
+        return 2
+    print(f"\n{res['summary']}")
+    return 0
+
+
+def c_cleanup(a):
+    print(f"Removed {probe.cleanup_ai()} Endpoint AI test item(s).")
+    return 0
+
+
+def add_test_args(s):
+    s.add_argument("--pack", help="a probe pack file (default: the one installed on this device)")
+    s.add_argument("--wait", type=int, default=0, help="minutes to wait for traffic to go through Zscaler first")
+    s.add_argument("--out", help="the results file to write")
+    s.add_argument("--criteria", help="only these criterion IDs, comma-separated")
+
+
+def add_traffic_args(s):
+    s.add_argument("what", choices=["check", "run", "schedule"])
+    s.add_argument("--types", help="any of: web,saas,genai,threats,dlp,files,dns,ports (default: the pack's)")
+    s.add_argument("--count", type=int, default=4, help="requests per type")
+    s.add_argument("--every", type=int, default=30, help="with schedule: minutes between rounds (15 to 1440)")
+    s.add_argument("--remove", action="store_true", help="with schedule: stop the scheduled rounds")
+    s.add_argument("--cloud", help="with check: the Zscaler cloud traffic should reach (e.g. zscalertwo)")
+
+
+def parser():
+    ap = argparse.ArgumentParser(prog="pov-probe", description="Zscaler POV probe: the POV's tests on a pilot device. "
+                                 "No API keys; nothing in any tenant changes.")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("test", help="run the POV's tests (the probe pack's) and write a results file for the SE")
+    add_test_args(s)
+    s.set_defaults(fn=c_test)
+    s = sub.add_parser("pack", help="pack install FILE | pack show")
+    s.add_argument("what", choices=["install", "show"])
+    s.add_argument("file", nargs="?")
+    s.set_defaults(fn=c_pack)
+    s = sub.add_parser("traffic", help="traffic check | run | schedule: ZIA traffic for the customer's dashboards")
+    add_traffic_args(s)
+    s.set_defaults(fn=c_traffic)
+    s = sub.add_parser("cleanup", help="remove the Endpoint AI test items a test left")
+    s.set_defaults(fn=c_cleanup)
+    s = sub.add_parser("version", help="print the version")
+    s.set_defaults(fn=lambda a: print(VERSION) or 0)
+    return ap
+
+
+def main(argv=None):
+    a = parser().parse_args(argv)
+    try:
+        return a.fn(a) or 0
+    except DeviceError as e:
+        print(f"\n  {e}\n", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
