@@ -58,6 +58,7 @@ def guide(pov):
     keys.append(("end", "end.api_clients"))
 
     done = pov.read_json(DONE_FILE, {}) or {}
+    crit = {i["key"]: i.get("criteria") or [] for i in plan}
     names = {i["key"]: i["name"] for i in plan}
     why = {i["key"]: i.get("why") for i in plan}
     out, seen = [], set()
@@ -75,8 +76,111 @@ def guide(pov):
         e.update({x: d.get(x) for x in ("by", "at", "how", "detail", "checked_at", "result")})
         e["url"] = GUIDE.get("console")
         e["check"] = check_name(k)
+        e["values"] = values(pov, k, plan)
+        e["criteria"] = [i for i in (crit.get(k) or [])]
         out.append(e)
+    blocks_by_rule(pov, out)
     return out
+
+
+# ---------------------------------------------------------------- what each step holds up, and the values to paste
+# Steps whose plan item doesn't name criteria hold up these: a product's criteria, or every criterion a pilot device
+# proves ("probe"). The API client itself holds up everything, which needs no saying.
+RULES = {"setup.zdx_role": ("product", ["zdx"]), "setup.zpa_customer_id": ("product", ["zpa"]),
+         "zid.ca.entitlement": ("probe", ["zia", "zcc"]), "zia.ca.entitlement": ("probe", ["zia", "zcc"]),
+         "zid.ca.passwords": ("probe", None), "zcc.ca.devices": ("probe", None), "zcc.by_hand": ("product", ["zcc"]),
+         "casb.ca.tenant": ("product", ["casb"]), "zpa.ca.connectors": ("product", ["zpa"]),
+         "zpa.ca.users": ("product", ["zpa"])}
+
+
+def blocks_by_rule(pov, steps):
+    from . import evidence
+    # a product rule fills in only when the plan item names no criteria; a device rule always adds (no pilot device
+    # signed in as an entitled pilot user means no device test can pass)
+    rules = {k: v for k, v in RULES.items()
+             if any(s["key"] == k and (v[0] == "probe" or not s["criteria"]) for s in steps)}
+    if not rules:
+        return
+    crit = evidence.selected_criteria(pov)
+    for s in steps:
+        how, prods = rules.get(s["key"], (None, None))
+        if how == "product":
+            s["criteria"] = [c["id"] for c in crit if c.get("product") in prods]
+        elif how == "probe":
+            s["criteria"] = list(dict.fromkeys(s["criteria"] + [
+                c["id"] for c in crit if "probe" in (c.get("proofs") or [])
+                and (prods is None or c.get("product") in prods)]))
+
+
+def waiting_on(pov, steps=None):
+    """-> {criterion id: [open steps holding it up]}, for the Success criteria tab."""
+    out = {}
+    for s in steps if steps is not None else guide(pov):
+        if s["status"] == "done" or s["phase"] == "end":
+            continue
+        for cid in s.get("criteria") or []:
+            out.setdefault(cid, []).append({"key": s["key"], "title": s["title"]})
+    return out
+
+
+def _plan_names(plan, product=None, kinds=()):
+    return [i["name"] for i in plan if (product is None or i["product"] == product) and i["kind"] in kinds
+            and i["action"] != "customer_action"]
+
+
+def values(pov, key, plan):
+    """The exact values a person types or picks for this step, so they can copy them instead of retyping."""
+    client = f"ZPOV {pov.id}"
+    group = (_plan_names(plan, "zid", ("group",)) + _plan_names(plan, "zia", ("user_group",))
+             or [pov.cfg.get("pilot_group") or ""])[0]
+    users = [str((i.get("body") or {}).get("login_name") or (i.get("body") or {}).get("email") or i["name"])
+             for i in plan if i["kind"] == "user" and i["product"] in ("zid", "zia")]
+    v = []
+    if key in ("setup.api_client", "setup.zdx_role"):
+        v.append(("API client name", client))
+    elif key == "end.api_clients":
+        v += [("API client name", client), ("Read-only client (if made)", f"{client} read-only")]
+    elif key == "setup.zpa_customer_id" and pov.cfg.get("customer_id"):
+        v.append(("Customer ID saved in the kit", str(pov.cfg["customer_id"])))
+    elif key in ("zid.ca.entitlement", "zia.ca.entitlement"):
+        if group:
+            v.append(("Group to entitle", group))
+        v.append(("Service", "Internet & SaaS" + (" and Private Access" if "zpa" in pov.products else "")))
+    elif key == "zid.ca.passwords":
+        v += [("Pilot user", u) for u in users]
+    elif key == "zcc.ca.devices":
+        cloud = (pov.cfg.get("zcc") or {}).get("cloud")
+        if cloud:
+            v.append(("Zscaler cloud", cloud))
+        emails = list(dict.fromkeys([e for e in pov.cfg.get("pilot_emails") or [] if "@" in e] + users))
+        v += [("Pilot user", e) for e in emails[:10]]
+    elif key == "zcc.by_hand":
+        v += [("Profile name", n) for n in _plan_names(plan, "zcc", ("forwarding_profile", "app_profile",
+                                                                     "web_app_profile", "app_profile_windows"))
+              or [i["name"] for i in plan if i["product"] == "zcc" and i["action"] == "create_or_adopt"]]
+        if group:
+            v.append(("For the group", group))
+    elif key == "zpa.ca.connectors":
+        v += [("Connector group", n) for n in _plan_names(plan, "zpa", ("connector_group",))]
+        v += [("Provisioning key name", n) for n in _plan_names(plan, "zpa", ("provisioning_key",))]
+    elif key == "zpa.ca.users":
+        v += [("Access rule", n) for n in _plan_names(plan, "zpa", ("access_rule", "policy_rule"))]
+        if group:
+            v.append(("Pilot group", group))
+    return [{"label": a, "value": b} for a, b in v if b]
+
+
+def preview(product_names):
+    """Before a POV exists: the steps a person will do for these products (titles, who, when), for kickoff."""
+    keys = ["setup.api_client"] + (["setup.zdx_role"] if "zdx" in product_names else []) + \
+        (["setup.zpa_customer_id"] if "zpa" in product_names else [])
+    if {"zia", "zcc"} & set(product_names):
+        keys += ["zid.ca.entitlement", "zid.ca.passwords", "zia.ca.malware", "zcc.ca.devices"]
+    keys += [k for k, need in (("casb.ca.tenant", "casb"), ("zpa.ca.connectors", "zpa"), ("zpa.ca.users", "zpa"))
+             if need in product_names]
+    keys.append("end.api_clients")
+    return [{"key": k, "title": GUIDE["steps"][k]["title"], "who": GUIDE["steps"][k].get("who"),
+             "when": GUIDE["steps"][k].get("when")} for k in keys if k in GUIDE["steps"]]
 
 
 def mark(pov, key, by, undo=False):
@@ -278,8 +382,12 @@ def sheet_md(pov):
         if s.get("why"):
             lines += [f"Why: {s['why']}", ""]
         lines += [f"{i}. {x.replace('<pov-id>', pov.id)}" for i, x in enumerate(s.get("steps") or [], 1)]
-        if s.get("names"):
+        if s.get("values"):
+            lines += ["", "Values to use:"] + [f"- {x['label']}: `{x['value']}`" for x in s["values"]]
+        elif s.get("names"):
             lines += ["", "Exact names: " + "; ".join(f"`{x}`" for x in s["names"])]
+        if s.get("criteria") and s["status"] != "done":
+            lines += ["", "Holds up: " + ", ".join(s["criteria"][:12])]
         if s.get("done"):
             lines += ["", f"Done when: {s['done']}"]
         lines.append("")

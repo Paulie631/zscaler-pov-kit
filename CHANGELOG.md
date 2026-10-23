@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.29
+
+- **Steps for people, where they're needed.**
+  - **Start a POV** previews the steps the chosen products will need from a person, to agree at kickoff.
+  - **Connect** shows how to create the API client (and find the ZPA customer ID) right there, with Check now.
+  - **Pilot users** shows the entitlement and password steps.
+  - The header shows **N steps for people** on every tab; clicking it opens the list.
+- **What each step holds up.** Each open step lists the success criteria that can't pass until it's done. On
+  **Success criteria**, a criterion that isn't passing says "waiting on" the step, with a link to it.
+- **Values to paste.** Each step shows the exact values to use (API client name, group to entitle, connector group,
+  provisioning key name, pilot users, cloud...) with a Copy button. They're in the sheet for the customer's admin
+  too, with what each step holds up.
+
 ## 0.9.28
 
 - **CloudShare for the traffic generator in the console:** Next steps → ZIA traffic generator → **CloudShare Windows

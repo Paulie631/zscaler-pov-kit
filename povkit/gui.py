@@ -38,6 +38,15 @@ def tf(pov, which):
 
 
 # ---------------------------------------------------------------- state for the page
+def _manual_open(p):
+    from . import manual
+    try:
+        steps = [s for s in manual.guide(p) if s["status"] != "done" and s["phase"] != "end"]
+    except Exception:   # noqa: BLE001 - never let the badge break the page
+        return None
+    return {"open": len(steps), "next": steps[0]["title"] if steps else None}
+
+
 def pov_state(p):
     led = lifecycle.ledger(p)
     cl = ChangeList(p.dir)
@@ -58,6 +67,7 @@ def pov_state(p):
             "zpa_key": bool(secrets.get(p.id, "zpa-provisioning-key")),
             "end": remind.end_check(p), "backup_at": (p.cfg.get("backup") or {}).get("at"),
             "record": bool(p.cfg.get("record")), "selftest": p.read_json("selftest.json"),
+            "manual_open": _manual_open(p),
             "claude_desktop": (lambda c: {"server": c["server"], "vanity_domain": c["vanity_domain"]} if c else None)(
                 mcp.desktop_client()),
             "aiguard": {"live": bool(led.find("aiguard.policy")),
@@ -245,7 +255,13 @@ def api(method, path, body, q):
         if path == "/api/criteria":
             from . import summary
             summ, stale = summary.current(current())
-            return 200, {"rows": evidence.evaluate(current()), "summary": summ, "summary_stale": stale}
+            from . import manual
+            rows = evidence.evaluate(current())
+            wait = manual.waiting_on(current())
+            for r in rows:
+                if r["status"] != "pass" and wait.get(r["criterion"]["id"]):
+                    r["waiting_on"] = wait[r["criterion"]["id"]]
+            return 200, {"rows": rows, "summary": summ, "summary_stale": stale}
         if path == "/api/logs":
             p = current()
             f = p.path("activity.jsonl")
@@ -265,6 +281,9 @@ def api(method, path, body, q):
         if path == "/api/usecase/directions":
             from . import usecases
             return 200, {"text": usecases.directions_md(usecases.get(current(), q.get("id")))}
+        if path == "/api/manual/preview":
+            from . import manual
+            return 200, {"steps": manual.preview([x for x in (q.get("products") or "").split(",") if x])}
         if path == "/api/manual":
             from . import manual
             p = current()

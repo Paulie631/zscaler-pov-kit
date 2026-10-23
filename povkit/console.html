@@ -313,13 +313,16 @@ function reportText(checks){return checks.map(c=>`[${c.status.toUpperCase()}] ${
 let S=null;
 async function load(){S=await api("/api/state");const c=S.current;
   $("#hpov").innerHTML=(c?`<b>${esc(c.customer)}</b> · ${esc(c.id)} · <span class="chip">${esc(c.state||"new")}</span>`+
-    (c.end&&(c.end.status=="warn"||c.end.status=="fail")?` <span class="badge b-${esc(c.end.status)}" title="${esc(c.end.fix)}">${esc(c.end.detail)}</span>`:` · <span title="POV end date">ends ${esc((c.settings.ends||"").slice(0,10))}</span>`):"No POV yet")+` · kit ${esc(S.version)}`;
+    (c.end&&(c.end.status=="warn"||c.end.status=="fail")?` <span class="badge b-${esc(c.end.status)}" title="${esc(c.end.fix)}">${esc(c.end.detail)}</span>`:` · <span title="POV end date">ends ${esc((c.settings.ends||"").slice(0,10))}</span>`)+
+    (c.manual_open&&c.manual_open.open?` · <a href="#" id="hmanual" class="badge b-warn" title="Next: ${esc(c.manual_open.next||"")}">${c.manual_open.open} step${c.manual_open.open==1?"":"s"} for people</a>`:""):"No POV yet")+` · kit ${esc(S.version)}`;
+  $("#hmanual")&&($("#hmanual").onclick=e=>{e.preventDefault();goManual()});
   const ag=c&&c.aiguard&&c.aiguard.live;$("#hpol").style.display=ag?"":"none";if(ag){$("#polsel").value=c.aiguard.profile;$("#polstate").textContent=""}
   $("#povsel").innerHTML=S.povs.length?S.povs.map(p=>`<option value="${esc(p.id)}" ${c&&p.id==c.id?"selected":""}>${esc(p.customer)} (${esc(p.id)})</option>`).join(""):'<option>No POVs</option>';
   $("#povsel").disabled=!S.povs.length;return S}
 $("#povsel").onchange=async e=>{await api("/api/pov/use",{id:e.target.value});await load();W.step=firstOpen();W.checks=null;W.plan=null;wizard();refreshTab()};
 $$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".view").forEach(v=>v.classList.toggle("on",v.id=="v-"+b.dataset.t));refreshTab()});
 function tab(){return $("#tabs button.on").dataset.t}
+function goManual(){W.step=7;$$("#tabs button").find(x=>x.dataset.t=="setup").click();setTimeout(()=>{const m=$("#manualtop");m&&m.scrollIntoView({behavior:"smooth"})},400)}
 $("#polsel").onchange=async e=>{const v=e.target.value;$("#polstate").textContent="switching…";
   try{await api("/api/aiguard-policy",{profile:v});$("#polstate").textContent="applied";await load()}catch(err){$("#polstate").textContent="failed";alert(err.message)}};
 
@@ -375,7 +378,7 @@ function firstOpen(){if(!S.current)return 0;for(let i=1;i<7;i++)if(!done(i))retu
 function wsteps(){$("#wsteps").innerHTML=STEPS.map((t,i)=>`<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":i+1}</span><span>${esc(t)}</span></li>`).join("");
   $$("#wsteps li").forEach(li=>li.onclick=()=>{const i=+li.dataset.i;if(i>0&&!S.current)return;W.step=i;wizard()})}
 function head(i,title,desc){return `<div class="kicker">STEP ${i+1} OF ${STEPS.length}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
-function nav(back,next,nextLabel,disabled){return `<div class="row" style="margin-top:20px">${back?'<button id="wback">‹ Back</button>':""}${next?`<button class="primary" id="wnext" ${disabled?"disabled":""}>${esc(nextLabel||"Continue ›")}</button>`:""}</div>`}
+function nav(back,next,nextLabel,disabled){return `<div class="row wnav" style="margin-top:20px">${back?'<button id="wback">‹ Back</button>':""}${next?`<button class="primary" id="wnext" ${disabled?"disabled":""}>${esc(nextLabel||"Continue ›")}</button>`:""}</div>`}
 function bindNav(onNext){$("#wback")&&($("#wback").onclick=()=>{W.step--;wizard()});$("#wnext")&&($("#wnext").onclick=onNext||(()=>{W.step++;wizard()}))}
 const has=n=>S.current&&S.current.products.includes(n);
 const KIND={label:"rule label",url_category:"custom URL category",network_service:"network service",url_filtering:"URL filtering rule",
@@ -447,7 +450,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     st.innerHTML=head(0,"Start a POV","One POV per customer. Its prefix goes on every object the kit creates in their tenant, so its objects are easy to see and can't be confused with theirs.")+
       (S.povs.length?`<div class="group-h">Continue a POV</div>${S.povs.map(p=>`<div class="row" style="gap:8px;align-items:stretch"><label class="opt" style="flex:1"><input type="radio" name="wp" value="${esc(p.id)}" ${c&&p.id==c.id?"checked":""}><span><b>${esc(p.customer)}</b> <span class="muted">· ${esc(p.id)} · ${esc(p.state||"new")}</span></span></label><button class="danger wdel" data-id="${esc(p.id)}" title="Check it's safe, then delete this POV from this computer" style="margin-top:8px">Delete…</button></div>`).join("")}<div class="row" style="margin:10px 0 18px"><button class="primary" id="wcont">Continue with this POV ›</button></div><div class="group-h">Or start a new one</div>`:"")+
       `<div class="form"><span class="lbl">Customer</span><input type="text" id="wcust" placeholder="Acme Corp">
-        <span class="lbl">Products in scope</span><div id="wprods">${S.products.map(p=>`<label class="chk" style="margin:0 6px 6px 0"><input type="checkbox" value="${esc(p.name)}" ${["zia","zcc"].includes(p.name)?"checked":""}>${esc(p.title)}</label>`).join("")}</div>
+        <span class="lbl">Products in scope</span><div><div id="wprods">${S.products.map(p=>`<label class="chk" style="margin:0 6px 6px 0"><input type="checkbox" value="${esc(p.name)}" ${["zia","zcc"].includes(p.name)?"checked":""}>${esc(p.title)}</label>`).join("")}</div><div id="wneeds" class="hint" style="margin-top:4px"></div></div>
         <span class="lbl">API client</span><div>
           ${S.claude_desktop?`<label class="opt" style="margin-top:0"><input type="radio" name="wcl" value="cd" checked><span><b>The one Claude Desktop uses</b> <span class="muted">(${esc(S.claude_desktop.server)} · ${esc(S.claude_desktop.vanity_domain)})</span><br><span class="muted">For your own lab tenant. The secret goes straight to this computer's keychain.</span></span></label>
           <label class="opt"><input type="radio" name="wcl" value="new"><span><b>The customer's client</b> <span class="muted">(created from the role spec)</span></span></label>`:`<input type="hidden" name="wcl" value="new">`}
@@ -467,7 +470,9 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     $$(".wdel").forEach(b=>b.onclick=()=>deletePov(b.dataset.id));
     const zpaOn=()=>$$('#wprods input').some(x=>x.checked&&x.value=="zpa");
     const showCl=()=>{const v=($$('input[name=wcl]').find(x=>x.checked||x.type=="hidden")||{}).value;$("#wclnew").style.display=v=="new"?"":"none";$$(".qzpa").forEach(e=>e.style.display=zpaOn()?"":"none")};
-    $$('input[name=wcl]').forEach(x=>x.onchange=showCl);$$('#wprods input').forEach(x=>x.onchange=showCl);showCl();
+    const needs=async()=>{const ps=$$('#wprods input').filter(x=>x.checked).map(x=>x.value);if(!ps.length){$("#wneeds").innerHTML="";return}
+      try{const r=await api("/api/manual/preview?products="+encodeURIComponent(ps.join(",")));$("#wneeds").innerHTML=`<b>${r.steps.length} steps need a person in the Zscaler console</b>, mostly the customer's admin: worth agreeing at kickoff. <details style="display:inline"><summary style="display:inline;cursor:pointer;color:var(--accent)">which</summary><ul style="margin:4px 0 0 18px">${r.steps.map(x=>`<li>${esc(x.title)} <span class="muted">· ${esc(x.who||"")}${x.when?" · "+esc(x.when):""}</span></li>`).join("")}</ul></details>`}catch(e){}};
+    $$('input[name=wcl]').forEach(x=>x.onchange=showCl);$$('#wprods input').forEach(x=>x.onchange=()=>{showCl();needs()});showCl();needs();
     $("#wcont")&&($("#wcont").onclick=async()=>{const v=($$('input[name=wp]').find(x=>x.checked)||{}).value;if(!v)return;await api("/api/pov/use",{id:v});await load();W.checks=null;W.plan=null;W.opts=null;W.step=firstOpen()||1;wizard()});
     const prods=()=>$$('#wprods input').filter(x=>x.checked).map(x=>x.value);
     $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,lab:$("#wlab").checked,
@@ -494,6 +499,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         <span class="lbl">${single?"Client ID":"Discovery client ID"}</span><input type="text" id="wcid" autocomplete="off" value="${esc(cl.client_id||"")}">
         <span class="lbl">Client secret</span><input type="password" id="wsec" autocomplete="new-password" placeholder="${cl.saved?"saved in the keychain (enter a new one to replace it)":""}"></div>
       <div id="wmsg"></div>`+nav(true,true,cl.saved?"Test and continue ›":"Save and test ›")+(single?`<div class="row" style="margin-top:8px;gap:10px"><button id="wqs">Quick start from here ›</button><span class="hint">Signs in, fills in the rest from the tenant (read-only), runs preflight and opens the change list.</span></div><div class="log" id="wqlog2" style="display:none"></div>`:"");
+    inlineManual(["setup.api_client","setup.zdx_role","setup.zpa_customer_id"],"How to create the API client (and the rest of Connect)",()=>wizard());
     $("#wqs")&&($("#wqs").onclick=async()=>{const b=$("#wqs");b.disabled=true;$("#wmsg").innerHTML="";
       try{const r=await api("/api/quickstart",{existing:true,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
         $("#wsec").value="";$("#wqlog2").style.display="block";await runJob(r.job,$("#wqlog2"));await load();W.checks=null;W.plan=null;W.opts=null;W.step=4;wizard()}
@@ -539,6 +545,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       ${has("casb")?`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`:""}
       <div id="wmsg"></div>`+nav(true,true,"Save ›");
     pilotPicker(s);
+    inlineManual(["zid.ca.entitlement","zia.ca.entitlement","zid.ca.passwords"],"For the pilot users, a person also does these",()=>wizard());
     bindNav(async()=>{const vals={};
       $$("#wstage [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
       if($("#wnewusers"))vals["identity.create_users"]=$("#wnewusers").checked?"yes":"no";
@@ -679,12 +686,13 @@ function probeStatusHTML(ps){
 
 /* ---------------- steps people do (the API can't) ---------------- */
 const PHASE_H={setup:"Before we start",customer:"During the POV",end:"When the POV ends"};
-function manualHTML(steps){
+function manualHTML(steps,opts={}){
   const open=steps.filter(s=>s.status!="done").length;
   let last=null,n=0;
-  return `<div class="group-h">Steps for people <span class="muted" style="font-weight:normal">(${open?open+" open":"all done"} · the kit can't do these through the API)</span></div>
-  <div class="row" style="gap:8px;margin:4px 0 10px"><button id="mchkall">Check them all</button><button id="msheet">Copy the steps for the customer's admin</button><button id="msheetdl">Download them</button></div><div id="mmsg"></div>`+
-  steps.map(s=>{const h=s.phase!=last?`<div class="hint" style="margin:12px 0 4px;font-weight:600">${PHASE_H[s.phase]}</div>`:"";last=s.phase;n++;
+  return (opts.compact?`<div class="group-h" style="margin-top:16px">${esc(opts.title||"Done by a person in the Zscaler console")} <span class="muted" style="font-weight:normal">(${open?open+" open":"all done"})</span></div><div id="mmsg"></div>`:
+  `<div class="group-h" id="manualtop">Steps for people <span class="muted" style="font-weight:normal">(${open?open+" open":"all done"} · the kit can't do these through the API)</span></div>
+  <div class="row" style="gap:8px;margin:4px 0 10px"><button id="mchkall">Check them all</button><button id="msheet">Copy the steps for the customer's admin</button><button id="msheetdl">Download them</button></div><div id="mmsg"></div>`)+
+  steps.map(s=>{const h=!opts.compact&&s.phase!=last?`<div class="hint" style="margin:12px 0 4px;font-weight:600">${PHASE_H[s.phase]}</div>`:"";last=s.phase;n++;
     const ok=s.status=="done", res=s.result===false?note(esc(s.detail),"bad"):s.result===null&&s.detail?note(esc(s.detail)):"";
     return h+`<details class="card" style="margin:6px 0" ${s===steps.find(x=>x.status!="done")?"open":""}>
       <summary style="cursor:pointer"><b>${ok?"✓":"○"} ${n}. ${esc(s.title)}</b> <span class="muted">· ${esc(s.who||"")}${s.when?" · "+esc(s.when):""}</span>
@@ -694,7 +702,8 @@ function manualHTML(steps){
       ${s.path?`<p style="margin:8px 0 4px"><b>Where:</b> ${esc(s.path)}${s.verified?"":" <span class=\"muted\">(not checked in a live console yet)</span>"}</p>`:""}
       ${s.search?`<p style="margin:4px 0"><b>Console search:</b> <code>${esc(s.search)}</code> <span class="muted">(the console's Search menu finds the page if a menu has moved)</span></p>`:""}
       <ol style="margin:6px 0 6px 0;padding-left:20px">${(s.steps||[]).map(x=>`<li style="margin:3px 0">${esc(x.replaceAll("<pov-id>",S.current.id))}</li>`).join("")}</ol>
-      ${s.names?`<p style="margin:4px 0"><b>Exact names:</b> ${s.names.map(x=>`<code>${esc(x)}</code>`).join(" ; ")}</p>`:""}
+      ${s.values&&s.values.length?`<div style="margin:8px 0 4px"><b>Values to use</b> <span class="muted">(copy, don't retype)</span>${s.values.map(x=>`<div class="row" style="gap:8px;margin:4px 0;align-items:center"><span class="muted" style="min-width:170px">${esc(x.label)}</span><code class="mval">${esc(x.value)}</code><button class="mcopy" data-v="${esc(x.value)}" style="padding:2px 10px;font-size:12px">Copy</button></div>`).join("")}</div>`:s.names?`<p style="margin:4px 0"><b>Exact names:</b> ${s.names.map(x=>`<code>${esc(x)}</code>`).join(" ; ")}</p>`:""}
+      ${s.criteria&&s.criteria.length&&s.status!="done"?`<p class="muted" style="margin:4px 0"><b>Holds up:</b> ${s.criteria.slice(0,14).map(x=>`<code>${esc(x)}</code>`).join(" ")}${s.criteria.length>14?` and ${s.criteria.length-14} more`:""}: they can't pass until this is done.</p>`:""}
       ${s.done?`<p class="muted" style="margin:4px 0"><b>Done when:</b> ${esc(s.done)}</p>`:""}
       ${res}${s.checked_at?`<div class="hint">Last checked ${esc(s.checked_at.replace("T"," ").slice(0,16))} UTC${s.detail&&s.result?": "+esc(s.detail):""}</div>`:""}
       <div class="row" style="gap:8px;margin-top:8px">
@@ -703,8 +712,15 @@ function manualHTML(steps){
         ${ok?`<button class="mundo" data-k="${esc(s.key)}">Reopen</button>`:`<input type="text" class="mby" data-k="${esc(s.key)}" placeholder="Who did it" style="width:160px"><button class="mmark" data-k="${esc(s.key)}">Mark done</button>`}
       </div></details>`}).join("");
 }
+// the steps for people that belong to the screen being shown, right there instead of only at Next steps
+async function inlineManual(keys,title,redraw){
+  try{const m=(await api("/api/manual")).steps.filter(x=>keys.includes(x.key));if(!m.length)return;
+    const box=document.createElement("div");box.id="winline";box.innerHTML=manualHTML(m,{compact:true,title});
+    const st=$("#wstage"),navEl=st.querySelector(".wnav")||null;(navEl?navEl.parentNode.insertBefore(box,navEl):st.appendChild(box));
+    bindManual(redraw)}catch(e){}}
 function bindManual(redraw){
   const msg=(t,k)=>$("#mmsg")&&($("#mmsg").innerHTML=note(t,k));
+  $$(".mcopy").forEach(b=>b.onclick=async e=>{e.preventDefault();try{await navigator.clipboard.writeText(b.dataset.v);b.textContent="Copied ✓";setTimeout(()=>b.textContent="Copy",1500)}catch(err){msg("Couldn't copy: select the value instead.","bad")}});
   $$(".mchk").forEach(b=>b.onclick=async()=>{b.disabled=true;b.textContent="Checking…";
     try{await api("/api/manual/check",{key:b.dataset.k});redraw()}catch(e){msg(e.message,"bad");b.disabled=false;b.textContent="Check now"}});
   $$(".mmark").forEach(b=>b.onclick=async()=>{const by=$$(".mby").find(i=>i.dataset.k==b.dataset.k).value;
@@ -1041,8 +1057,9 @@ async function criteria(){let R;try{R=await api("/api/criteria");CR=R.rows}catch
   const n=s=>CR.filter(r=>r.status==s).length;
   api("/api/probe/status").then(ps=>{$("#crprobe").innerHTML=probeStatusHTML(ps)}).catch(()=>{});
   $("#crstat").innerHTML=`<div><b>${n("pass")}</b>passed</div><div><b>${n("fail")}</b>failed</div><div><b>${n("incomplete")}</b>still to prove</div><div><b>${CR.length}</b>criteria</div>`;
-  $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span></td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
+  $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span>${r.waiting_on?`<div class="hint" style="margin-top:4px">waiting on: ${r.waiting_on.map(w=>`<a href="#" class="crwait">${esc(w.title)}</a>`).join("; ")}</div>`:""}</td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
   $$("#crrows tr.r").forEach(tr=>tr.onclick=()=>{open=open==+tr.dataset.i?null:+tr.dataset.i;criteria()});
+  $$(".crwait").forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();goManual()});
   $$(".attgo").forEach(b=>b.onclick=async e=>{e.stopPropagation();const i=+b.dataset.i;
     try{await api("/api/attest",{criterion:CR[i].criterion.id,note:$("#att"+i).value,by:$("#attby"+i).value});criteria()}catch(err){alertIn(i,err.message)}});
   $$("#crrows tr.detail").forEach(tr=>tr.onclick=e=>e.stopPropagation())}
