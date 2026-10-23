@@ -614,13 +614,13 @@ class ZIA(Product):
                                        "<vanity>.zslogin.net, and the customer approves it. Nothing else was changed "
                                        "beyond what's in the ledger.") from e
                     raise
-                log("ok", f"Created {it['name']}")
+                log("ok", f"{'Already there:' if getattr(t, 'existed', False) else 'Created'} {it['name']}")
         for kind in RULE_KINDS:
             group = [i for i in mine if i["kind"] == kind]
             # placed one by one at the top, so the last created ends up first: go in reverse to keep template order
             for it in (reversed(group) if pov.cfg.get("placement", "top") == "top" else group):
                 self._place(t, it, pov)
-                log("ok", f"Created {it['name']}")
+                log("ok", f"{'Already there:' if getattr(t, 'existed', False) else 'Created'} {it['name']}")
         t.activate()
         log("ok", "ZIA changes activated")
 
@@ -636,7 +636,16 @@ class ZIA(Product):
             if re.search(r"\b404\b|not found|does not exist", str(e), re.I):
                 return None
             raise
-        return o if isinstance(o, dict) and o else None
+        if not (isinstance(o, dict) and o):
+            return None
+        if entry["kind"] == "user" and not naming.has_prefix(obj_name(o), naming.split_prefix(entry["name"])):
+            # an API role with "User Names: Obfuscated" scrambles the name a single get returns (seen live,
+            # 2026-10); the user list shows it as it is, so take the name from there, matched by ID
+            rows = items(t.call(k["res"], k["lst"], query_params={"search": entry["name"]}))
+            hit = next((r for r in rows if str(g(r, "id")) == str(entry["id"])), None)
+            if hit and obj_name(hit):
+                o = dict(o, name=obj_name(hit))
+        return o
 
     def drift(self, t, pov, ledger, items_):
         out, missing, gone, foreign, disabled, unscoped = [], [], [], [], [], []

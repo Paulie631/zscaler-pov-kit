@@ -279,3 +279,13 @@ def test_no_default_profile_to_copy_doesnt_stop_apply(tpov, tenant, tenant_for):
     lifecycle.apply(tpov, tenant_for, lambda lvl, msg: lines.append((lvl, msg)))
     assert any(lvl == "warn" and "built by hand" in msg for lvl, msg in lines)
     assert tenant.by_name("url_filtering", "ZPOV: Block gambling")
+
+
+def test_obfuscated_user_names_dont_block_teardown(tpov, tenant, tenant_for):
+    tenant.obfuscate_user_names = True
+    approve(tpov, tenant_for)
+    lifecycle.apply(tpov, tenant_for, log)
+    checks = {c["id"]: c for c in lifecycle.status(tpov, tenant_for)}
+    assert "zia-foreign" not in checks
+    lifecycle.teardown(tpov, tenant_for, log)
+    assert not [u for u in tenant.users if u["name"].startswith("ZPOV")] and not lifecycle.ledger(tpov).active()

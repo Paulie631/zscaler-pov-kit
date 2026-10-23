@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.6
+
+From the live lab test:
+- **Obfuscated user names no longer block teardown.** An API role with "User Names: Obfuscated" makes ZIA scramble
+  the name of a user fetched on its own, so the kit took its own test users for renamed ones and would have left them
+  in the tenant. It now reads their names from ZIA's user list, which shows them as they are, matched by ID.
+- Apply says "Already there" for objects an earlier run made, instead of "Created" again.
+
 ## 0.9.5
 
 From the live lab test (ZIA, Client Connector and AI Guard, with test users made in ZIA):

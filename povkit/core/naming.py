@@ -19,6 +19,11 @@ def safe_name(n: str, prefix: str, limit: int = NAME_MAX) -> str:
     return re.sub(r"[^A-Za-z0-9 _.()-]", "", n)[:limit].rstrip()
 
 
+def split_prefix(n: str) -> str:
+    """The prefix of a POV name: 'ZPOV' out of 'ZPOV: x' or 'ZPOV - x'."""
+    return re.split(r":| - ", str(n or ""), maxsplit=1)[0].strip()
+
+
 def has_prefix(n: str, prefix: str) -> bool:
     n = str(n or "")
     return n.startswith(prefix + ":") or n.startswith(prefix + " - ")

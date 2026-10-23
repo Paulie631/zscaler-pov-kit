@@ -63,6 +63,7 @@ class LedgerTenant:
         if not it or it["action"] not in ("create", "create_or_adopt"):
             raise GuardError(f"'{key}' isn't a create in the approved change list. Nothing was sent.")
         done = self.ledger.find(key)
+        self.existed = bool(done)   # so apply can say "already there" on a rerun instead of "created"
         if done:
             return done["id"]
         body = resolve_refs(body, self.ids)

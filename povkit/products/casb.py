@@ -103,7 +103,7 @@ class CASB(Product):
         guard_activation(t, "applied")
         for it in mine:
             t.create(it["key"], "casb_dlp_rules", "add_rule", **it["body"])
-            log("ok", f"Created {it['name']}")
+            log("ok", f"{'Already there:' if getattr(t, 'existed', False) else 'Created'} {it['name']}")
         t.activate()   # CASB DLP rules are ZIA policy
 
     def live_object(self, t, entry):

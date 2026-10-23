@@ -281,7 +281,7 @@ class ZPA(Product):
                     live = self.live_object(t, e)
                     if live and it.get("placement") == "top":
                         t.update(e, live, k["res"], "reorder_rule", "access", e["id"], "1")
-                log("ok", f"Created {it['name']}")
+                log("ok", f"{'Already there:' if getattr(t, 'existed', False) else 'Created'} {it['name']}")
         if secrets.get(pov.id, KEY_SECRET):
             log("info", "Provisioning key saved to the keychain. Next: `pov-kit zpa template` for the connectors.")
 

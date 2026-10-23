@@ -206,7 +206,7 @@ class AIGuard(Product):
                 t.create(it["key"], KINDS[kind]["res"], verbs[kind], extract_id=keep, stamped=False, **it["body"])
             else:
                 t.create(it["key"], KINDS[kind]["res"], verbs[kind], stamped=False, **it["body"])
-            log("ok", f"Created {it['name']}")
+            log("ok", f"{'Already there:' if getattr(t, 'existed', False) else 'Created'} {it['name']}")
 
     def live_object(self, t, entry):
         k = KINDS[entry["kind"]]

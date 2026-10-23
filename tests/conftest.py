@@ -64,6 +64,7 @@ class FakeTenant:
         self.zid_provisions = True    # ZIdentity provisions its groups to ZIA (once entitled, in a real tenant)
         self.zid_entitle_new = True   # new ZIdentity users get Internet & SaaS (a tenant that entitles everyone)
         self.zia_users_zid_managed = False   # ZIA refuses user/group writes: ZIdentity owns the users
+        self.obfuscate_user_names = False    # a single get scrambles user names (seen in a live tenant)
         self.entitlements = {"z1": ["Internet & SaaS", "Private Access"], "z2": ["Internet & SaaS"]}
         self.users = [{"id": 91, "name": "Jane Roe", "email": "jane@acme.com", "groups": [{"id": 77}]},
                       {"id": 92, "name": "Raj Patel", "email": "raj@acme.com", "groups": [{"id": 78}]}]
@@ -235,7 +236,10 @@ class FakeTenant:
         if hit is None:
             raise KitError("404 not found")
         if method.startswith("get"):
-            return copy.deepcopy(hit)
+            o = copy.deepcopy(hit)
+            if kind == "user" and self.obfuscate_user_names:   # as an API role with "User Names: Obfuscated"
+                o["name"] = "Olxr3vbStYtuaih/hOJ+diQ0BBDX+BtWahf2pe85xSU="
+            return o
         if method.startswith("delete"):
             rows.remove(hit)
             return {}
