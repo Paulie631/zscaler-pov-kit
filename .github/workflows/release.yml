@@ -53,5 +53,5 @@ jobs:
           python tools/package.py --notes > notes.md
           gh release create "$V" dist/zscaler-pov-kit-*.zip dist/zscaler-pov-kit-*.plugin dist/SHA256SUMS.txt \
             dist/latest.json dist/*-Guide-*.md dist/*-Guide-*.docx dist/*-Overview-*.md dist/*-Overview-*.docx \
-            dist/*-Quick-Start-*.md dist/*-Quick-Start-*.docx \
+            dist/*-Quick-Start-*.md dist/*-Quick-Start-*.docx install.sh install.ps1 \
             --target "$GITHUB_SHA" --title "Zscaler POV Kit $V" --notes-file notes.md

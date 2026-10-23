@@ -14,6 +14,11 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - name: Offline tests
         run: uv run --with pytest --with requests --with keyring --with cryptography pytest -q
+      - name: One-line installers parse
+        shell: bash
+        run: |
+          bash -n install.sh
+          pwsh -NoProfile -Command '$e=$null; [System.Management.Automation.Language.Parser]::ParseFile("install.ps1",[ref]$null,[ref]$e) | Out-Null; if ($e) { $e; exit 1 }'
       - name: Lint
         if: matrix.os == 'ubuntu-24.04'
         run: uvx ruff check .

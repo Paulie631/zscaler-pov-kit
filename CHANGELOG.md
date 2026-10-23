@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.2
+
+- **One-line install, no security prompts.** `curl -fsSL …/releases/latest/download/install.sh | bash` on a Mac, or
+  `irm …/install.ps1 | iex` in PowerShell, downloads the latest release, checks its SHA-256, installs uv if needed,
+  installs the kit and opens the console. macOS Gatekeeper ("Apple could not verify…") and Windows SmartScreen only
+  block files a browser downloaded, so this avoids both without code signing. The double-click installers stay, and
+  the guides now say what to do when Gatekeeper or SmartScreen stops them.
+
 ## 0.9.1
 
 From an independent review of 0.9.0's tenant writes, and the follow-ups:

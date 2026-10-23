@@ -4,13 +4,22 @@ Stand up a proof of value in a **customer's** tenant, prove each success criteri
 as you found it, or hand the configuration over as Terraform.
 
 Built on the patterns of the [AI Guard SE Demo Kit](https://github.com/Paulie631/aiguard-se-kit), with a customer-tenant
-safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.9.1**: every product module, the identity step,
+safety model on top. Design: [docs/DESIGN.md](docs/DESIGN.md). Status: **0.9.2**: every product module, the identity step,
 the browser console and AI use cases are built and tested offline against a fake tenant. Run it in a lab tenant first ([TESTPLAN.md](TESTPLAN.md)); not yet for customer
 tenants.
 
 ## Install
 
-Download `zscaler-pov-kit-<version>.zip` from the [latest release](https://github.com/Paulie631/zscaler-pov-kit/releases/latest),
+Mac (Terminal):
+```
+curl -fsSL https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/install.sh | bash
+```
+Windows (PowerShell):
+```
+irm https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/install.ps1 | iex
+```
+No Gatekeeper or SmartScreen prompts: the terminal fetches the release and checks its SHA-256. Or download
+`zscaler-pov-kit-<version>.zip` from the [latest release](https://github.com/Paulie631/zscaler-pov-kit/releases/latest),
 unzip it, and double-click **Install Zscaler POV Kit** (`.command` on Mac, `.cmd` on Windows). It installs uv if
 needed, copies the kit to `~/.zscaler-pov-kit/app`, adds a **Zscaler POV Console** shortcut and the `pov-kit` command,
 and opens the console. The **Updates** button in the console installs new releases (verified against their SHA-256)

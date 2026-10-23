@@ -1,6 +1,21 @@
 # Installing the Zscaler POV Kit
 
-## Double-click install (recommended)
+## One-line install (recommended: no security prompts)
+
+**Mac:** open Terminal and paste:
+```
+curl -fsSL https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/install.sh | bash
+```
+**Windows:** open PowerShell and paste:
+```
+irm https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/install.ps1 | iex
+```
+It downloads the latest release, checks it against the release's SHA-256, installs uv if needed, installs the kit
+(the same steps as the double-click installer below) and opens the console. Because Terminal and PowerShell fetch the
+files rather than a browser, macOS Gatekeeper and Windows SmartScreen don't block them. The scripts are
+[install.sh](install.sh) and [install.ps1](install.ps1) in this repository, if you'd like to read them first.
+
+## Double-click install
 
 1. Download `zscaler-pov-kit-<version>.zip` from the [latest release](https://github.com/Paulie631/zscaler-pov-kit/releases/latest)
    and unzip it anywhere, for example in Downloads. **On Windows, right-click the zip → Extract All.** Running a file

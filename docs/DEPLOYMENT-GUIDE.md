@@ -67,9 +67,14 @@ Tick every box before your first POV.
 
 ## Part 1: Install the kit (5 minutes)
 
-1. Download `zscaler-pov-kit-<version>.zip` from the latest release, unzip it, and double-click **Install Zscaler POV
-   Kit** (`.command` on Mac, `.cmd` on Windows). It installs uv if needed, copies the kit to `~/.zscaler-pov-kit/app`,
-   adds a **Zscaler POV Console** shortcut and the `pov-kit` command, and opens the console.
+1. Paste one line (no security prompts, because the terminal fetches the files rather than a browser):
+   - **Mac (Terminal):** `curl -fsSL https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/install.sh | bash`
+   - **Windows (PowerShell):** `irm https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/install.ps1 | iex`
+
+   It downloads the latest release, checks its SHA-256, installs uv if needed, copies the kit to
+   `~/.zscaler-pov-kit/app`, adds a **Zscaler POV Console** shortcut and the `pov-kit` command, and opens the console.
+   Or download `zscaler-pov-kit-<version>.zip` from the latest release, unzip it, and double-click **Install Zscaler
+   POV Kit** (`.command` on Mac, `.cmd` on Windows):
    - **Mac: "Apple could not verify… Not Opened".** The installer isn't signed with an Apple Developer ID, so macOS
      blocks it once. Click **Done** (not Move to Trash), then **System Settings → Privacy & Security → Open Anyway**,
      and double-click it again. Or in Terminal: `xattr -dr com.apple.quarantine ~/Downloads/zscaler-pov-kit`, then
