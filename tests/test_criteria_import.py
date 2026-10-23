@@ -49,6 +49,10 @@ def test_keyword_mapping_without_claude(pov_all):
                                 "Our CFO gets a weekly PDF of results by courier"], use_ai=False)
     assert rows[0]["catalog"] == ["AI-AIG-01"] and rows[0]["how"] == "keywords"
     assert not rows[1]["catalog"] and rows[1]["usecase"]
+    rows = ci.map_all(pov_all, ["Prevent credit card numbers from being uploaded to personal webmail",
+                                "Block gambling and anonymizer sites for the pilot group",
+                                "Pilot users reach the internal wiki through ZPA only"], use_ai=False)
+    assert [r["catalog"] for r in rows] == [["IS-DLP-01"], ["IS-URL-01"], ["PA-APP-01"]]
 
 
 def test_claude_mapping_and_build(pov_all, tenant_for, monkeypatch):

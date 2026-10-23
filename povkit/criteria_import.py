@@ -107,8 +107,20 @@ def split(text: str) -> list[str]:
     return uniq[:MAX_ROWS]
 
 
+def stem(w):
+    for end in ("ing", "ed", "es", "s"):
+        if w.endswith(end) and len(w) - len(end) >= 4:
+            return w[:-len(end)]
+    return w
+
+
 def words(s):
-    return {w for w in re.findall(r"[a-z0-9]+", s.lower()) if w not in STOP and len(w) > 2}
+    return {stem(w) for w in re.findall(r"[a-z0-9]+", s.lower()) if w not in STOP and len(w) > 2}
+
+
+AI_WORDS = {"prompt", "chatbot", "llm", "genai", "model", "agent", "copilot", "chatgpt", "claude", "gemini", "mcp",
+            "openai", "anthropic", "assistant", "inference", "jailbreak"}
+AI_PRODUCTS = {"aiguard", "eai"}
 
 
 def catalog(pov=None):
@@ -125,6 +137,8 @@ def keyword_match(text, cat):
         if not cw:
             continue
         s = len(w & cw) / max(4, len(w))
+        if c["product"] in AI_PRODUCTS and not (w & {stem(x) for x in AI_WORDS}):
+            s *= 0.5   # an AI product's criterion only for a criterion that talks about AI
         if s > score:
             best, score = c["id"], s
     return (best, round(score, 2)) if score >= 0.25 else (None, round(score, 2))
