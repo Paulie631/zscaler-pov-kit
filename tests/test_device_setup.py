@@ -70,7 +70,8 @@ def test_detect_cloud_reads_the_entitlement(tenant):
             if res == "zid.users":
                 return [{"id": "u1"}]
             if res == "pac_files":
-                return [{"pacContent": 'return "PROXY gateway.zscalerthree.net:80; DIRECT";'}]
+                return [{"pacContent": 'if (shExpMatch(host, "*.zscaler.net")) return "DIRECT"; '
+                                       'return "PROXY gateway.zscalerthree.net:80; DIRECT";'}]
             return {"services": [{"serviceName": "ZIA"}]}
     assert ds.detect_cloud(ReadOnlyTenant(P())) == "zscalerthree"
 

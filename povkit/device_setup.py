@@ -38,7 +38,9 @@ def cloud(pov):
     return (pov.cfg.get("zcc") or {}).get("cloud") or ""
 
 
-CLOUD_RE = re.compile(r"\b(zscaler[a-z]*|zscloud|zscalergov|zscalerten)\.net\b", re.I)
+# only the PAC URL (pac.<cloud>.net) or the gateway (gateway.<cloud>.net) name the cloud: a PAC file's bypass lines
+# often mention *.zscaler.net whatever the cloud, which once made the kit say "zscaler" for a zscalertwo tenant
+CLOUD_RE = re.compile(r"\b(?:pac|gateway)\.(zscaler[a-z]*|zscloud|zscalergov|zscalerten)\.net\b", re.I)
 
 
 def detect_cloud(t):
@@ -88,10 +90,11 @@ def _cloud_from_pac(t):
         pacs = items(t.call("pac_files", "list_pac_files"))
     except KitError:
         return None
-    for pf in pacs:
-        m = CLOUD_RE.search(" ".join(str(g(pf, k) or "") for k in ("pac_content", "pac_url", "domain")))
-        if m:
-            return m.group(1).lower()
+    for key in ("pac_url", "pac_content"):   # the PAC URL first: it's the tenant's own
+        for pf in pacs:
+            m = CLOUD_RE.search(str(g(pf, key) or ""))
+            if m:
+                return m.group(1).lower()
     return None
 
 

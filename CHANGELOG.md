@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.13
+
+- **Cloud detection fix** (seen live): a PAC file's bypass lines mention `*.zscaler.net` whatever the cloud, so a
+  zscalertwo tenant was detected as `zscaler`. Only the PAC URL (`pac.<cloud>.net`) and the gateway
+  (`gateway.<cloud>.net`) count now; otherwise the console asks for the cloud.
+
 ## 0.9.12
 
 - **Detect the cloud** also reads ZIA's PAC files (they name the cloud's gateway) when ZIdentity's entitlements
