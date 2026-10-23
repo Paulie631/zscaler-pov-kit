@@ -652,7 +652,7 @@ def parser():
     s = cmd("new", c_new, "start a POV for a customer")
     s.add_argument("customer")
     s.add_argument("--products", default="zia,zcc", help="any of: zia,zcc,zpa,aiguard,zdx,casb")
-    s.add_argument("--prefix", default="ZPOV")
+    s.add_argument("--prefix", help="object name prefix (default ZPOV, or ZPOV2... if another POV here uses ZPOV)")
     s.add_argument("--ends", help="end date, YYYY-MM-DD (default: 30 days from now)")
     s.add_argument("--lab", action="store_true", help="a POV for your own lab tenant (allows selftest)")
     cmd("list", c_list, "list POVs on this laptop")

@@ -445,7 +445,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
             <input class="qzpa" type="text" id="qcust" placeholder="ZPA customer ID: Administration > API > Legacy API > Private Access API > Copy ID" style="display:none"></div></div></div>
       <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: lab tenant, prefix, end date, two API clients</summary><div class="form" style="margin-top:8px">
         <span class="lbl">Lab</span><label class="chk"><input type="checkbox" id="wlab">This is my own lab tenant <span class="muted">(allows the self-test, which creates and deletes test objects)</span></label>
-        <span class="lbl">Prefix</span><input type="text" id="wprefix" value="ZPOV" maxlength="12">
+        <span class="lbl">Prefix</span><input type="text" id="wprefix" value="" placeholder="ZPOV (or ZPOV2... if another POV here uses it)" maxlength="12">
         <span class="lbl">Ends</span><div><input type="date" id="wends" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"> <span class="hint">A reminder comes in the last week.</span></div>
         <span class="lbl">API clients</span><div>
           <label class="opt" style="margin-top:0"><input type="radio" name="wmode" value="single" checked><span><b>One API client</b> (recommended)</span></label>
@@ -597,7 +597,10 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         $("#wafter").innerHTML='<div class="notice">Checking the result…</div>';
         const checks=await runJob((await api("/api/status",{})).job,document.createElement("div"));
         $("#wnav").innerHTML="";$("#wafter").innerHTML='<div class="group-h">Status after apply</div>'+checksHTML(checks)+nav(true,true,"Next steps ›");bindNav()}
-      catch(e){$("#wafter").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
+      catch(e){const m=/Use prefix (\S+) on the Apply step/.exec(e.message);
+        $("#wafter").innerHTML=note(e.message,"bad")+(m?`<div class="row" style="gap:10px;margin-top:8px"><button class="primary" id="wuseprefix">Use prefix ${esc(m[1])} for this POV</button><span class="hint">Renames this POV's planned objects. Then review the new change list and approve it again; nothing is in the tenant yet.</span></div>`:"");
+        $("#wuseprefix")&&($("#wuseprefix").onclick=async()=>{try{await api("/api/settings",{values:{prefix:m[1]}});await load();W.step=4;wizard()}catch(err){$("#wafter").insertAdjacentHTML("beforeend",note(err.message,"bad"))}})}
+      finally{b.disabled=false}};
   }
   else if(W.step==7){
     let plan=null;try{plan=(await api("/api/plan")).plan}catch(e){}

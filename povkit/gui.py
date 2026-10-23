@@ -324,7 +324,7 @@ def api(method, path, body, q):
             raise KitError("Enter the customer's name.")
         if not names:
             raise KitError("Choose at least one product.")
-        p = povs.new(body["customer"].strip(), names, (body.get("prefix") or "ZPOV").strip(),
+        p = povs.new(body["customer"].strip(), names, (body.get("prefix") or "").strip() or None,
                      remind.parse_date(body["ends"]) if body.get("ends") else None)
         settings.set_value(p, "client_mode", body.get("client_mode") or "single")
         if body.get("lab") is True:   # your own lab tenant: allows the self-test, which writes

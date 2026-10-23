@@ -78,7 +78,39 @@ class Pov:
         return gone
 
 
-def new(customer: str, products: list[str], prefix: str = naming.DEFAULT_PREFIX, ends: str | None = None) -> Pov:
+def prefixes_in_use(exclude: str | None = None) -> dict[str, list[str]]:
+    """Prefixes of the POVs on this laptop that have objects in a tenant (or may have): {prefix: [pov ids]}."""
+    out: dict[str, list[str]] = {}
+    for pid in all_povs():
+        if pid == exclude:
+            continue
+        try:
+            cfg = json.loads((POVS / pid / "pov.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        from .ledger import Ledger
+        busy = cfg.get("state") in ("applied", "partly_applied")
+        if not busy and (POVS / pid / "ledger.json").exists():
+            try:
+                busy = bool(Ledger(POVS / pid / "ledger.json", pid, cfg.get("prefix", naming.DEFAULT_PREFIX)).active())
+            except Exception:   # noqa: BLE001 - an unreadable ledger: assume it may hold objects
+                busy = True
+        if busy:
+            out.setdefault(cfg.get("prefix", naming.DEFAULT_PREFIX), []).append(pid)
+    return out
+
+
+def free_prefix(base: str = naming.DEFAULT_PREFIX, exclude: str | None = None) -> str:
+    """The base prefix, or base2, base3... when another POV on this laptop already has objects under it, so two POVs
+    in one tenant (a lab, say) never want the same object names."""
+    used = prefixes_in_use(exclude)
+    if base not in used:
+        return base
+    return next(f"{base}{n}" for n in range(2, 100) if f"{base}{n}" not in used)
+
+
+def new(customer: str, products: list[str], prefix: str | None = None, ends: str | None = None) -> Pov:
+    prefix = (prefix or "").strip() or free_prefix()
     if not re.fullmatch(r"[A-Za-z][A-Za-z0-9-]{1,11}", prefix):
         raise KitError("The prefix must be 2 to 12 letters, digits or dashes, starting with a letter.")
     pov_id = f"{slug(customer)}-{_rand.token_hex(2)}"

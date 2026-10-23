@@ -10,7 +10,7 @@ SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_email
             "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain",
             "identity.pilot", "identity.create_users", "identity.users_in", "ai.model", "ai.share", "ends", "lab",
             "customer_id", "mcp.version", "zcc.cloud", "aiguard.proxy", "aiguard.provider",
-            "aiguard.provider_credential", "aiguard.model"}
+            "aiguard.provider_credential", "aiguard.model", "prefix"}
 LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports", "identity.bypass_domains"}
 CHOICES = {"lab": ("yes", "no"), "aiguard.proxy": ("none", "customer", "se"), "aiguard.provider": ("anthropic", "openai"),
            "identity.pilot": ("existing", "create", "test"),
@@ -46,6 +46,8 @@ def parse(key, raw):
         v = parse_date(v)
     if key == "zcc.cloud" and v and not __import__("re").fullmatch(r"[a-z0-9]+", v):
         raise KitError("zcc.cloud is the Zscaler cloud's name, such as zscalertwo or zscaler.")
+    if key == "prefix" and not __import__("re").fullmatch(r"[A-Za-z][A-Za-z0-9-]{1,11}", v or ""):
+        raise KitError("The prefix is 2 to 12 letters, digits or dashes, starting with a letter.")
     if key == "pilot_emails":
         bad = [x for x in v if "@" not in x]
         if bad:
@@ -60,6 +62,15 @@ def set_value(pov, key, raw, save=True):
         if Ledger(pov.path("ledger.json"), pov.id, pov.prefix).active("zid"):
             raise KitError("The POV's ZIdentity pilot group is in the tenant, so the pilot group can't change now. "
                            "Remove the POV first (Handover), or keep this group.")
+    if key == "prefix" and v != pov.prefix:
+        from .core.ledger import Ledger
+        if Ledger(pov.path("ledger.json"), pov.id, pov.prefix).active():
+            raise KitError("This POV has objects in the tenant under its prefix, so it can't change now. Remove the "
+                           "POV first (Handover), or keep the prefix.")
+        from .core import pov as povs
+        if v in povs.prefixes_in_use(exclude=pov.id):
+            raise KitError(f"Another POV on this laptop uses '{v}' in a tenant. Pick another, such as "
+                           f"{povs.free_prefix(v, exclude=pov.id)}.")
     if "." in key:
         sect, field = key.split(".", 1)
         pov.cfg.setdefault(sect, {})[field] = v

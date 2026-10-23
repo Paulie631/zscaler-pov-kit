@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.26
+
+- **Two POVs in one tenant no longer collide.** A new POV takes the prefix ZPOV2 (ZPOV3...) when another POV on this
+  laptop already has objects under ZPOV, so a second POV in a lab tenant gets names of its own.
+- **When names are taken,** Apply now says whose they are (another POV on this laptop, or objects it doesn't know)
+  and offers **Use prefix ZPOV2 for this POV**. That renames the planned objects; the new change list is then
+  approved again. The prefix can change only while the POV has nothing in the tenant (`pov-kit set prefix NAME`).
+
 ## 0.9.25
 
 - **The POV probe: a separate small download for pilot devices.** It holds only the POV's tests and the traffic

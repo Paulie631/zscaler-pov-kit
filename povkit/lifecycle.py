@@ -76,6 +76,7 @@ def discover(pov, tenant_for):
         ident, ic = {}, [check("id-read", "Pilot users readable", FAIL, str(e)[:200])]
     snaps["identity"] = ident
     checks += [dict(x, label=f"Identity: {x['label']}") for x in ic]
+    name_clash(pov, checks)
     waiting = wait_for(pov, checks, [n for n in snaps if n != "identity"])
     if waiting:   # these products sit out this change list; the rest of the POV goes ahead
         for x in checks:
@@ -92,6 +93,29 @@ def discover(pov, tenant_for):
     pov.write_json("discovery.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "products": snaps_out})
     pov.log("discover", f"discovery: {len(checks)} checks")
     return snaps, checks
+
+
+def name_clash(pov, checks):
+    """Names taken in the tenant: say whose they are when another POV on this laptop uses the same prefix (two POVs
+    in one lab tenant, say), and how to get past it."""
+    clashes = [c for c in checks if c["id"].endswith("-names") and c["status"] == FAIL]
+    if not clashes:
+        return
+    from .core import pov as povs
+    others = povs.prefixes_in_use(exclude=pov.id).get(pov.prefix) or []
+    base = pov.prefix.rstrip("0123456789") or pov.prefix
+    used = set(povs.prefixes_in_use(exclude=pov.id)) | {pov.prefix}
+    alt = next(f"{base}{n}" for n in range(2, 100) if f"{base}{n}" not in used)
+    applied = bool(ledger(pov).active())
+    for c in clashes:
+        who = (f"POV {', '.join(others)} on this laptop already has these names in the tenant (same prefix "
+               f"'{pov.prefix}'). " if others else f"Objects named with this POV's prefix '{pov.prefix}' are already "
+               "in the tenant, and aren't this POV's. ")
+        fix = (f"Give this POV its own prefix: Use prefix {alt} on the Apply step (or `pov-kit set prefix {alt}`), "
+               "then approve the new change list. " if not applied else "")
+        fix += (f"Or remove POV {others[0]} first (Handover)." if others else
+                "Or check who made them (the Logs of the POV that did), and remove them if they're left over.")
+        c.update(detail=who + c.get("detail", ""), fix=fix, prefix_alt=None if applied else alt)
 
 
 def make_plan(pov, snaps):
@@ -124,7 +148,9 @@ def apply(pov, tenant_for, log):
     snaps, checks = discover(pov, tenant_for)
     failed = [c for c in checks if c["status"] == FAIL]
     if failed:
-        raise KitError("Discovery found problems, so nothing was applied: " + "; ".join(c["label"] for c in failed))
+        why = "; ".join(c["label"] for c in failed)
+        fixes = list(dict.fromkeys(c["fix"] for c in failed if c.get("fix")))
+        raise KitError("Discovery found problems, so nothing was applied: " + why + (". " + " ".join(fixes[:2]) if fixes else ""))
     items, _ = make_plan(pov, snaps)
     approval = ChangeList(pov.dir).require_approved(items)
     led = ledger(pov)
