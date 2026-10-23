@@ -14,10 +14,94 @@
    "id": "AI-AIG-02",
    "phase": "v2",
    "title": "Secrets and regulated PII are caught",
-   "statement": "Secrets and regulated PII in prompts and replies are detected, or blocked when enforced.",
+   "statement": "Secrets (API keys, tokens, private keys), regulated PII (cards, SSNs, bank and passport numbers) and personal data in prompts are detected, or blocked when enforced.",
    "proofs": [
     "api"
    ]
+  },
+  {
+   "id": "AI-AIG-03",
+   "phase": "v2",
+   "title": "Evasion attempts are caught",
+   "statement": "Gibberish, encoded blobs and invisible-character smuggling are detected, so attacks can't slip past the other detectors.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "AI-AIG-04",
+   "phase": "v2",
+   "title": "Source code in prompts is recognized",
+   "statement": "Code pasted into prompts (Python, JavaScript, SQL, CLI commands, Go, Java) is detected by language, so IP-protection policy can act on it.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "AI-AIG-05",
+   "phase": "v2",
+   "title": "Responsible-AI policies apply",
+   "statement": "Toxic language, requests for financial or legal advice, competitor mentions and brand-risk content are detected, so the customer's usage policy can be enforced.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "AI-AIG-06",
+   "phase": "v2",
+   "title": "Model replies are checked too",
+   "statement": "Replies that would leak PII or secrets, contain toxic language or malicious links, or refuse are detected on the way back, not only prompts.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "AI-AIG-07",
+   "phase": "v2",
+   "title": "Every prompt is classified",
+   "statement": "Prompts are tagged by topic and language, so the customer sees what their AI is used for, not only what was blocked.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "AI-AIG-08",
+   "phase": "v2",
+   "title": "Everyday work isn't flagged",
+   "statement": "Ordinary business prompts pass without triggering any protective detector (no false positives in the baseline).",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "AI-AIG-P1",
+   "phase": "v2",
+   "title": "Financial services prompts are protected",
+   "statement": "The financial-services pack: account and card data, trading and advice requests, internal code, as a bank's staff would use AI.",
+   "proofs": [
+    "api"
+   ],
+   "optional": true
+  },
+  {
+   "id": "AI-AIG-P2",
+   "phase": "v2",
+   "title": "Healthcare prompts are protected",
+   "statement": "The healthcare pack: patient records, clinical notes, claims and EHR queries (synthetic data).",
+   "proofs": [
+    "api"
+   ],
+   "optional": true
+  },
+  {
+   "id": "AI-AIG-P3",
+   "phase": "v2",
+   "title": "Legal prompts are protected",
+   "statement": "The legal pack: client matters, contracts and privileged material.",
+   "proofs": [
+    "api"
+   ],
+   "optional": true
   }
  ]
 }

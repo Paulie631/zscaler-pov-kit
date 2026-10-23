@@ -145,15 +145,25 @@ def test_aiguard_lifecycle_profile_and_api_proof(pov_all, tenant, tenant_for, mo
     assert "prompt_injection" in blocks(pol)
     assert next(p for p in st["aiguard.policies"] if p["name"] == "Corp AI policy")["inputDetectorPolicies"] == []
 
-    def scan(key, text, direction="IN"):
-        hit = "prompt_injection" if "instruction" in text else "secrets" if "sk_" in text else "pii" if any(
-            c.isdigit() for c in text) else None
-        return {"policyId": pol["id"], "action": "BLOCK" if hit == "prompt_injection" else "ALLOW",
-                "detectorResponses": {hit: {"triggered": True}} if hit else {}}
+    from povkit.products.aiguard import PROOF_TESTS
+    want = {t["text"].replace("{_}", "").replace("{COMPETITOR}", "Competitor Inc"): t["expect"]
+            for ts in PROOF_TESTS.values() for t in ts}
+
+    def scan(key, text, direction="IN"):   # AI Guard as it should behave: the expected detectors trigger
+        hit = want.get(text, [])
+        return {"policyId": pol["id"], "action": "BLOCK" if "prompt_injection" in hit else "ALLOW",
+                "detectorResponses": {h: {"triggered": True} for h in hit} | {"prompt_tags": {"triggered": True}}}
     ag = products.get("aiguard")
-    r1 = ag.api_proof(None, pov_all, led, {"id": "AI-AIG-01"}, scan=scan)
-    r2 = ag.api_proof(None, pov_all, led, {"id": "AI-AIG-02"}, scan=scan)
-    assert r1["status"] == "pass" and "BLOCK" in r1["detail"] and r2["status"] == "pass"
+    for cid in PROOF_TESTS:
+        r = ag.api_proof(None, pov_all, led, {"id": cid}, scan=scan)
+        assert r["status"] == "pass", (cid, r["detail"])
+    assert "BLOCK" in ag.api_proof(None, pov_all, led, {"id": "AI-AIG-01"}, scan=scan)["detail"]
+    missing = lambda key, text, direction="IN": scan(key, text, direction) | {"detectorResponses": {}}  # noqa: E731
+    r = ag.api_proof(None, pov_all, led, {"id": "AI-AIG-02"}, scan=missing)
+    assert r["status"] == "fail" and "not as expected" in r["detail"]
+    harmful = lambda key, text, direction="IN": scan(key, text, direction) | {  # noqa: E731
+        "detectorResponses": {"secrets": {"triggered": True}}}
+    assert ag.api_proof(None, pov_all, led, {"id": "AI-AIG-08"}, scan=harmful)["status"] == "fail"   # false positive
     lifecycle.teardown(pov_all, tenant_for, log)
     assert names(tenant, "aiguard.policies") == {"Corp AI policy"}
     assert names(tenant, "aiguard.llm_applications") == {"Corp chatbot"}
@@ -253,3 +263,11 @@ def test_a_product_that_isnt_ready_waits_and_the_rest_goes_ahead(pov_all, tenant
     assert any("ZDX is added later" in n for n in notes)
     assert [i for i in items if i["product"] == "zia"]
     assert not [c for c in checks if c["status"] == "fail"]
+
+
+def test_industry_packs_are_optional_criteria(pov_all):
+    from povkit import evidence
+    ids = {c["id"] for c in evidence.selected_criteria(pov_all)}
+    assert {"AI-AIG-01", "AI-AIG-08"} <= ids and "AI-AIG-P2" not in ids
+    pov_all.cfg["criteria"] = ["AI-AIG-01", "AI-AIG-P2"]
+    assert {c["id"] for c in evidence.selected_criteria(pov_all)} >= {"AI-AIG-01", "AI-AIG-P2"}

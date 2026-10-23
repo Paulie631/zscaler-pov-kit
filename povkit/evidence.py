@@ -27,7 +27,8 @@ def selected_criteria(pov, ids=None):
     if ids:
         return [c for c in out if c["id"] in ids]
     chosen = set(pov.cfg.get("criteria") or [])
-    return [c for c in out if not chosen or c["id"] in chosen or c.get("usecase")]
+    # optional criteria (industry packs) count only when chosen: `pov-kit set criteria ...,AI-AIG-P2`
+    return [c for c in out if c.get("usecase") or c["id"] in chosen or (not chosen and not c.get("optional"))]
 
 
 def import_probe(pov, src: Path):
