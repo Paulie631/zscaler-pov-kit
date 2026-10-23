@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.10
+
+From running the new checks against the lab tenant:
+- **The ZPA customer ID check** says plainly when no customer ID is set, or when ZPA doesn't know the one entered,
+  instead of showing ZPA's raw "not found" answer. Its steps give ZPA's Public API page.
+- **"Build the Client Connector profiles by hand"** only appears after Apply, when it's actually needed.
+
 ## 0.9.9
 
 - **Detailed instructions for every step the API can't do.** Next steps → **Steps for people** lists them in order

@@ -86,3 +86,14 @@ def test_gui_endpoints(pov_all, tenant_for, monkeypatch):
     code, r = gui.api("POST", "/api/manual/mark", {"key": "setup.zdx_role", "by": "SE"}, {})
     assert r["done"] is True
     assert "Zscaler POV steps" in gui.api("GET", "/api/manual/sheet", {}, {})[1]["text"]
+
+
+def test_zpa_check_says_when_the_customer_id_is_missing(pov_all, tenant_for):
+    planned(pov_all, tenant_for)
+    r = manual.check(pov_all, "setup.zpa_customer_id", tenant_for)
+    assert r["ok"] is False and "customer ID" in r["detail"]
+
+
+def test_by_hand_profiles_only_after_apply(pov_all, tenant_for):
+    planned(pov_all, tenant_for)
+    assert "zcc.by_hand" not in [s["key"] for s in manual.guide(pov_all)]

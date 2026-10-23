@@ -28,9 +28,9 @@
       "steps": [
         "Open Administration > API > OneAPI > API Clients and edit the POV's client.",
         "Under its resources or roles, add Digital Experience (ZDX) with a view-only role (the kit only starts deep traces if a use case asks).",
-        "Save, then run the checks again in the console's Preflight step."
+        "Save, then click Check now here (or run Preflight again)."
       ],
-      "done": "Preflight shows ZDX readable."
+      "done": "Check now says ZDX is readable."
     },
     "setup.zpa_customer_id": {
       "title": "Find the ZPA customer ID",
@@ -38,11 +38,11 @@
       "when": "kickoff, with ZPA",
       "search": "Public API",
       "steps": [
-        "In the Zscaler console, search the menu for Public API (ZPA), or open ZPA's company or tenant information page.",
-        "Copy the Customer ID (a long number). It isn't a secret.",
-        "Paste it into Connect > ZPA customer ID, and run the checks again."
+        "In the Zscaler console, open ZPA's Public API page: Configuration & Control > Public API > API Keys (or search the menu for Public API). The customer ID is shown there, and also in the ZPA admin URL.",
+        "Copy the Customer ID (a long number, all of it). It isn't a secret.",
+        "Paste it into Connect > ZPA customer ID (or `pov-kit set customer_id <number>`), then click Check now here."
       ],
-      "done": "Preflight shows ZPA readable."
+      "done": "Check now says ZPA is readable."
     },
     "zid.ca.entitlement": {
       "title": "Entitle the POV's pilot group (Internet & SaaS)",

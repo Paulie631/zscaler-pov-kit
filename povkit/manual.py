@@ -50,8 +50,9 @@ def guide(pov):
     for i in plan:
         if i["action"] == "customer_action":
             keys.append(("customer", i["key"]))
+    applied = bool(led.active() or pov.cfg.get("state") in ("applied", "partly_applied"))
     zcc_by_hand = [i for i in plan if i["product"] == "zcc" and i["action"] == "create_or_adopt"
-                   and not led.find(i["key"])]
+                   and not led.find(i["key"])] if applied else []
     if zcc_by_hand:
         keys.append(("customer", "zcc.by_hand"))
     keys.append(("end", "end.api_clients"))
@@ -119,7 +120,14 @@ def _check_zdx(t, pov, led):
 
 
 def _check_zpa(t, pov, led):
-    t.call(*_ping("zpa"))
+    if not pov.cfg.get("customer_id"):
+        return False, "no ZPA customer ID set yet (Connect > ZPA customer ID)"
+    try:
+        t.call(*_ping("zpa"))
+    except KitError as e:
+        if re.search(r"\b404\b|resource\.not\.found", str(e)):
+            return False, f"ZPA doesn't know customer ID {pov.cfg['customer_id']}: check it was copied whole"
+        raise
     return True, "ZPA readable with the customer ID"
 
 
