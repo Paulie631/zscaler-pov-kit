@@ -34,6 +34,7 @@ def test_plan_makes_the_group_users_and_customer_actions(zpov, tenant_for):
     assert by["zid.user.new-user-acme-com"]["body"]["login_name"] == "new.user@acme.com"
     assert by["zid.group.members"]["body"]["users"] == ["z1", "{ref:zid.user.new-user-acme-com}"]
     assert by["zid.ca.entitlement"]["action"] == "customer_action" and by["zid.ca.passwords"]
+    assert by["zid.ca.signin"]["action"] == "customer_action"
     rules = [i for i in items if i["product"] == "zia" and i["body"].get("groups")]
     assert rules and all(i["body"]["groups"] == ["{ref:zid.zia_group}"] for i in rules)
     assert not [c for c in checks if c["status"] == "fail"]

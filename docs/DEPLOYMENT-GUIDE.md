@@ -124,9 +124,11 @@ checking its SHA-256, and **Roll back** goes back one version.
    - **Create one for the POV in ZIdentity:** the kit makes `ZPOV - pilot users` and puts the users in it, once the
      change list is approved, and removes it at teardown. Existing users are only added to the group. In a lab tenant,
      tick **Also create the users who don't exist** and the kit creates them too (you set their passwords in
-     ZIdentity). ZIdentity's API can't grant entitlements, so the customer gives the group Internet & SaaS (and
-     Private Access with ZPA); Apply waits for ZIdentity to provision the group to ZIA, and if it stops to wait, click
-     **Apply** again once the entitlement is granted.
+     ZIdentity). ZIA only learns ZIdentity users and their groups when they sign in, so Apply creates the group and
+     then stops until **one pilot user has signed in once** (Client Connector, or the ZIA sign-in page); click
+     **Apply** again after that and it carries on. Where the tenant entitles chosen users or groups rather than
+     everyone, the customer also gives the group Internet & SaaS (and Private Access with ZPA) in ZIdentity, since its
+     API can't grant entitlements.
    - Add users by typing a name or email: the list comes from ZIdentity, and the step shows who isn't there.
 3. **Preflight**: read-only checks of every product and of the pilot users across products. Fix every FAIL before
    going on; each one says how.
@@ -197,7 +199,7 @@ repository is public).
 | Preflight: ZIdentity entitlements FAIL | ZIdentity's API can't grant them: the customer assigns the missing service to the pilot group in ZIdentity |
 | Preflight: pilot group doesn't exist | Pick an existing group from the list, or choose **Create one for the POV in ZIdentity** |
 | Preflight: ZDX readable FAIL (403) | The API client has no ZDX role: in ZIdentity → API Clients, add one (view only is enough), or take ZDX out of the POV |
-| Apply stops: "ZIA doesn't have it yet" | Give the POV's ZIdentity group its entitlements, wait a minute, click **Apply** again: it carries on and creates nothing twice |
+| Apply stops: "ZIA doesn't have it yet" | Have one pilot user sign in once (Client Connector or the ZIA sign-in page); grant the group's entitlement first if the tenant needs it. Then click **Apply** again: it carries on and creates nothing twice |
 | Delete: "still in the customer's tenant" | Remove the POV first (Handover → Remove the POV) or export it to Terraform, then delete |
 | Apply: "ZIA has changes waiting to be activated" | Another admin's changes are pending. The customer activates or discards them; the kit never does |
 | Apply: "the tenant changed since the customer approved" | Something the plan depends on changed. Make the change list again and get it approved again |

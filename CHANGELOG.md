@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.3
+
+From the live lab test:
+- **A ZIdentity pilot group reaches ZIA at a member's first sign-in**, not when it's entitled: a live tenant showed ZIA
+  holds none of its ZIdentity groups until one of their users signs in. The change list now has the customer action
+  "One pilot user signs in once", and apply, preflight, status and the guide say so; apply looks for the group for
+  15 seconds, not a minute, then stops and carries on next time.
+
 ## 0.9.2
 
 - **One-line install, no security prompts.** `curl -fsSL …/releases/latest/download/install.sh | bash` on a Mac, or

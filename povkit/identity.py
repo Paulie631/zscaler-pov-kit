@@ -137,7 +137,7 @@ def discover(t, pov, snaps):
     if "zia" in pov.products and made_here and c.get("pilot") == "create":
         checks.append(check("id-zia-users", "Pilot users are in ZIA", INFO if missing else OK,
                             f"not yet: {', '.join(missing)}" if missing else f"all {len(emails)}",
-                            "ZIdentity provisions them to ZIA with the POV's group, once it's entitled."
+                            "ZIA gets each user, and the POV's group, at their first sign-in."
                             if missing else ""))
     elif "zia" in pov.products:
         checks.append(check("id-zia-users", "Pilot users are in ZIA", WARN if missing else OK,
@@ -153,8 +153,9 @@ def discover(t, pov, snaps):
     if zid and zid_pilot(pov.cfg):   # the group is the POV's own: its entitlement is a customer action after apply
         checks.append(check("id-entitlements", "ZIdentity entitlements", INFO if unentitled else OK,
                             "; ".join(unentitled) if unentitled else "every pilot user is entitled",
-                            "After apply creates the POV's pilot group, give it its entitlements in ZIdentity (a "
-                            "customer action in the change list)." if unentitled else "",
+                            "If your tenant entitles chosen users or groups, give the POV's pilot group its "
+                            "entitlements in ZIdentity after apply creates it (a customer action in the change list)."
+                            if unentitled else "",
                             console="zid.entitlements"))
     elif zid:
         checks.append(check("id-entitlements", "ZIdentity entitlements", FAIL if unentitled else OK,

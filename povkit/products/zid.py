@@ -6,11 +6,12 @@ everything else, so nothing is written before the customer approves it:
   - the pilot users put in it: existing ZIdentity users are only added (never changed); users who don't exist yet
     are created only when `identity.create_users yes` (lab tenants), named '<prefix>: <login>'
   - the customer actions ZIdentity's API can't do: granting the group its service entitlements (Internet & SaaS,
-    Private Access) and setting new users' passwords
+    Private Access) where the tenant entitles chosen groups, setting new users' passwords, and one pilot user signing
+    in once (ZIA learns ZIdentity users and their groups at sign-in, not before: seen in a live tenant, 2026-10)
 
-ZIdentity then provisions the group to ZIA, where the POV rules use it. ZIA's copy of the group belongs to ZIdentity,
+ZIA then has the group (after that first sign-in), and the POV rules use it. ZIA's copy of the group belongs to ZIdentity,
 so the ledger only links it ('linked': its ID fills the rules, and the kit never changes or deletes it). Apply waits
-for it; if the entitlement isn't granted yet, apply stops after this step and picks up where it left off next time.
+for it briefly; until a member has signed in, apply stops after this step and picks up where it left off next time.
 Teardown deletes the users the POV created and the group (ZIdentity then removes them from ZIA), after every rule
 that used the group is gone.
 """
@@ -26,7 +27,8 @@ from ..tenant import g, items
 from .base import Product
 
 ZIA_GROUP_KEY = "zid.zia_group"   # the ledger link to ZIA's copy of the group; rules reference {ref:zid.zia_group}
-WAIT = (5, 10, 15, 30)            # seconds between looks for ZIA's copy of the group during apply
+WAIT = (5, 10)                    # seconds between looks for ZIA's copy of the group during apply (it comes with a
+                                  # member's first sign-in, so a long wait rarely helps)
 
 
 def enabled(cfg):
@@ -128,7 +130,7 @@ class ZID(Product):
         P, pid, gname = pov.prefix, pov.id, snap["group"]
         who = len(snap["members"]) + len(snap["new"])
         out = [item("zid", "group", "zid.group", gname, affects=f"its {who} pilot user{'s' * (who != 1)} only",
-                    why="The pilot group every POV rule is scoped to. ZIdentity provisions it to ZIA.",
+                    why="The pilot group every POV rule is scoped to. ZIA gets it when a member first signs in.",
                     body={"name": gname, "description": naming.describe(pid, "POV pilot users"),
                           "service_entitlement_enabled": True, "admin_entitlement_enabled": False})]
         for e in snap["new"]:
@@ -152,8 +154,14 @@ class ZID(Product):
         out.append(item("zid", "customer_action", "zid.ca.entitlement",
                         f"Give '{gname}' the {' and '.join(svc)} entitlement{'s' * (len(svc) > 1)}",
                         action="customer_action", console="zid.entitlements",
-                        why="ZIdentity's API can't grant entitlements. Once granted, ZIdentity provisions the group "
-                            "to ZIA and apply carries on (click Apply again if it stopped to wait)."))
+                        why="ZIdentity's API can't grant entitlements. Needed where the tenant entitles chosen users "
+                            "or groups rather than everyone."))
+        if {"zia", "zcc", "casb"} & set(pov.products):
+            out.append(item("zid", "customer_action", "zid.ca.signin", "One pilot user signs in once",
+                            action="customer_action", console="zcc.enrolled_devices",
+                            why="ZIA learns ZIdentity users and their groups when they sign in. Until one member of "
+                                f"'{gname}' signs in (Client Connector, or the ZIA sign-in page), ZIA doesn't have the "
+                                "group, so apply stops after creating it and carries on once it's there."))
         if snap["new"]:
             out.append(item("zid", "customer_action", "zid.ca.passwords", "Set the new pilot users' passwords",
                             action="customer_action", console="zid.users",
@@ -184,7 +192,7 @@ class ZID(Product):
                 log("ok", f"Added {len(add)} pilot user{'s' * (len(add) != 1)} to {gi['name']}")
         if not ({"zia", "zcc", "casb"} & set(pov.products)) or t.ids.get(ZIA_GROUP_KEY):
             return
-        for wait in (0,) + WAIT:   # ZIdentity provisions the group to ZIA once it's entitled
+        for wait in (0,) + WAIT:   # ZIA has the group once a member has signed in
             time.sleep(wait)
             rows = items(t.call("user_management", "list_groups", query_params={"search": gi["name"]}))
             hit = next((r for r in rows if str(g(r, "name")) == gi["name"]), None)
@@ -192,10 +200,11 @@ class ZID(Product):
                 t.link(ZIA_GROUP_KEY, "zia", "user_group", g(hit, "id"), gi["name"])
                 log("ok", f"ZIA sees {gi['name']}")
                 return
-            log("info", f"Waiting for ZIdentity to provision {gi['name']} to ZIA…")
+            log("info", f"Looking for {gi['name']} in ZIA…")
         raise KitError(f"The pilot group is ready in ZIdentity, but ZIA doesn't have it yet. In ZIdentity, give "
-                       f"'{gi['name']}' its service entitlements (the change list's customer action), then click Apply "
-                       "again: it carries on from here and nothing is created twice.")
+                       f"'{gi['name']}' its Internet & SaaS entitlement if your tenant needs it, then have one pilot "
+                       "user sign in once (Client Connector, or the ZIA sign-in page): ZIA learns ZIdentity groups at "
+                       "sign-in. Then click Apply again: it carries on from here and nothing is created twice.")
 
     # ---------------------------------------------------------------- live objects, drift, teardown
     def live_object(self, t, entry):
@@ -233,7 +242,8 @@ class ZID(Product):
         if {"zia", "zcc", "casb"} & set(pov.products):
             out.append(check("zid-zia", "ZIA has the pilot group", OK if linked else WARN,
                              linked["name"] if linked else "not yet",
-                             "" if linked else "Grant the group's entitlements in ZIdentity, then click Apply again."))
+                             "" if linked else "Have one pilot user sign in once (and grant the group's entitlement if "
+                             "your tenant needs it), then click Apply again."))
         return out
 
     def fix_drift(self, t, pov, ledger, items_, log):

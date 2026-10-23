@@ -289,7 +289,8 @@ class ZIA(Product):
             gname = group_name(pov.prefix)
             snap["pilot_group"] = {"id": "{ref:%s}" % ZIA_GROUP_KEY, "name": gname}
             checks.append(check("zia-pilot", "Pilot group", INFO, f"'{gname}', made by the POV in ZIdentity",
-                                "ZIdentity provisions it to ZIA once it has its entitlements; apply waits for it."))
+                                "ZIA gets it when a member first signs in (after any entitlement it needs); apply "
+                                "stops until then and carries on next time."))
         elif n_test and (mode != "hosted" or snap["zidentity"]):
             checks.append(check("zia-testusers", "Hosted DB test users", FAIL,
                                 "this tenant's users come from " + ("ZIdentity" if snap["zidentity"] else "an IdP or directory"),
