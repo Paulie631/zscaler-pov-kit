@@ -9,7 +9,8 @@
    - **Windows (PowerShell):** `irm https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/install.ps1 | iex`
 2. Or download the zip from the latest release, unzip it and double-click **Install Zscaler POV Kit**. Mac says "Not
    Opened"? **Done**, then System Settings → Privacy & Security → **Open Anyway**. Windows: **More info → Run anyway**.
-3. From then on, open **Zscaler POV Console** from your desktop. Keep its terminal window open while you work.
+3. From then on, open **Zscaler POV Console** from your desktop. It opens in your browser with no terminal window;
+   **Stop** at the top of the console stops it.
 
 ## Once
 

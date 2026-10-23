@@ -3,7 +3,9 @@
 The double-click installers (Install Zscaler POV Kit.command / .cmd) install uv if needed, then run
 `pov-kit install`, which:
   - copies the kit to ~/.zscaler-pov-kit/app (the previous copy is kept as app.previous for rollback)
-  - adds a "Zscaler POV Console" shortcut: an app on the Mac desktop, a desktop and Start menu shortcut on Windows
+  - adds a "Zscaler POV Console" shortcut: an app on the Mac desktop, a desktop and Start menu shortcut on Windows.
+    It opens the console in the browser with no terminal window (`pov-kit gui --background`); a problem starting it
+    shows in a dialog
   - lets the SE run `pov-kit` from any terminal (~/.local/bin on Mac and Linux, the user PATH on Windows)
 POVs, secrets and the ledger stay where they are (~/.zscaler-pov-kit/povs and the keychain); installing, updating
 and uninstalling never touch them or any tenant.
@@ -25,6 +27,7 @@ APP = BASE / "app"
 APP_NAME = "Zscaler POV Console"
 CLI = "pov-kit"
 UNINSTALL_LNK = "Uninstall Zscaler POV Kit.lnk"
+LAUNCH_LOG = BASE / "console-launch.log"   # what the shortcut's launcher printed, for its error dialog
 FILES = ["pov-kit", "pov-kit.cmd", "pov_kit.py", "povkit", "assets", "docs", "plugin", "README.md", "SECURITY.md",
          "CHANGELOG.md", "TESTPLAN.md", "INSTALL.md", "pyproject.toml", "Uninstall Zscaler POV Kit.command",
          "Uninstall Zscaler POV Kit.cmd"]
@@ -79,10 +82,11 @@ def shortcut_paths():
     if windows():
         menu = Path(os.getenv("APPDATA", str(home))) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
         return {"desktop": desktop_dir() / f"{APP_NAME}.lnk", "start": menu / f"{APP_NAME}.lnk",
-                "start_uninstall": menu / UNINSTALL_LNK}
+                "start_uninstall": menu / UNINSTALL_LNK, "launcher": BASE / "Open POV Console.vbs"}
     if platform.system() == "Darwin":
         return {"desktop": home / "Desktop" / f"{APP_NAME}.app", "wrapper": home / ".local" / "bin" / CLI}
-    return {"desktop": home / "Desktop" / f"{APP_NAME}.desktop", "wrapper": home / ".local" / "bin" / CLI}
+    return {"desktop": home / "Desktop" / f"{APP_NAME}.desktop", "wrapper": home / ".local" / "bin" / CLI,
+            "launcher": BASE / "open-pov-console.sh"}
 
 
 def desktop_dir():
@@ -114,8 +118,9 @@ def win_shortcut(path, target, args, workdir, description, icon=None):
 
 
 def mac_app(app, kit=None):
-    """A small app bundle on the desktop: the kit's icon, and it opens the console in a Terminal window (closing
-    the window stops the console). Built on the laptop, so Gatekeeper doesn't quarantine it."""
+    """A small app bundle on the desktop: the kit's icon, and it opens the console in the browser with no Terminal
+    window (a console already running is reused). If it can't start, a dialog says why. Built on the laptop, so
+    Gatekeeper doesn't quarantine it."""
     import plistlib
     kit = Path(kit or APP)
     shutil.rmtree(app, ignore_errors=True)
@@ -123,21 +128,51 @@ def mac_app(app, kit=None):
     (app / "Contents" / "Resources").mkdir(parents=True)
     info = {"CFBundleName": APP_NAME, "CFBundleDisplayName": APP_NAME, "CFBundleExecutable": "launch",
             "CFBundleIdentifier": "com.zscaler-pov-kit.console", "CFBundlePackageType": "APPL",
-            "CFBundleShortVersionString": VERSION, "LSMinimumSystemVersion": "10.13"}
+            "CFBundleShortVersionString": VERSION, "LSMinimumSystemVersion": "10.13",
+            "LSUIElement": True}   # no Dock icon: the app only starts the console and quits
     icon = kit / "assets" / "pov-icon.icns"
     if icon.exists():
         shutil.copy2(icon, app / "Contents" / "Resources" / "icon.icns")
         info["CFBundleIconFile"] = "icon"
     with open(app / "Contents" / "Info.plist", "wb") as f:
         plistlib.dump(info, f)
-    console = app / "Contents" / "Resources" / "console.command"
-    console.write_text(f'#!/bin/bash\n# Opens the {APP_NAME}. Close this window to stop it.\nexec "{kit / CLI}" gui\n',
-                       encoding="utf-8")
-    os.chmod(console, 0o755)
     launch = app / "Contents" / "MacOS" / "launch"
-    launch.write_text(f'#!/bin/bash\nexec open -a Terminal "{console}"\n', encoding="utf-8")
+    launch.write_text(posix_launcher(kit, 'osascript -e "on run argv" -e "display dialog (item 1 of argv) with title '
+                                          f'\\"{APP_NAME}\\" buttons {{\\"OK\\"}} default button 1 with icon caution" '
+                                          '-e "end run" "$MSG"'), encoding="utf-8")
     os.chmod(launch, 0o755)
     os.utime(app)
+
+
+def posix_launcher(kit, show_error):
+    """The shortcut's script on Mac and Linux: open the console with no terminal; on failure, show_error shows $MSG."""
+    kit = Path(kit)
+    return (f'#!/bin/bash\n# Opens the {APP_NAME} in the browser, with no terminal window.\n'
+            f'LOG="{LAUNCH_LOG}"\nmkdir -p "$(dirname "$LOG")"\n'
+            f'if ! "{kit / CLI}" gui --background >"$LOG" 2>&1; then\n'
+            f'  MSG="The POV console didn\'t start.\n\n$(tail -n 12 "$LOG")\n\nFull log: $LOG"\n'
+            f'  {show_error}\n  exit 1\nfi\n')
+
+
+def win_launcher(path, kit):
+    """The shortcut's script on Windows: runs the console with no window (wscript hides cmd), and shows a message
+    box if it can't start."""
+    kit = Path(kit)
+    line = f'cmd /c ""{kit / "pov-kit.cmd"}" gui --background > "{LAUNCH_LOG}" 2>&1"'
+    vbs = "\r\n".join([
+        f"' Opens the {APP_NAME} in the browser, with no terminal window.",
+        'Set sh = CreateObject("WScript.Shell")',
+        'Set fso = CreateObject("Scripting.FileSystemObject")',
+        f'If Not fso.FolderExists("{LAUNCH_LOG.parent}") Then fso.CreateFolder("{LAUNCH_LOG.parent}")',
+        f'rc = sh.Run("{line.replace(chr(34), chr(34) * 2)}", 0, True)',
+        'If rc <> 0 Then',
+        '  msg = ""',
+        f'  If fso.FileExists("{LAUNCH_LOG}") Then msg = fso.OpenTextFile("{LAUNCH_LOG}", 1).ReadAll',
+        f'  MsgBox "The POV console didn\'t start." & vbCrLf & vbCrLf & Right(msg, 900) & vbCrLf & vbCrLf & '
+        f'"Full log: {LAUNCH_LOG}", vbExclamation, "{APP_NAME}"',
+        "End If", ""])
+    Path(path).parent.mkdir(parents=True, exist_ok=True)
+    Path(path).write_text(vbs, encoding="utf-8")
 
 
 def win_user_path(add=None, remove=None):
@@ -166,10 +201,12 @@ def shortcuts(log, kit=None):
     kit = Path(kit or APP)
     sp = shortcut_paths()
     if windows():
+        win_launcher(sp["launcher"], kit)
+        wscript = Path(os.getenv("SystemRoot", r"C:\Windows")) / "System32" / "wscript.exe"
         for key in ("desktop", "start"):
             try:
                 sp[key].parent.mkdir(parents=True, exist_ok=True)
-                win_shortcut(sp[key], kit / "pov-kit.cmd", "gui", Path.home(), "Open the Zscaler POV console",
+                win_shortcut(sp[key], wscript, f'"{sp["launcher"]}"', Path.home(), "Open the Zscaler POV console",
                              kit / "assets" / "pov-icon.ico")
                 log("ok", f"Shortcut: {sp[key]}")
             except (KitError, OSError, subprocess.TimeoutExpired) as e:
@@ -190,8 +227,13 @@ def shortcuts(log, kit=None):
         mac_app(sp["desktop"], kit)
         log("ok", f"'{APP_NAME}' on your desktop (double-click to open the console)")
     else:
-        sp["desktop"].write_text(f"[Desktop Entry]\nType=Application\nName={APP_NAME}\nExec={kit / CLI} gui\n"
-                                 f"Icon={kit / 'assets' / 'pov-icon.png'}\nTerminal=true\n", encoding="utf-8")
+        sp["launcher"].parent.mkdir(parents=True, exist_ok=True)
+        sp["launcher"].write_text(posix_launcher(kit, '(command -v zenity >/dev/null && zenity --error --title '
+                                                      f'"{APP_NAME}" --text="$MSG") || notify-send "{APP_NAME}" "$MSG"'),
+                                  encoding="utf-8")
+        os.chmod(sp["launcher"], 0o755)
+        sp["desktop"].write_text(f"[Desktop Entry]\nType=Application\nName={APP_NAME}\nExec=\"{sp['launcher']}\"\n"
+                                 f"Icon={kit / 'assets' / 'pov-icon.png'}\nTerminal=false\n", encoding="utf-8")
         os.chmod(sp["desktop"], 0o755)
         log("ok", f"Shortcut: {sp['desktop']}")
     sp["wrapper"].parent.mkdir(parents=True, exist_ok=True)

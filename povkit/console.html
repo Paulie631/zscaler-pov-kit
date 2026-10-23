@@ -135,6 +135,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
   <h1>Zscaler POV Console</h1>
   <span class="meta" id="hpov">No POV yet</span>
   <button class="upd" id="upd" title="Check for kit updates">Updates</button>
+  <button class="upd" id="hstop" title="Stop the POV console on this computer (open it again from the desktop shortcut)">Stop</button>
   <span class="sp"></span>
   <div class="pol" id="hpol" style="display:none" title="What the POV's own AI Guard policy blocks. Takes about 30 seconds to apply.">
     <span class="lbl">AI Guard</span>
@@ -1090,6 +1091,14 @@ setInterval(()=>{if(tab()=="logs")refreshLogs()},5000);
 $("#lgdiag").onclick=()=>window.open(`/diagnostics?t=${encodeURIComponent(TOKEN)}`,"_blank");
 
 load().then(()=>{W.step=firstOpen();wizard()}).catch(e=>{$("#wstage").innerHTML=errNote(e)});
+/* the console may run with no terminal window: this page checks in so it isn't stopped while open, and Stop ends it */
+setInterval(()=>{api("/api/ping").catch(()=>{})},60000);
+$("#hstop").onclick=async()=>{
+  if(!confirm("Stop the POV console? Your POVs are kept. Open it again from the Zscaler POV Console shortcut on your desktop."))return;
+  try{await api("/api/stop",{})}catch(e){
+    if(!/still running/.test(e.message)||!confirm(e.message+"\n\nStop anyway? The job stops where it is (run it again later to carry on)."))return;
+    await api("/api/stop",{force:true})}
+  document.body.innerHTML=`<main style="max-width:560px;margin:80px auto;padding:0 16px;font:15px system-ui"><h2>The POV console has stopped</h2><p>Your POVs, settings and secrets are kept. To open it again, double-click <b>Zscaler POV Console</b> on your desktop (or run <code>pov-kit gui</code>).</p><p class="muted">You can close this tab.</p></main>`};
 </script>
 </body>
 </html>

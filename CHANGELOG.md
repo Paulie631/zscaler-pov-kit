@@ -15,6 +15,11 @@
   - The fixes are in `povkit/fixes.json`, one place to correct the wording or a click path. The CLI prints them
     too, and the sheet for the customer's admin includes the fix for any step whose last check failed.
 - Fixed: a failed check in Steps for people showed `&gt;` instead of `>` (the message was escaped twice).
+- **No terminal window.** The desktop shortcut now opens the console in the browser with no terminal window
+  (`pov-kit gui --background`). Opening it again while it runs reuses it. **Stop** (top of the console) or
+  `pov-kit gui --stop` stops it, and it stops by itself 30 minutes after its last browser tab closes, never during a
+  job. If it can't start, a dialog shows why. Run `pov-kit install` (or update) to refresh the shortcut; `pov-kit gui`
+  in a terminal works as before.
 
 ## 0.9.25
 

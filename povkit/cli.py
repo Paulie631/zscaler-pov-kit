@@ -378,7 +378,14 @@ def c_users(a):
 
 
 def c_gui(a):
-    from . import gui
+    from . import gui, launch
+    if a.stop:
+        print("Stopped the POV console." if launch.stop() else "No POV console is running.")
+        return 0
+    if a.background:   # the desktop shortcut: no terminal window
+        url = launch.open_background(port=a.port, open_browser=not a.no_browser)
+        print(f"POV console: {url}")
+        return 0
     gui.serve(port=a.port, open_browser=not a.no_browser)
 
 
@@ -758,6 +765,9 @@ def parser():
     s = cmd("gui", c_gui, "the POV console in your browser (setup wizard, status, criteria, handover, logs)")
     s.add_argument("--port", type=int, default=8790)
     s.add_argument("--no-browser", action="store_true")
+    s.add_argument("--background", action="store_true",
+                   help="no terminal window: open the running console, or start one in the background (the desktop shortcut)")
+    s.add_argument("--stop", action="store_true", help="stop the console running in the background")
     s = cmd("users", c_users, "the POV's Hosted DB test users (--show prints their passwords)")
     s.add_argument("--show", action="store_true")
     s = cmd("backup", c_backup, "backup setup FOLDER | now | restore FILE-or-POV-ID: encrypted ledger backups")
