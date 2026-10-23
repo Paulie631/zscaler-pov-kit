@@ -16,6 +16,7 @@ import re
 import time
 from pathlib import Path
 
+from . import fixes
 from .core import KitError
 from .tenant import g, items
 
@@ -75,8 +76,20 @@ def guide(pov):
         e.update({x: d.get(x) for x in ("by", "at", "how", "detail", "checked_at", "result")})
         e["url"] = GUIDE.get("console")
         e["check"] = check_name(k)
+        e["howto"] = howto(k, e, pov.id)
         out.append(e)
     return out
+
+
+def howto(key, step, pov_id=None):
+    """The step-by-step fix for a step whose last check failed or couldn't run (None when it passed or never ran)."""
+    if step.get("status") == "done" or step.get("result") is True or not (step.get("checked_at") and step.get("detail")):
+        return None
+    return fixes.find([key, check_name(key) or ""], step.get("detail"), pov_id)
+
+
+PRODUCT_NAME = {"zia": "ZIA", "zpa": "ZPA", "zdx": "ZDX", "zcc": "Client Connector", "zid": "ZIdentity",
+                "aiguard": "AI Guard", "casb": "SaaS security", "zins": "Insights"}
 
 
 def mark(pov, key, by, undo=False):
@@ -223,8 +236,10 @@ def check(pov, key, tenant_for):
         ok, detail = CHECKS[name](t, pov, led)
     except KitError as e:
         msg = str(e)
-        if key == "setup.zdx_role" and re.search(r"\b403\b|forbidden", msg, re.I):
-            ok, detail = False, "ZDX refused the API client (403): it has no ZDX role yet"
+        prod = fixes.product_of([key, name], msg) if re.search(r"\b403\b|forbidden", msg, re.I) else None
+        if prod:
+            pn = PRODUCT_NAME.get(prod, prod.upper())
+            ok, detail = False, f"{pn} refused the API client (403): it has no {pn} role yet"
         else:
             ok, detail = None, f"couldn't check: {msg[:180]}"
     done = pov.read_json(DONE_FILE, {}) or {}
@@ -237,7 +252,7 @@ def check(pov, key, tenant_for):
     done[key] = cur
     pov.write_json(DONE_FILE, done)
     pov.log("manual", f"{key}: check {'passed' if ok else 'failed' if ok is False else 'inconclusive'}: {detail}")
-    return {"ok": ok, "detail": detail}
+    return {"ok": ok, "detail": detail, "howto": None if ok else fixes.find([key, name], detail, pov.id)}
 
 
 def check_all(pov, tenant_for, log=lambda *a: None):
@@ -246,7 +261,8 @@ def check_all(pov, tenant_for, log=lambda *a: None):
         if not check_name(s["key"]) or s["phase"] == "end":
             continue
         r = check(pov, s["key"], tenant_for)
-        log("ok" if r["ok"] else "warn" if r["ok"] is False else "info", f"{s['title']}: {r['detail']}")
+        log("ok" if r["ok"] else "warn" if r["ok"] is False else "info", f"{s['title']}: {r['detail']}"
+            + (f" (to fix: {r['howto']['title']})" if r.get("howto") else ""))
         out[s["key"]] = r
     return out
 
@@ -282,5 +298,14 @@ def sheet_md(pov):
             lines += ["", "Exact names: " + "; ".join(f"`{x}`" for x in s["names"])]
         if s.get("done"):
             lines += ["", f"Done when: {s['done']}"]
+        h = s.get("howto")
+        if h:
+            lines += ["", f"**Last check:** {s.get('detail')}", "", f"**To fix it: {h['title']}**"
+                      + (f" ({h['who']})" if h.get("who") else ""), ""]
+            if h.get("where"):
+                lines += [f"Where: {h['where']}", ""]
+            lines += [f"{i}. {x}" for i, x in enumerate(h["steps"], 1)]
+            if h.get("done"):
+                lines += ["", f"Fixed when: {h['done']}"]
         lines.append("")
     return "\n".join(lines)

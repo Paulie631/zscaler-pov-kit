@@ -233,6 +233,8 @@ and Word. `python tools/package.py` and `python tools/build_guide.py` build the 
 - A new product: a module in `povkit/products/` implementing `Product` (base.py) and a catalog file. It gets a guarded
   client from the core and never talks to the tenant directly.
 - Console paths live in `povkit/console_paths.json`, each with a last-verified date. Fix a moved menu there once.
+- How to resolve each error or blocker lives in `povkit/fixes.json`, matched by check ID and message. A new check
+  that can warn or fail needs a fix there (`tests/test_fixes.py` fails otherwise).
 - Releases follow the kit: bump `VERSION` in `povkit/__init__.py`, add a `## <version>` section to CHANGELOG.md,
   update `docs/DEPLOYMENT-GUIDE.md` in the same branch. The release workflow and self-updater use `latest.json` with a
   SHA-256, as the kit does (release workflow: to do).

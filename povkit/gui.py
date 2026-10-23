@@ -16,10 +16,11 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, evidence, handover, installer, lifecycle, mcp, products, remind, rolespec, settings, updater
+from . import VERSION, evidence, handover, installer, launch, lifecycle, mcp, products, remind, rolespec, settings, updater
 from .core import KitError, pov as povs, secrets
 from .core.changelist import ChangeList
 from .core.checks import exit_code
+from .fixes import for_error
 
 HERE = Path(__file__).resolve().parent
 JOBS: dict[str, dict] = {}
@@ -69,7 +70,7 @@ def pov_state(p):
 def state():
     cur = povs.CURRENT.read_text().strip() if povs.CURRENT.exists() else ""
     from . import backup
-    out = {"version": VERSION, "povs": [], "current": None, "backup_folder": str(backup.folder() or "") or None,
+    out = {"version": VERSION, "background": launch.background(), "povs": [], "current": None, "backup_folder": str(backup.folder() or "") or None,
            "products": [{"name": n, "title": products.get(n).title, "phase": products.get(n).phase}
                         for n in products.CHOOSABLE],
            "claude_desktop": (lambda c: {"server": c["server"], "vanity_domain": c["vanity_domain"]} if c else None)(
@@ -143,7 +144,7 @@ def start_job(kind, work):
     if busy:
         raise KitError(f"This POV's {busy} is still running. Wait for it to finish (the Logs tab shows it).")
     jid = uuid.uuid4().hex[:8]
-    job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None}
+    job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None, "howto": None}
 
     def log(level, msg):
         job["lines"].append({"level": level, "msg": str(msg), "t": time.strftime("%H:%M:%S")})
@@ -157,6 +158,8 @@ def start_job(kind, work):
         except Exception as e:   # never let a job thread die silently
             job["error"] = f"{type(e).__name__}: {e}"
             log("fail", job["error"])
+        if job["error"]:
+            job["howto"] = for_error(job["error"], pid)
         job["done"] = True
     threading.Thread(target=run, daemon=True).start()
     return jid
@@ -224,6 +227,8 @@ def quickstart(body):
 def api(method, path, body, q):
     """-> (status, payload). Pure function of the request, so tests can call it without a server."""
     if method == "GET":
+        if path == "/api/ping":   # an open console page checks in, so a background console knows it's still wanted
+            return 200, {"ok": True}
         if path == "/api/state":
             return 200, state()
         if path == "/api/rolespec":
@@ -233,7 +238,8 @@ def api(method, path, body, q):
             if not j:
                 return 404, {"error": "no such job"}
             since = int(q.get("since", 0))
-            return 200, {"done": j["done"], "lines": j["lines"][since:], "result": j["result"], "error": j["error"]}
+            return 200, {"done": j["done"], "lines": j["lines"][since:], "result": j["result"], "error": j["error"],
+                         "howto": j.get("howto")}
         if path == "/api/plan":
             p = current()
             cl = ChangeList(p.dir)
@@ -626,6 +632,12 @@ def api(method, path, body, q):
         return 200, {"job": start_job("update", work)}
     if path == "/api/update/rollback":
         return 200, {"version": updater.rollback()}
+    if path == "/api/stop":
+        busy = next((j["kind"] for j in JOBS.values() if not j["done"]), None)
+        if busy and not body.get("force"):
+            raise KitError(f"The {busy} is still running. Stop the console once it has finished.")
+        threading.Timer(0.3, stop_console).start()
+        return 200, {"ok": True}
     if path == "/api/update/restart":
         if not (installer.APP / "pov_kit.py").exists():
             raise KitError("The kit isn't installed, so there's nothing to restart into.")
@@ -768,6 +780,16 @@ def page_file(path, q, token):
 SERVER = {}
 
 
+def stop_console():
+    """The page's Stop button: stop serving and exit (a background console has no window to close)."""
+    if SERVER.get("srv"):
+        SERVER["srv"].shutdown()
+
+
+def jobs_running():
+    return any(not j["done"] for j in JOBS.values())
+
+
 def restart_console():
     """After an update or rollback: stop serving; serve() then starts the installed kit's console on the same port.
     The page polls until it answers, then reloads (with the new run's token)."""
@@ -782,7 +804,11 @@ def _exec_installed(port):
     launcher = installer.APP / ("pov-kit.cmd" if installer.windows() else "pov-kit")
     args = [str(launcher), "gui", "--port", str(port), "--no-browser"]
     if installer.windows():
-        subprocess.Popen(["cmd", "/c", *args], creationflags=0x00000010)   # CREATE_NEW_CONSOLE
+        if launch.background():   # no window before, none after: the new console writes to the same log
+            subprocess.Popen(["cmd", "/c", *args], creationflags=launch.CREATE_NO_WINDOW | launch.NEW_GROUP,
+                             stdin=subprocess.DEVNULL, stdout=launch._log_file(), stderr=subprocess.STDOUT)
+        else:
+            subprocess.Popen(["cmd", "/c", *args], creationflags=0x00000010)   # CREATE_NEW_CONSOLE
         os._exit(0)
     os.execv(str(launcher), args)
 
@@ -826,6 +852,7 @@ def serve(port=8790, open_browser=True):
                 return self._send(200, raw=data, ctype="application/zip") if data else self._send(403, {"error": "bad token"})
             if not u.path.startswith("/api/") or self.headers.get("X-POV-Token") != token:
                 return self._send(403, {"error": "bad token"})
+            SERVER["seen"] = time.time()
             body = {}
             if method == "POST":
                 n = int(self.headers.get("Content-Length") or 0)
@@ -838,9 +865,9 @@ def serve(port=8790, open_browser=True):
             try:
                 code, out = api(method, u.path, body, q)
             except KitError as e:
-                code, out = 400, {"error": str(e)}
+                code, out = 400, {"error": str(e), "howto": for_error(str(e))}
             except Exception as e:
-                code, out = 500, {"error": f"{type(e).__name__}: {e}"}
+                code, out = 500, {"error": f"{type(e).__name__}: {e}", "howto": for_error(str(e))}
             self._send(code, out)
 
         def do_GET(self):
@@ -859,15 +886,27 @@ def serve(port=8790, open_browser=True):
             continue
     if not srv:
         raise KitError(f"No free local port between {port} and {port + 19}.")
-    SERVER.update(srv=srv, port=port)
+    SERVER.update(srv=srv, port=port, seen=time.time())
     url = f"http://127.0.0.1:{port}/"
-    print(f"  POV console: {url}   (this computer only; Ctrl+C to stop)")
+    launch.write_state(port, url)
+    if launch.background():
+        print(f"  POV console: {url}   (in the background: the page's Stop button, or `pov-kit gui --stop`)", flush=True)
+        launch.watchdog(lambda: SERVER["seen"], jobs_running, stop_console)
+    else:
+        print(f"  POV console: {url}   (this computer only; Ctrl+C to stop)")
+    try:   # stopping it from outside (pov-kit gui --stop, logging out) shuts it down cleanly
+        import signal
+        signal.signal(signal.SIGTERM, lambda *a: threading.Thread(target=srv.shutdown, daemon=True).start())
+    except (ValueError, OSError, AttributeError):
+        pass
     if open_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
         print("\n  Stopped.")
+    finally:
+        launch.clear_state()
     if SERVER.pop("restart", False):   # an update or rollback asked for it: the main thread restarts, not a timer
         srv.server_close()
         print("  Restarting the console with the installed kit...")
