@@ -2,6 +2,7 @@
 import base64
 import json
 import subprocess
+import sys
 
 import pytest
 
@@ -40,9 +41,11 @@ def test_scripts_carry_the_probe_pack_and_parse(ready, tmp_path):
     assert name.endswith("-jane.sh") and "set -- --cloud zscalertwo --domain acme.com --user jane" in text
     b64 = text.split("ZPOV_PACK_B64='", 1)[1].split("'", 1)[0]
     assert json.loads(base64.b64decode(b64)) == json.loads(json.dumps(pack))
-    f = tmp_path / name
-    f.write_text(text)
-    assert subprocess.run(["bash", "-n", str(f)]).returncode == 0
+    assert "\r" not in text
+    if sys.platform != "win32":   # Windows' bash.exe is WSL, which can't read the temp path
+        f = tmp_path / name
+        f.write_text(text)
+        assert subprocess.run(["bash", "-n", str(f)]).returncode == 0
     name, text = ds.script(ready, "windows", "jane@acme.com", pack)
     assert name.endswith(".ps1") and "-Cloud zscalertwo -Domain acme.com -User jane" in text and "@'\n" in text
 

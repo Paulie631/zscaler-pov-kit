@@ -27,7 +27,7 @@ def _script(name):
     f = ROOT / name
     if not f.exists():
         raise KitError(f"{name} is missing from this copy of the kit.")
-    return f.read_text(encoding="utf-8")
+    return f.read_text(encoding="utf-8").replace("\r\n", "\n")   # a Windows checkout mustn't break bash
 
 
 def base_url():
