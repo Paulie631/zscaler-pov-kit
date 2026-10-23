@@ -165,10 +165,13 @@ def start_job(kind, work):
 def quickstart(body):
     """Start a POV from three answers (customer, products, API client): the kit fills in the rest from the tenant,
     runs preflight and makes the change list, all read-only. -> {id, job}. The wizard stays for changing anything."""
-    _, r = api("POST", "/api/pov/new", {"customer": body.get("customer"), "products": body.get("products"),
-                                        "ends": body.get("ends")}, {})
-    p = povs.Pov(r["id"])
-    povs.use(p.id)
+    if body.get("existing"):   # a POV started earlier (to send the role spec before the kickoff): carry on from Connect
+        p = current()
+    else:
+        _, r = api("POST", "/api/pov/new", {"customer": body.get("customer"), "products": body.get("products"),
+                                            "ends": body.get("ends"), "lab": body.get("lab") is True}, {})
+        p = povs.Pov(r["id"])
+        povs.use(p.id)
     try:   # the API client first: a bad secret should show at once, not in a job
         if body.get("from_claude_desktop"):
             api("POST", "/api/connect/claude-desktop", {}, {})
@@ -176,7 +179,8 @@ def quickstart(body):
             api("POST", "/api/connect", {k: body.get(k) for k in ("vanity_domain", "customer_id", "client_id",
                                                                    "secret", "cloud")}, {})
     except KitError as e:
-        raise KitError(f"The POV was created, but the API client didn't sign in: {e} Fix it in Connect.") from e
+        raise KitError(("" if body.get("existing") else "The POV was created, but ") +
+                       f"the API client didn't sign in: {e} Fix it in Connect.") from e
 
     def work(log):
         p = current()
@@ -287,6 +291,8 @@ def api(method, path, body, q):
         p = povs.new(body["customer"].strip(), names, (body.get("prefix") or "ZPOV").strip(),
                      remind.parse_date(body["ends"]) if body.get("ends") else None)
         settings.set_value(p, "client_mode", body.get("client_mode") or "single")
+        if body.get("lab") is True:   # your own lab tenant: allows the self-test, which writes
+            settings.set_value(p, "lab", "yes")
         return 200, {"id": p.id}
     if path == "/api/quickstart":
         return 200, quickstart(body)

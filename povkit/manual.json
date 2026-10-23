@@ -127,6 +127,7 @@
       "steps": [
         "In the console, search the menu for Forwarding Profile and add one with exactly the name in the change list's spec: ZIA action Tunnel, Z-Tunnel 2.0, on every network type.",
         "Search the menu for App Profiles, open the Windows app profiles and add one with exactly the name in the spec: for the pilot group only, Install Zscaler SSL Certificate on, the forwarding profile from step 1.",
+        "For Mac pilot devices: add the same app profile under macOS (same name, group, certificate setting and forwarding profile). The kit doesn't track the macOS one: delete it by hand at the end of the POV.",
         "Put it above any broader app profile in the order.",
         "In the POV console, Status > Fix drift adopts both by their exact names."
       ],

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.18
+
+- **SE Deployment Guide and Quick Start rewritten** for Zscaler and partner SEs, leading with Quick start, and checked
+  against the kit: current option names, "Needs you" and "added later", optional prerequisites (pilot group, ZPA app,
+  cloud account), pilot devices on Mac and virtual machines, CloudShare, verified console paths, and new
+  troubleshooting rows.
+- **Mark a lab POV in the console:** Start a POV → More options → **This is my own lab tenant** (the self-test needs
+  it; before, only `pov-kit new --lab` could).
+- **Quick start from here** on Connect carries on a POV started earlier (to send the customer the role spec before
+  the kickoff), instead of starting a second one.
+- The hand-built Client Connector spec covers Mac pilot devices (a macOS app profile with the same settings).
+
 ## 0.9.17
 
 - **A POV lab on CloudShare** ([docs/CLOUDSHARE.md](docs/CLOUDSHARE.md)): scripts to build a blueprint once with two

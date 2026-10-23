@@ -91,7 +91,9 @@ BY_HAND = ("Build it by hand in the Client Connector portal, then run `pov-kit s
            "name and adopts it: 1) Forwarding profile named exactly '{fwd}': a copy of '{src_fwd}' with ZIA action "
            "Tunnel and Z-Tunnel 2.0 on every network type. 2) Windows app profile named exactly '{app}': a copy of "
            "'{src_app}' for group '{group}' only, Install Zscaler SSL Certificate on, forwarding profile '{fwd}', and "
-           "no broader profile above it in the order.")
+           "no broader profile above it in the order. 3) Mac pilot devices: the same app profile under macOS (same name, "
+           "group, certificate and forwarding profile); the kit doesn't track the macOS one, so delete it by hand at the "
+           "end of the POV.")
 
 
 def names(prefix, pov_id):

@@ -411,7 +411,8 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
             <input type="text" id="qcid" autocomplete="off" placeholder="Client ID">
             <input type="password" id="qsec" autocomplete="new-password" placeholder="Client secret (goes to this computer's keychain)">
             <input class="qzpa" type="text" id="qcust" placeholder="ZPA customer ID: Administration > API > Legacy API > Private Access API > Copy ID" style="display:none"></div></div></div>
-      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: prefix, end date, two API clients</summary><div class="form" style="margin-top:8px">
+      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: lab tenant, prefix, end date, two API clients</summary><div class="form" style="margin-top:8px">
+        <span class="lbl">Lab</span><label class="chk"><input type="checkbox" id="wlab">This is my own lab tenant <span class="muted">(allows the self-test, which creates and deletes test objects)</span></label>
         <span class="lbl">Prefix</span><input type="text" id="wprefix" value="ZPOV" maxlength="12">
         <span class="lbl">Ends</span><div><input type="date" id="wends" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"> <span class="hint">A reminder comes in the last week.</span></div>
         <span class="lbl">API clients</span><div>
@@ -425,12 +426,12 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     $$('input[name=wcl]').forEach(x=>x.onchange=showCl);$$('#wprods input').forEach(x=>x.onchange=showCl);showCl();
     $("#wcont")&&($("#wcont").onclick=async()=>{const v=($$('input[name=wp]').find(x=>x.checked)||{}).value;if(!v)return;await api("/api/pov/use",{id:v});await load();W.checks=null;W.plan=null;W.opts=null;W.step=firstOpen()||1;wizard()});
     const prods=()=>$$('#wprods input').filter(x=>x.checked).map(x=>x.value);
-    $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,
+    $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,lab:$("#wlab").checked,
         products:prods(),client_mode:($$('input[name=wmode]').find(x=>x.checked)||{}).value});
       await load();W.checks=null;W.plan=null;W.opts=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}};
     $("#wquick").onclick=async()=>{const b=$("#wquick");b.disabled=true;$("#wmsg").innerHTML="";
       const cd=($$('input[name=wcl]').find(x=>x.checked)||{}).value=="cd";
-      try{const r=await api("/api/quickstart",{customer:$("#wcust").value,products:prods(),ends:$("#wends").value,from_claude_desktop:cd,
+      try{const r=await api("/api/quickstart",{customer:$("#wcust").value,products:prods(),ends:$("#wends").value,from_claude_desktop:cd,lab:$("#wlab").checked,
           vanity_domain:$("#qvan").value,client_id:$("#qcid").value,secret:$("#qsec").value,customer_id:$("#qcust").value});
         $("#qsec").value="";$("#wqlog").style.display="block";
         const res=await runJob(r.job,$("#wqlog"));await load();W.checks=null;W.plan=null;W.opts=null;W.step=4;wizard()}
@@ -448,7 +449,11 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         ${has("zpa")?`<span class="lbl">ZPA customer ID</span><input type="text" id="wcustid" placeholder="Administration > API > Legacy API > Private Access API > Copy ID" value="${esc(c.settings.customer_id||"")}">`:""}
         <span class="lbl">${single?"Client ID":"Discovery client ID"}</span><input type="text" id="wcid" autocomplete="off" value="${esc(cl.client_id||"")}">
         <span class="lbl">Client secret</span><input type="password" id="wsec" autocomplete="new-password" placeholder="${cl.saved?"saved in the keychain (enter a new one to replace it)":""}"></div>
-      <div id="wmsg"></div>`+nav(true,true,cl.saved?"Test and continue ›":"Save and test ›");
+      <div id="wmsg"></div>`+nav(true,true,cl.saved?"Test and continue ›":"Save and test ›")+(single?`<div class="row" style="margin-top:8px;gap:10px"><button id="wqs">Quick start from here ›</button><span class="hint">Signs in, fills in the rest from the tenant (read-only), runs preflight and opens the change list.</span></div><div class="log" id="wqlog2" style="display:none"></div>`:"");
+    $("#wqs")&&($("#wqs").onclick=async()=>{const b=$("#wqs");b.disabled=true;$("#wmsg").innerHTML="";
+      try{const r=await api("/api/quickstart",{existing:true,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
+        $("#wsec").value="";$("#wqlog2").style.display="block";await runJob(r.job,$("#wqlog2"));await load();W.checks=null;W.plan=null;W.opts=null;W.step=4;wizard()}
+      catch(e){$("#wmsg").innerHTML=note(e.message,"bad");b.disabled=false}});
     $("#wcd")&&($("#wcd").onclick=async()=>{try{await api("/api/connect/claude-desktop",{});await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
     $("#wcopyrole").onclick=async()=>{try{await navigator.clipboard.writeText(W.role);$("#wcopyrole").textContent="Copied ✓"}catch(e){download(`role-spec-${c.id}.md`,W.role,"text/markdown")}};
     $("#wdlrole").onclick=()=>download(`role-spec-${c.id}.md`,W.role,"text/markdown");
@@ -798,7 +803,7 @@ function labTools(){const c=S&&S.current;if(!c){$("#lglab").innerHTML="";return}
   $("#lglab").innerHTML=`<h2>Lab tools</h2><p class="muted" style="margin-top:0">For your own lab tenant, before a customer POV.</p>
     <div class="cards"><div class="card"><h4>Self-test</h4><p class="muted" style="margin:4px 0 8px">Reads each product, then creates, reads back and deletes one harmless object (a ZIA label, a disabled ZPA segment group, an AI Guard app).</p>
       ${st?`<p style="margin:4px 0"><span class="badge b-${st.ok?"ok":"fail"}">${st.ok?"passed":"failed"}</span> <span class="muted">${esc(st.at.slice(0,16).replace("T"," "))} UTC</span></p>`:""}
-      ${c.settings.lab=="yes"?`<label class="chk"><input type="checkbox" id="lglabok">I'm running it in my own lab tenant</label><div class="row" style="margin-top:8px"><button id="lgself">Run the self-test</button></div>`:`<p class="muted" style="margin:4px 0">This POV isn't marked as a lab POV. Start a separate POV for your lab tenant and mark it: <code>pov-kit new "Lab" --lab</code>.</p>`}<div class="log" id="lgselflog" style="display:none"></div></div>
+      ${c.settings.lab=="yes"?`<label class="chk"><input type="checkbox" id="lglabok">I'm running it in my own lab tenant</label><div class="row" style="margin-top:8px"><button id="lgself">Run the self-test</button></div>`:`<p class="muted" style="margin:4px 0">This POV isn't marked as a lab POV. Start a separate POV for your lab tenant with <b>More options → This is my own lab tenant</b> ticked (or <code>pov-kit new "Lab" --lab</code>).</p>`}<div class="log" id="lgselflog" style="display:none"></div></div>
     <div class="card"><h4>Record API traffic</h4><p class="muted" style="margin:4px 0 8px">Saves every call and response, redacted, in this POV's folder. <code>pov-kit record export NAME</code> turns it into a test fixture with no customer data.</p>
       <label class="chk"><input type="checkbox" id="lgrec" ${c.record?"checked":""}>Recording ${c.record?"on":"off"}</label></div></div>`;
   $("#lgself")&&($("#lgself").onclick=async()=>{const b=$("#lgself");b.disabled=true;$("#lgselflog").style.display="block";

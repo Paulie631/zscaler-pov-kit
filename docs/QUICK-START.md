@@ -1,6 +1,6 @@
 # Zscaler POV Kit: Quick Start
 
-*One page for SEs. The full steps are in the SE Deployment Guide.*
+*One page for Zscaler and partner SEs. The full steps are in the SE Deployment Guide.*
 
 ## Install (5 minutes)
 
@@ -15,24 +15,27 @@
 
 - **Status → Safety net:** turn on encrypted backups (a synced folder and a passphrase in your password manager) and
   daily reminders.
-- Run the self-test in your own lab tenant: Setup → start a POV marked as lab → **Logs → Lab tools → Run the
-  self-test**.
+- Prove the kit in your own lab tenant: **Setup → Start a POV**, tick **More options → This is my own lab tenant**,
+  **Quick start**, then **Logs → Lab tools → Run the self-test**.
 
-## Your first POV in 10 steps
+## Your first POV
 
-1. **Setup → Start a POV:** customer, products, end date.
-2. **Connect:** copy the role spec to the customer's admin; enter the client ID and secret they create.
-3. **Pilot users:** pick the customer's group, or have the kit create one in ZIdentity; add the users; their identity
-   provider; product details.
-4. **Preflight:** fix every FAIL (each one says how).
-5. **Change list:** walk the admin through it, or send them the change-list page.
-6. **Approval:** record who approved it, or import the approval file they saved from the page.
-7. **Apply:** watch it run, then check the status.
-8. **Next steps:** customer actions, the probe pack for pilot devices, the ZPA connector template.
-9. **Success criteria:** import probe results, run the API proofs, record attestations, draft the summary, build the
+1. **Before the kickoff:** Setup → Start a POV: customer and products, then **Step by step** → Connect → **Copy the
+   role spec** for the customer's admin.
+2. **At the kickoff, on Connect:** the API client they created (with ZPA, the customer ID: Administration → API →
+   Legacy API → Private Access API → Copy ID), then **Quick start from here**. The kit fills in the rest from the tenant,
+   read-only, runs preflight and opens the change list. Fix anything under **Needs you**; products not ready yet are
+   **added later** without holding up the rest.
+3. **Change list → Approval:** walk the admin through it, or send them the customer page and import their approval.
+4. **Apply:** watch it run, then check the status.
+5. **Who tests** (Pilot users, any time): a group they have, people you name, or test accounts. A change means a new
+   approval.
+6. **Next steps:** Steps for people (with instructions and checks), **Set up a pilot device** (one line per device;
+   never your own work laptop), the ZPA connector template or CloudShare commands.
+7. **Success criteria:** import probe results, run the API proofs, record attestations, draft the summary, build the
    report.
-10. **Handover:** export to Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
-    forgets it on your laptop, once it has checked nothing is left in the tenant.
+8. **Handover:** export to Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
+   forgets it on your laptop, once it has checked nothing is left in the tenant.
 
 ## Every customer session
 

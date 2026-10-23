@@ -52,7 +52,7 @@ Nothing here touches a Zscaler tenant except enrolling the connectors with the P
 
 ## Notes
 
-- Connectors take about 10 minutes to appear in the POV's connector group; **Steps for people → Deploy the POV's App
+- Connectors take 10 to 15 minutes to appear in the POV's connector group; **Steps for people → Deploy the POV's App
   Connectors → Check now** ticks once both are up.
 - If the customer names a real app instead of the test app, leave the address off the connector command; the
   connectors then need to reach that app from CloudShare, which usually isn't possible. CloudShare suits the test app.

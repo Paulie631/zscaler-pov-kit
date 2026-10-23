@@ -37,3 +37,23 @@ def test_quickstart_says_when_the_client_doesnt_sign_in(home, tenant_for, monkey
     with pytest.raises(KitError, match="didn't sign in"):
         gui.api("POST", "/api/quickstart", {"customer": "Acme Corp", "products": ["zia"], "vanity_domain": "acme",
                                            "client_id": "", "secret": ""}, {})
+
+
+def test_a_lab_pov_can_be_started_from_the_console(home, tenant_for, monkeypatch):
+    monkeypatch.setattr(gui, "tf", tenant_for)
+    _, r = gui.api("POST", "/api/pov/new", {"customer": "Lab", "products": ["zia"], "lab": True}, {})
+    assert povs.Pov(r["id"]).cfg["lab"] == "yes"
+    _, r = gui.api("POST", "/api/pov/new", {"customer": "Acme", "products": ["zia"]}, {})
+    assert povs.Pov(r["id"]).cfg.get("lab") != "yes"
+
+
+def test_quickstart_carries_on_a_pov_started_for_the_role_spec(home, tenant, tenant_for, monkeypatch):
+    tenant.zidentity = True
+    monkeypatch.setattr(gui, "tf", tenant_for)
+    monkeypatch.setattr(gui.mcp, "desktop_client", lambda: None)
+    _, r = gui.api("POST", "/api/pov/new", {"customer": "Acme", "products": ["zia", "zcc"]}, {})
+    assert "role" in gui.api("GET", "/api/rolespec", {}, {})[1]["text"].lower()     # what the SE sends beforehand
+    _, q = gui.api("POST", "/api/quickstart", {"existing": True, "vanity_domain": "acme", "client_id": "c1",
+                                               "secret": "s1"}, {})
+    j = wait(q["job"])
+    assert j["error"] is None and q["id"] == r["id"] and len(povs.all_povs()) == 1
