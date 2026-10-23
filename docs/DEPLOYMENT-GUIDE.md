@@ -254,6 +254,10 @@ The **AI Guard tab** brings the SE demo kit's tools to the POV, always on the PO
   Guard, or **your own key** (it goes to your keychain; the change list adds it to their AI Guard as a POV object, and
   teardown removes it). Save the choice, run the checks again and get the new change list approved; then **Send to
   the model** works in the runner and the live prompt.
+- **Guided demos:** the demo kit's storylines (AI Guard in 8 steps, Data protection, Blocking step by step,
+  Healthcare, Financial services, Legal) with a Say/Show talk track, presenter notes (so what, a discovery question,
+  objections), OWASP Top 10 for LLM tags, real incidents, and a Monitor/Block switch per step that changes the POV
+  policy as you open the step. **Recap** lists what each step caught, ready to paste into the follow-up email.
 
 **AI Endpoint Security (Endpoint AI)** is a *draft* product in the kit: Zscaler announced it in October 2026, and it
 has no API in the Zscaler SDK yet, so the kit creates nothing for it. Tick it on Start a POV to add five draft

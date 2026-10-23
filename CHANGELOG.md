@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.22
+
+- **Guided demos in the AI Guard tab**, from the SE demo kit: six storylines with a Say/Show talk track, presenter
+  notes, OWASP Top 10 for LLM tags, real incidents, a Monitor/Block switch per step (the POV policy changes as the step
+  opens, with a countdown while it applies), real model replies in proxy mode, and a recap for the follow-up email.
+
 ## 0.9.21
 
 - **An AI Guard tab, like the SE demo kit**, on the POV's own app, keys and policy:

@@ -276,7 +276,7 @@ def api(method, path, body, q):
             from .products import aiguard as agm
             p = current()
             lib = aiguard_runner.library(p)
-            slim = lambda t: {k: t.get(k) for k in ("id", "name", "group", "category", "direction", "expect")}  # noqa: E731
+            slim = lambda t: {k: t.get(k) for k in ("id", "name", "group", "category", "direction", "expect", "text")}  # noqa: E731
             dkey, pkey = aiguard_runner.keys(p)
             mode, ptype, model = agm.proxy_cfg(p)
             disc = ((p.read_json("discovery.json", {}) or {}).get("products") or {}).get("aiguard") or {}
@@ -288,6 +288,8 @@ def api(method, path, body, q):
                                        "criterion": v.get("criterion"), "tests": [slim(t) for t in v["tests"]]}
                                    for k, v in lib["packs"].items()},
                          "stories": lib["stories"],
+                         "levels": {"attacks": sorted(set().union(*agm.ATTACKS.values())), "data": ["pii", "secrets"],
+                                    "never": sorted(agm.NEVER_BLOCK)},
                          "profile": (p.cfg.get("aiguard") or {}).get("profile") or "monitor",
                          "custom": (p.cfg.get("aiguard") or {}).get("custom") or {},
                          "profiles": agm.PROFILES, "detectors": agm.template_detectors(), "never_block": sorted(agm.NEVER_BLOCK),
