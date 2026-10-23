@@ -7,6 +7,8 @@
 1. Download `zscaler-pov-kit-<version>.zip` from the latest release on GitHub. Unzip it (Windows: right-click → Extract
    All).
 2. Double-click **Install Zscaler POV Kit** (`.command` on Mac, `.cmd` on Windows). Press Return or a key to start.
+   Mac says "Not Opened"? Click **Done**, then System Settings → Privacy & Security → **Open Anyway**, and double-click
+   it again. Windows SmartScreen: **More info → Run anyway**.
 3. From then on, open **Zscaler POV Console** from your desktop. Keep its terminal window open while you work.
 
 ## Once

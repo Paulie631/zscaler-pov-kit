@@ -70,6 +70,11 @@ Tick every box before your first POV.
 1. Download `zscaler-pov-kit-<version>.zip` from the latest release, unzip it, and double-click **Install Zscaler POV
    Kit** (`.command` on Mac, `.cmd` on Windows). It installs uv if needed, copies the kit to `~/.zscaler-pov-kit/app`,
    adds a **Zscaler POV Console** shortcut and the `pov-kit` command, and opens the console.
+   - **Mac: "Apple could not verify… Not Opened".** The installer isn't signed with an Apple Developer ID, so macOS
+     blocks it once. Click **Done** (not Move to Trash), then **System Settings → Privacy & Security → Open Anyway**,
+     and double-click it again. Or in Terminal: `xattr -dr com.apple.quarantine ~/Downloads/zscaler-pov-kit`, then
+     double-click it.
+   - **Windows: "Windows protected your PC".** Click **More info → Run anyway**.
 2. Optional: open `zscaler-pov-kit-<version>.plugin` from the release in the Claude desktop app, so Claude can run the
    kit for you.
 
