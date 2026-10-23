@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.26
+
+- **Every error or blocker says how to resolve it, step by step.** A failed or warning check (Preflight, Status,
+  teardown, Steps for people), a failed job and a console error now come with a **How to fix** panel: who does it,
+  the console path or search term, numbered steps and what fixed looks like. Before, most showed one line.
+  - A 403 from any product becomes "give the API client a <product> role", with the exact steps, for ZIA, ZPA, ZDX,
+    Client Connector, ZIdentity, AI Guard, SaaS security and Insights (Steps for people's checks now name the
+    product that refused, not only ZDX).
+  - Sign-in (401), a missing client, the keychain, network, TLS inspection, rate limits (429) and Zscaler-side
+    errors each have their own fix, as do the ZPA customer ID (missing or wrong), pending ZIA activation, pilot
+    users and groups, entitlements, names already taken, drift, App Connectors, Client Connector profiles, SaaS
+    tenants, AI Guard proxy mode, Malware Protection, pilot devices, ZDX apps, teardown leftovers and the end date.
+  - The fixes are in `povkit/fixes.json`, one place to correct the wording or a click path. The CLI prints them
+    too, and the sheet for the customer's admin includes the fix for any step whose last check failed.
+- Fixed: a failed check in Steps for people showed `&gt;` instead of `>` (the message was escaped twice).
+
 ## 0.9.25
 
 - **The POV probe: a separate small download for pilot devices.** It holds only the POV's tests and the traffic

@@ -268,6 +268,8 @@ clients at the end. **Next steps → Steps for people** lists the ones this POV 
   pilot users are entitled, Malware Protection blocks viruses, devices are registered, connectors are up, a SaaS
   tenant is connected, profiles are adopted. A passing check ticks the step; **Check them all** runs every one;
 - **Mark done** with a name, for the rest.
+- when a check fails or can't run, **How to fix** under the result: the step-by-step fix for that exact error (a
+  missing role, a wrong customer ID, a sign-in or network problem), who does it and what fixed looks like.
 
 **Copy the steps for the customer's admin** gives the same list as Markdown to paste into an email or the shared POV
 doc (no secrets in it). From the command line: `pov-kit steps` (`--check`, `--done KEY --by NAME`, `--sheet`).
@@ -378,7 +380,8 @@ remove them.
 
 ## Troubleshooting
 
-Start with the **Logs** tab: every API call and change is there, and **Download diagnostics** makes a zip without
+Every failed or warning check, and every error the console shows, comes with a **How to fix** panel: follow its
+steps first. The CLI prints the same steps under the check. Start with the **Logs** tab: every API call and change is there, and **Download diagnostics** makes a zip without
 secrets or the customer's object names for the kit owner. **Report a problem** (next to it) opens the kit's GitHub
 issue form: attach the zip, and never paste a secret, a customer's name or anything from their tenant there (the
 repository is public).

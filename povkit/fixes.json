@@ -1,0 +1,953 @@
+{
+  "about": "How to resolve every error or blocker the kit can report, step by step. Each fix says who does it, where, what to click and what done looks like. 'match' lists when it applies: 'check' is a check ID or a 'Steps for people' key (a trailing * matches a prefix), 'detail' a case-insensitive regex on the message. A fix that matches both beats one that matches one. 'roles' builds the 'give the API client a <product> role' fix for each product (a 403 from that product). Console paths come from console_paths.json via 'console'; unverified ones say what to search for. <pov-id> is replaced with the POV's ID.",
+  "roles": {
+    "zia": {
+      "name": "Internet & SaaS (ZIA)",
+      "pattern": "^(?!zpa|zdx|zcc|zid|zins|aiguard)[a-z_]+\\.[a-z_]+ failed",
+      "note": "ZIA's API roles come from Administration > Role Management > Internet & SaaS: the role the client uses needs the API scopes the role spec lists."
+    },
+    "zpa": {
+      "name": "Private Access (ZPA)",
+      "pattern": "\\bzpa\\.",
+      "note": "ZPA through OneAPI also needs the ZPA customer ID in Connect."
+    },
+    "zdx": {
+      "name": "Digital Experience (ZDX)",
+      "pattern": "\\bzdx\\.",
+      "note": "If no ZDX role is offered, a ZDX admin creates a view-only one first (search the console menu for 'Role Management' under Digital Experience)."
+    },
+    "zcc": {
+      "name": "Client Connector (ZCC)",
+      "pattern": "\\bzcc\\.",
+      "note": "Client Connector portal access is separate from ZIA: add it even if ZIA works."
+    },
+    "zid": {
+      "name": "ZIdentity",
+      "pattern": "\\bzid\\.",
+      "note": "View access to users and groups; write only to groups if the POV makes its own pilot group."
+    },
+    "aiguard": {
+      "name": "AI Guard (ZGUARD)",
+      "pattern": "\\baiguard\\.",
+      "note": "Listed as ZGUARD in some consoles."
+    },
+    "casb": {
+      "name": "SaaS security (ZIA CASB)",
+      "pattern": "\\bcasb\\b|saas_security",
+      "note": "SaaS security is part of ZIA's scopes: add it to the ZIA role."
+    },
+    "zins": {
+      "name": "Insights / Analytics",
+      "pattern": "\\bzins\\.",
+      "note": "Only needed for the report's dashboards."
+    }
+  },
+  "role_steps": [
+    "Sign in to the Zscaler console as an admin who can manage API clients.",
+    "Go to Administration > API > OneAPI > API Clients (or search the console menu for 'API Clients').",
+    "Find the POV's client, ZPOV <pov-id>. Check its Client ID matches the one in the kit's Connect step, then click Edit.",
+    "Under Resources (or Roles), add {name} and choose the access the role spec lists for it: view for discovery, full only where the role spec says full. The role spec is in the Connect step (Show it) or `pov-kit role-spec`.",
+    "{note}",
+    "Save the client.",
+    "Back in the kit, click Check now (or run Preflight). Each check signs in afresh, so the new role applies at once. If it still says 403, wait a minute and try again, and make sure you edited the client whose Client ID is in Connect."
+  ],
+  "fixes": {
+    "signin-401": {
+      "title": "Fix the API client's sign-in (401)",
+      "who": "SE, with the customer admin",
+      "console": "oneapi.clients",
+      "match": [
+        {
+          "detail": "\\b401\\b|rejected the API client's sign-in|invalid_client|unauthori[sz]ed"
+        }
+      ],
+      "steps": [
+        "In the Zscaler console, open Administration > API > OneAPI > API Clients and find ZPOV <pov-id>. If it's gone, it was deleted: create it again from the role spec.",
+        "Compare its Client ID with the one in the kit's Connect step, character for character.",
+        "Check the vanity domain in Connect: it's the part before .zslogin.net in the console's sign-in address (acme for acme.zslogin.net), with nothing else.",
+        "Check the Cloud field in Connect: empty for production; the cloud name (for example beta) only for a non-production tenant.",
+        "If the secret may have been rotated or mistyped: on the client, create a new secret, copy it once, and paste it into Connect (Secret). It goes to this computer's keychain. Delete the old secret if nothing else uses it.",
+        "If the client has an expiry date or is disabled, re-enable it or extend it.",
+        "Click Connect again."
+      ],
+      "done": "Connect signs in and ticks Connect."
+    },
+    "no-client": {
+      "title": "Save the POV's API client",
+      "who": "SE",
+      "match": [
+        {
+          "detail": "No API client saved"
+        }
+      ],
+      "steps": [
+        "Get the client ID from the customer admin (the client is made from the role spec: Connect step › Show it, or `pov-kit role-spec`).",
+        "In the kit's Connect step, enter the vanity domain, the client ID and the secret (the admin types the secret in, or you paste it straight from the console). Or run `pov-kit connect`.",
+        "Click Connect."
+      ],
+      "done": "Connect signs in and ticks Connect."
+    },
+    "keychain": {
+      "title": "Make this computer's keychain work",
+      "who": "SE (on this computer)",
+      "match": [
+        {
+          "check": "keychain"
+        },
+        {
+          "detail": "keyring|keychain|No recommended backend|SecKeychain"
+        }
+      ],
+      "steps": [
+        "macOS: open Keychain Access, select the login keychain and unlock it (padlock, top left) with your Mac password. If macOS asks whether Python or the kit may use the keychain, click Always Allow.",
+        "Windows: the kit uses Credential Manager. Sign in to Windows with your own account (not a service or SYSTEM account) and check Credential Manager opens.",
+        "Linux: install and unlock a Secret Service keyring (GNOME Keyring or KWallet) for your desktop session; on a headless machine, start one with `dbus-run-session` and `gnome-keyring-daemon --unlock`.",
+        "Run Preflight again."
+      ],
+      "done": "Preflight's 'Keychain works on this computer' check passes."
+    },
+    "network": {
+      "title": "Let the kit reach Zscaler's API",
+      "who": "SE (on this computer)",
+      "match": [
+        {
+          "detail": "timed? ?out|ConnectionError|Connection (refused|reset|aborted)|Max retries|Name or service not known|nodename nor servname|getaddrinfo|Temporary failure in name resolution|NewConnectionError|ProxyError"
+        }
+      ],
+      "steps": [
+        "Check this computer is online: open https://console.zscaler.com in a browser.",
+        "If you're on a VPN or a hotel/guest network, try without it, or on another network.",
+        "Check the vanity domain and Cloud in Connect: a wrong cloud name sends the kit to a host that doesn't exist.",
+        "If a corporate proxy is required, set HTTPS_PROXY before starting the kit (for example `export HTTPS_PROXY=http://proxy:8080`, then `pov-kit console`).",
+        "Wait a minute and click Check now (or run Preflight) again."
+      ],
+      "done": "The check runs and gives a result instead of a connection error."
+    },
+    "tls": {
+      "title": "Trust the certificate in front of Zscaler's API",
+      "who": "SE (on this computer)",
+      "match": [
+        {
+          "detail": "CERTIFICATE_VERIFY_FAILED|certificate verify failed|SSLError|self.signed certificate"
+        }
+      ],
+      "steps": [
+        "This usually means something on this computer or network (often Client Connector with SSL inspection) is decrypting the kit's API traffic, and Python doesn't trust its certificate.",
+        "Ask the tenant's admin to exclude the API hosts (*.zslogin.net, *.zsapi.net and api.zsapi.net) from SSL inspection for your machine, or test from a network without inspection.",
+        "Or make Python trust the inspecting root: export the root certificate (PEM), then start the kit with `SSL_CERT_FILE=/path/root.pem REQUESTS_CA_BUNDLE=/path/root.pem pov-kit console`.",
+        "Click Check now again."
+      ],
+      "done": "The check runs without a certificate error."
+    },
+    "rate-limit": {
+      "title": "Wait out Zscaler's API rate limit (429)",
+      "who": "SE",
+      "match": [
+        {
+          "detail": "\\b429\\b|rate.?limit|too many requests"
+        }
+      ],
+      "steps": [
+        "Zscaler limits API calls per client. Wait one to two minutes.",
+        "Make sure nothing else is using the same API client right now (another kit, Claude Desktop's MCP server, a script).",
+        "Run the check again, one at a time rather than Check them all."
+      ],
+      "done": "The check runs without a 429."
+    },
+    "server-error": {
+      "title": "Zscaler's API had an error (5xx)",
+      "who": "SE",
+      "match": [
+        {
+          "detail": "\\b50[0-4]\\b|service unavailable|internal server error|bad gateway"
+        }
+      ],
+      "steps": [
+        "This is on Zscaler's side. Check https://trust.zscaler.com for an incident on the tenant's cloud.",
+        "Wait a few minutes and run it again: the kit carries on where it stopped.",
+        "If it keeps failing, click Download diagnostics on the Logs tab and open a Zscaler support case with it; it holds no secrets or customer object names."
+      ],
+      "done": "The call succeeds on a retry."
+    },
+    "zpa-customer-id": {
+      "title": "Set the ZPA customer ID",
+      "who": "SE or customer admin",
+      "console": "zpa.public_api",
+      "match": [
+        {
+          "check": "zpa-customer-id"
+        },
+        {
+          "check": "setup.zpa_customer_id",
+          "detail": "no ZPA customer ID"
+        },
+        {
+          "detail": "no ZPA customer ID|customerId.*(required|missing)"
+        }
+      ],
+      "steps": [
+        "In the Zscaler console, go to Administration > API > Legacy API > Private Access API (or search the console menu for 'Private Access API').",
+        "Click Copy ID (top right). It shows the Customer ID with a copy button.",
+        "Copy the whole number (it's long, often starting 21…). It isn't a secret, so email or chat is fine.",
+        "In the kit, open the Connect step and paste it into ZPA customer ID, then save. Or run `pov-kit set customer_id <number>`.",
+        "Click Check now on 'Find the ZPA customer ID'. If it then says ZPA refused the API client (403), the kit shows how to give the client a ZPA role."
+      ],
+      "done": "Check now says ZPA is readable.",
+      "search": "Private Access API"
+    },
+    "zpa-customer-id-wrong": {
+      "title": "Correct the ZPA customer ID",
+      "who": "SE or customer admin",
+      "console": "zpa.public_api",
+      "match": [
+        {
+          "detail": "doesn't know customer ID"
+        },
+        {
+          "check": "zpa-read",
+          "detail": "\\b404\\b|resource\\.not\\.found"
+        }
+      ],
+      "steps": [
+        "Open Administration > API > Legacy API > Private Access API and click Copy ID again.",
+        "Compare it with Connect > ZPA customer ID: it must be the whole number, with no spaces, quotes or line breaks.",
+        "Make sure it's this tenant's ID (an SE working several tenants can paste another one).",
+        "Paste the right one into Connect > ZPA customer ID (or `pov-kit set customer_id <number>`) and click Check now."
+      ],
+      "done": "Check now says ZPA is readable.",
+      "search": "Private Access API"
+    },
+    "zia-activation-pending": {
+      "title": "Get pending ZIA changes activated",
+      "who": "SE or customer admin",
+      "console": "zia.activation",
+      "match": [
+        {
+          "check": "zia-activation",
+          "detail": "status (?!active)"
+        }
+      ],
+      "steps": [
+        "ZIA has changes saved but not activated.",
+        "In the Zscaler console, open the Activation menu (it shows a count of pending changes) or search the menu for 'Activation', and see whose changes are pending.",
+        "Before Apply (Preflight): if they're someone else's, that admin activates or discards them after checking they're ready. The kit never activates someone else's work, so it waits.",
+        "After Apply (Status): if they're only the POV's, click Activate. If someone else's are there too, let them activate or discard theirs first.",
+        "Run Preflight (or Status › Check now) again."
+      ],
+      "done": "The ZIA activation check passes."
+    },
+    "zia-auth": {
+      "title": "Check how users sign in to ZIA",
+      "who": "SE or customer admin",
+      "console": "zia.auth",
+      "match": [
+        {
+          "check": "zia-auth"
+        }
+      ],
+      "steps": [
+        "Open Administration > Internet & SaaS Authentication > Internet Authentication Settings.",
+        "Note the authentication type: Hosted DB (ZIA users), SAML (an IdP such as Okta or Entra ID), or a directory (LDAP/AD).",
+        "If it's SAML, also note whether users are provisioned by SCIM or on first sign-in.",
+        "Tell the kit in the Pilot users step (sign-in provider), then run the checks again."
+      ],
+      "done": "'How users sign in' shows the sign-in type."
+    },
+    "zia-pilot-group": {
+      "title": "Name the pilot group exactly as ZIA shows it",
+      "who": "SE, with the customer admin",
+      "console": "zia.groups",
+      "match": [
+        {
+          "check": "zia-pilot"
+        }
+      ],
+      "steps": [
+        "Agree with the customer which existing group holds the pilot users (or switch to 'People we name' so the kit makes a POV group).",
+        "Open Administration > Internet & SaaS Authentication > Internet & SaaS Users > Groups tab and find it. Copy its name exactly, including spaces and capitals.",
+        "If it isn't there and it comes from an IdP: it appears after the IdP's next SCIM sync, or after one member signs in. Ask the IdP admin to push the group.",
+        "In the kit's Pilot users step, choose 'Use one of the customer's groups' and pick or paste the name. Or `pov-kit set pilot_group \"Group Name\"`.",
+        "Run the checks again."
+      ],
+      "done": "'Pilot group exists in ZIA' passes."
+    },
+    "zia-testusers-directory": {
+      "title": "Use directory users for the pilot",
+      "who": "customer admin (directory)",
+      "match": [
+        {
+          "check": "zia-testusers",
+          "detail": "directory"
+        }
+      ],
+      "steps": [
+        "This tenant signs users in from a directory (LDAP/AD), so the kit can't create test users in ZIA.",
+        "Ask the directory admin to create the test users (or pick existing pilot users) and a group for them.",
+        "Wait for the directory sync, then check they appear under Internet & SaaS Users.",
+        "In the Pilot users step, choose 'Use one of the customer's groups' with that group, and run the checks again."
+      ],
+      "done": "Preflight's Test users / Pilot group checks pass."
+    },
+    "zia-testusers-saml": {
+      "title": "Test users move to ZIdentity (SAML tenant)",
+      "who": "SE",
+      "match": [
+        {
+          "check": "zia-testusers",
+          "detail": "SAML"
+        }
+      ],
+      "steps": [
+        "Users here sign in with SAML, so the kit's test users go in ZIdentity instead of ZIA. Nothing to change in the console.",
+        "Run the checks again: the change list now makes the test users in ZIdentity, on <vanity>.zslogin.net.",
+        "After Apply, set their passwords (Steps for people › Set the new pilot users' passwords)."
+      ],
+      "done": "'Test users' passes on the next run."
+    },
+    "zia-testusers-domain": {
+      "title": "Tell the kit the test users' email domain",
+      "who": "SE",
+      "match": [
+        {
+          "check": "zia-testusers",
+          "detail": "couldn't tell"
+        }
+      ],
+      "steps": [
+        "In the Pilot users step, choose Test accounts and type the domain in 'at' (a domain the tenant owns in ZIA, or <vanity>.zslogin.net).",
+        "Or run `pov-kit set identity.test_domain acme.com`.",
+        "Run the checks again."
+      ],
+      "done": "'Test users' shows where they'll be made."
+    },
+    "names-taken": {
+      "title": "Free the POV's names (or use another prefix)",
+      "who": "SE, with the customer admin",
+      "match": [
+        {
+          "check": "zia-names"
+        },
+        {
+          "check": "zpa-names"
+        },
+        {
+          "check": "aiguard-names"
+        },
+        {
+          "check": "casb-names"
+        },
+        {
+          "check": "zid-name"
+        }
+      ],
+      "steps": [
+        "The check lists objects that already have the names this POV wants (prefix included).",
+        "Search the console for each one. If it's left over from an earlier POV with the same prefix, and the customer agrees, delete it there (the earlier POV's teardown may not have run).",
+        "If it belongs to someone, leave it: start this POV again with a different prefix, for example `pov-kit new \"<customer>\" --prefix ZPOV2` (Start a POV › More options › Prefix).",
+        "Run the checks again."
+      ],
+      "done": "'POV names are free' passes."
+    },
+    "pilot-emails": {
+      "title": "Name the pilot users",
+      "who": "SE, with the customer",
+      "match": [
+        {
+          "check": "id-emails"
+        },
+        {
+          "check": "zid-members",
+          "detail": "none yet"
+        },
+        {
+          "check": "zdx-users"
+        }
+      ],
+      "steps": [
+        "Ask the customer for the pilot users' sign-in names (usually their email addresses), as the IdP or ZIdentity shows them.",
+        "In the Pilot users step, paste them into the list (commas or one per line). Or `pov-kit set pilot_emails a@acme.com,b@acme.com`.",
+        "No one picked yet? Choose Test accounts to start with kit-made users.",
+        "Run the checks again."
+      ],
+      "done": "'Pilot users named' passes."
+    },
+    "zid-members-missing": {
+      "title": "Match the pilot users to ZIdentity",
+      "who": "SE, with the customer admin",
+      "console": "zid.users",
+      "match": [
+        {
+          "check": "zid-members",
+          "detail": "not found"
+        }
+      ],
+      "steps": [
+        "Open Administration > Authentication > Directory > Users and search for each user the check lists.",
+        "Use the sign-in name exactly as ZIdentity shows it (it may differ from the email: a different domain or alias).",
+        "If they come from an IdP and aren't there yet, ask the IdP admin to provision them (SCIM sync), or have each sign in once.",
+        "Lab tenant? Tick 'Create the ones that don't exist' in the Pilot users step instead.",
+        "Fix the list in the Pilot users step and run the checks again."
+      ],
+      "done": "'Pilot users are in ZIdentity' passes."
+    },
+    "vanity-missing": {
+      "title": "Enter the vanity domain",
+      "who": "SE",
+      "match": [
+        {
+          "check": "zid-members",
+          "detail": "vanity"
+        }
+      ],
+      "steps": [
+        "The vanity domain is the part before .zslogin.net in the console's sign-in address (acme for acme.zslogin.net).",
+        "Enter it in the Connect step and click Connect.",
+        "Run the checks again."
+      ],
+      "done": "'Test users' domain' passes."
+    },
+    "zia-users-missing": {
+      "title": "Get the pilot users into ZIA",
+      "who": "customer admin (IdP)",
+      "console": "zia.users",
+      "match": [
+        {
+          "check": "id-zia-users"
+        }
+      ],
+      "steps": [
+        "With SAML or SCIM, ZIA only knows a user after provisioning or the user's first sign-in.",
+        "Ask the IdP admin to push the listed users (SCIM), or have each pilot user sign in to Client Connector once.",
+        "With a ZIdentity POV group: ZIdentity sends the users to ZIA once the group has the Internet & SaaS entitlement (see 'Entitle the POV's pilot group').",
+        "Check Administration > Internet & SaaS Authentication > Internet & SaaS Users, then run the checks again."
+      ],
+      "done": "'Pilot users are in ZIA' passes."
+    },
+    "zia-group-members": {
+      "title": "Put the pilot users in the pilot group",
+      "who": "customer admin (directory or IdP)",
+      "match": [
+        {
+          "check": "id-zia-group"
+        }
+      ],
+      "steps": [
+        "The POV's rules only apply to members of the pilot group, so these users wouldn't be covered.",
+        "Add the listed users to the group in the customer's directory or IdP (not in ZIA, which takes groups from there).",
+        "Wait for the sync (or the users' next sign-in), then run the checks again."
+      ],
+      "done": "'Pilot users are in <group>' passes."
+    },
+    "entitlement": {
+      "title": "Entitle the pilot group to Internet & SaaS",
+      "who": "customer admin",
+      "console": "zid.entitlements",
+      "match": [
+        {
+          "check": "id-entitlements"
+        },
+        {
+          "check": "zid-zia"
+        },
+        {
+          "check": "zid.ca.entitlement"
+        },
+        {
+          "check": "zia.ca.entitlement"
+        },
+        {
+          "detail": "not entitled to Internet"
+        }
+      ],
+      "steps": [
+        "ZIdentity's API can read entitlements but not grant them, so a person does this.",
+        "In the Zscaler console, search the menu for 'Entitlement' and open the end-user (service) entitlements page (per Zscaler Help: Administration > Subscription > End User Entitlements; some consoles place it elsewhere).",
+        "Choose Internet & SaaS (and Private Access too, if ZPA is in the POV).",
+        "Assign the pilot group (the POV's own is 'ZPOV - pilot users') or the users the check lists, and save.",
+        "Back in the kit, click Apply again (it carries on where it stopped), or run the checks again."
+      ],
+      "done": "The entitlements check passes, and Status shows 'ZIA has the pilot group'."
+    },
+    "idp-bypass": {
+      "title": "Keep the IdP's sign-in sites out of SSL inspection",
+      "who": "SE",
+      "match": [
+        {
+          "check": "id-bypass"
+        }
+      ],
+      "steps": [
+        "Pick the customer's identity provider in the Pilot users step (More options › Sign-in provider), or `pov-kit set identity.idp okta` (okta, entra, ping, google…).",
+        "Or list its sign-in domains in 'Sign-in sites not decrypted' (for example acme.okta.com, login.microsoftonline.com).",
+        "Run the checks again."
+      ],
+      "done": "'Sign-in sites kept out of SSL inspection' lists the domains."
+    },
+    "drift-fix": {
+      "title": "Put the POV's objects back (Fix drift)",
+      "who": "SE",
+      "match": [
+        {
+          "check": "*-present"
+        },
+        {
+          "check": "zia-disabled"
+        },
+        {
+          "check": "zia-scope"
+        },
+        {
+          "check": "zid-members",
+          "detail": "removed in the console"
+        }
+      ],
+      "steps": [
+        "Someone changed or deleted a POV object in the console, or Apply hasn't run yet.",
+        "If Apply hasn't run (not created yet), run Apply.",
+        "Otherwise ask the customer whether the change was on purpose. If it was, agree it with them and update the change list instead.",
+        "If not, open Status and click Fix drift (or `pov-kit status --fix`): it recreates, re-enables or re-scopes only the POV's own objects.",
+        "Click Check now on Status."
+      ],
+      "done": "Status shows the objects present, enabled and scoped to the pilot group."
+    },
+    "zid-group-deleted": {
+      "title": "Recreate the POV's ZIdentity pilot group",
+      "who": "SE, then customer admin",
+      "match": [
+        {
+          "check": "zid-present",
+          "detail": "deleted"
+        }
+      ],
+      "steps": [
+        "Status › Fix drift (or `pov-kit status --fix`) recreates the group and puts the pilot users back in it.",
+        "The entitlement went with the old group: the customer admin grants Internet & SaaS to the new one (see 'Entitle the POV's pilot group').",
+        "Click Apply again so ZIA links the new group, then Status › Check now."
+      ],
+      "done": "Status shows 'Pilot group in ZIdentity' and 'ZIA has the pilot group'."
+    },
+    "foreign": {
+      "title": "Win back POV objects someone renamed",
+      "who": "SE, with the customer admin",
+      "match": [
+        {
+          "check": "*-foreign"
+        }
+      ],
+      "steps": [
+        "The listed objects were renamed or restamped, so the kit no longer treats them as the POV's and won't touch them.",
+        "Ask who changed them. If they should stay the POV's, rename them back to the exact names in the change list.",
+        "If the customer now owns them, leave them: they're out of the POV's teardown, and the customer deletes them when they want.",
+        "Status › Check now."
+      ],
+      "done": "'POV objects still the POV's' passes."
+    },
+    "plan-approval": {
+      "title": "Get the change list approved",
+      "who": "SE, with the customer",
+      "match": [
+        {
+          "check": "plan-approved"
+        }
+      ],
+      "steps": [
+        "If it says the tenant changed since approval: something the plan uses (a group, a category, a DLP engine) changed. Make the change list again (Change list step, or `pov-kit plan`).",
+        "Walk the customer through it (Change list › Open the change list, or send the HTML).",
+        "Record the approval: tick the box and enter who approved (or `pov-kit approve`).",
+        "Apply."
+      ],
+      "done": "'Change list approved' passes and Apply is enabled."
+    },
+    "zcc-read": {
+      "title": "Let the kit read Client Connector",
+      "who": "customer admin",
+      "match": [
+        {
+          "check": "zcc-read"
+        }
+      ],
+      "steps": [
+        "If the error says 403, follow 'Give the API client a Client Connector (ZCC) role' (shown instead when the kit sees the 403).",
+        "Otherwise check Client Connector is part of this tenant's subscription (search the console menu for 'App Profiles': if there's no such page, it isn't).",
+        "Run the checks again."
+      ],
+      "done": "'Client Connector readable' passes."
+    },
+    "zcc-source": {
+      "title": "Build the POV's Client Connector profiles by hand",
+      "who": "SE or customer admin",
+      "console": "zcc.forwarding_profiles",
+      "match": [
+        {
+          "check": "zcc-source"
+        },
+        {
+          "check": "zcc.by_hand"
+        },
+        {
+          "check": "zcc_adopted"
+        },
+        {
+          "detail": "not adopted yet"
+        }
+      ],
+      "steps": [
+        "There's no default Windows profile to copy, or the API refused it, so a person builds the two profiles. The exact names are in the change list's spec.",
+        "Search the console menu for 'Forwarding Profile' and add one with exactly the spec's name: ZIA action Tunnel, Z-Tunnel 2.0, on every network type.",
+        "Search the menu for 'App Profiles', open Windows, and add one with exactly the spec's name: for the pilot group only, Install Zscaler SSL Certificate on, the forwarding profile from step 2. Put it above any broader profile.",
+        "For Mac pilot devices, add the same app profile under macOS (the kit doesn't track it: delete it by hand at the end).",
+        "In the kit, Status › Fix drift adopts both by name."
+      ],
+      "done": "Status shows the Client Connector profiles adopted."
+    },
+    "zcc-names": {
+      "title": "Profiles with the POV's names already exist",
+      "who": "SE",
+      "match": [
+        {
+          "check": "zcc-names"
+        }
+      ],
+      "steps": [
+        "If someone built them by hand for this POV: Status › Fix drift (or `pov-kit status --fix`) adopts them.",
+        "If they're left over from an earlier POV or someone else's, rename or delete them in the console (search 'App Profiles' / 'Forwarding Profile'), then run the checks again."
+      ],
+      "done": "No clash reported, or Status shows them adopted."
+    },
+    "casb-tenant": {
+      "title": "Connect a SaaS tenant for SaaS security",
+      "who": "customer admin, with the SaaS app's admin",
+      "console": "zia.saas_tenants",
+      "match": [
+        {
+          "check": "casb-tenant"
+        },
+        {
+          "check": "casb.ca.tenant"
+        },
+        {
+          "check": "casb_tenant"
+        }
+      ],
+      "steps": [
+        "If several are connected, pick one: `pov-kit set casb.tenant NAME` (or Connected SaaS tenant in the Pilot users step), and you're done.",
+        "Otherwise search the console menu for 'SaaS Application Tenants' and click Add (Microsoft 365, Google Workspace, Box, Salesforce…).",
+        "Sign in with the SaaS app's admin account and grant Zscaler access (an OAuth consent the kit can't give).",
+        "Wait for the first scan to finish (it can take an hour or more on a large tenant).",
+        "Run the checks again."
+      ],
+      "done": "Preflight shows a connected SaaS tenant."
+    },
+    "zpa-cert": {
+      "title": "Find the ZPA connector enrollment certificate",
+      "who": "customer admin",
+      "match": [
+        {
+          "check": "zpa-cert"
+        }
+      ],
+      "steps": [
+        "Every ZPA tenant has an enrollment certificate named Connector. If the kit can't see it, the API client can't read certificates.",
+        "Edit the POV's API client (Administration > API > OneAPI > API Clients) and make sure its ZPA access includes view on certificates (the role spec lists it).",
+        "Search the console menu for 'Enrollment Certificates' and check one named Connector exists. If it was renamed, tell the SE its name.",
+        "Run the checks again."
+      ],
+      "done": "'Connector enrollment certificate' passes."
+    },
+    "zpa-pilot": {
+      "title": "Tell the kit how ZPA knows the pilot users",
+      "who": "SE, with the customer admin",
+      "match": [
+        {
+          "check": "zpa-pilot"
+        }
+      ],
+      "steps": [
+        "ZPA takes users from the IdP: by a SCIM group, or by a SAML attribute.",
+        "SCIM: search the console menu for 'SCIM Groups' (under the IdP), find the pilot group and copy its exact name. Then `pov-kit set zpa.group \"Name\"` (or ZPA › SCIM group in the Pilot users step).",
+        "SAML: search for 'SAML Attributes' under the IdP, note the attribute name (for example memberOf) and the value pilot users have. Then `pov-kit set zpa.saml_attribute NAME` and `pov-kit set zpa.saml_value VALUE`.",
+        "If the group isn't in ZPA yet, the IdP admin pushes it (SCIM sync).",
+        "Run the checks again."
+      ],
+      "done": "The ZPA pilot users check passes."
+    },
+    "zpa-overlap": {
+      "title": "Pick a POV app that isn't already a customer segment",
+      "who": "SE, with the customer",
+      "match": [
+        {
+          "check": "zpa-overlap"
+        }
+      ],
+      "steps": [
+        "ZPA matches the most specific segment, so these domains already belong to the customer's segment and the POV's rules wouldn't apply.",
+        "Pick another internal app, or a hostname only the POV uses (for example pov-test.acme.internal), or leave the domains empty to use the kit's own test app.",
+        "`pov-kit set zpa.domains host.acme.internal` (or ZPA › Its domains in the Pilot users step), then run the checks again."
+      ],
+      "done": "'POV app isn't already a customer segment' passes."
+    },
+    "zpa-broad": {
+      "title": "Broad ZPA allow rules (the customer decides)",
+      "who": "customer admin",
+      "console": "zpa.access_policy",
+      "match": [
+        {
+          "check": "zpa-broad"
+        }
+      ],
+      "steps": [
+        "These rules allow access without naming an app, so users outside the pilot group may reach the POV app too (criterion PA-APP-02 would fail).",
+        "Show the customer the listed rules (search the console menu for 'Access Policy').",
+        "Either leave them (and drop PA-APP-02 from the success criteria), or the customer narrows them. The kit never changes the customer's rules."
+      ],
+      "done": "The customer has decided; the warning stays if the rules stay."
+    },
+    "zpa-connectors": {
+      "title": "Deploy the POV's App Connectors",
+      "who": "customer admin (cloud team)",
+      "console": "zpa.app_connectors",
+      "match": [
+        {
+          "check": "zpa-connectors"
+        },
+        {
+          "check": "zpa.ca.connectors"
+        },
+        {
+          "check": "zpa_connectors"
+        }
+      ],
+      "steps": [
+        "In the kit, Next steps › ZPA App Connectors: download the AWS (or Azure) template and click Show the provisioning key.",
+        "In the customer's cloud account, deploy the template (AWS: CloudFormation › Create stack › Upload a template file) in a subnet that can reach the POV app and the internet on 443.",
+        "Paste the provisioning key into the template's ProvisioningKey field only. Don't save it anywhere else.",
+        "Wait about ten minutes. Search the console menu for 'App Connectors' and check two POV connectors show as connected.",
+        "If they don't enroll: check outbound 443 from the subnet, the instance's system log, and that the key wasn't truncated. Then Status › Check now."
+      ],
+      "done": "The kit's check shows 2 POV connectors connected."
+    },
+    "zpa-access": {
+      "title": "Get pilot users through to the POV app",
+      "who": "customer admin",
+      "console": "zcc.app_profiles",
+      "match": [
+        {
+          "check": "zpa.ca.users"
+        },
+        {
+          "check": "zpa_access"
+        }
+      ],
+      "steps": [
+        "First make sure both App Connectors are connected (the previous step).",
+        "Search the console menu for 'App Profiles' and open the one the pilot devices use: Zscaler Private Access must be enabled for it.",
+        "Check the pilot users have the Private Access entitlement (see 'Entitle the POV's pilot group').",
+        "On a pilot device: Client Connector › More › Update Policy, then check Private Access shows On, and open the POV app.",
+        "Click Check now."
+      ],
+      "done": "The kit finds the access rule and connectors up, and a pilot user reaches the POV app."
+    },
+    "zpa-teardown-connectors": {
+      "title": "Remove the App Connectors before teardown",
+      "who": "customer admin (cloud team)",
+      "match": [
+        {
+          "check": "zpa-connectors-left"
+        },
+        {
+          "check": "zpa-left",
+          "detail": "connectors"
+        }
+      ],
+      "steps": [
+        "ZPA won't delete a connector group with connectors in it.",
+        "Delete the connector stack in the cloud account (AWS: CloudFormation › the stack › Delete).",
+        "Search the console menu for 'App Connectors' and delete the POV's connectors.",
+        "Run teardown again (Handover › Remove it: teardown, or `pov-kit handover teardown`)."
+      ],
+      "done": "Teardown finishes with nothing left in place."
+    },
+    "left-in-place": {
+      "title": "Remove what teardown couldn't",
+      "who": "SE",
+      "match": [
+        {
+          "check": "*-left"
+        },
+        {
+          "check": "*-teardown"
+        }
+      ],
+      "steps": [
+        "The message says why the object stayed: usually another object still uses it (a rule using a group, a profile using a forwarding profile), or someone else changed it.",
+        "Search the console for the object and see what references it. Remove or repoint that reference if it's the POV's, or ask the customer if it's theirs.",
+        "Run teardown again: it only deletes the POV's own objects and skips what's gone."
+      ],
+      "done": "Teardown finishes with nothing left in place."
+    },
+    "adopted-kept": {
+      "title": "Delete objects built by hand and adopted",
+      "who": "SE",
+      "match": [
+        {
+          "check": "*-adopted"
+        }
+      ],
+      "steps": [
+        "Teardown keeps objects someone built by hand unless you say so.",
+        "Run teardown again and answer yes to delete adopted objects too (Handover › Remove it: teardown, with the adopted objects box ticked).",
+        "Delete the macOS app profile by hand: the kit doesn't track it."
+      ],
+      "done": "Teardown finishes with nothing left in place."
+    },
+    "aiguard-provider": {
+      "title": "Set up AI Guard's proxy mode",
+      "who": "customer admin, or SE",
+      "console": "aiguard.policies",
+      "match": [
+        {
+          "check": "aiguard-proxy"
+        }
+      ],
+      "steps": [
+        "No provider: the customer adds the model provider (for example Anthropic or OpenAI) in AI Guard (search the console menu for 'AI Guard'), or switch the POV's provider in the AI Guard tab. Until then tests run through the Detection API only.",
+        "Customer's key: in the AI Guard tab › Proxy mode, choose which of their provider keys the POV uses.",
+        "Your own key: AI Guard tab › Proxy mode, paste your provider API key. It goes to this computer's keychain, and the change list adds it to the customer's AI Guard as a POV object.",
+        "Run the checks again."
+      ],
+      "done": "The Proxy mode check passes."
+    },
+    "aiguard-key": {
+      "title": "Make a new AI Guard detection key",
+      "who": "SE",
+      "match": [
+        {
+          "check": "aiguard-key"
+        }
+      ],
+      "steps": [
+        "A key's secret is only shown when it's created, and this computer's keychain doesn't have it (another computer, or it was cleared).",
+        "In the console, open AI Guard, find the POV's key and delete it.",
+        "Run Status › Fix drift (or `pov-kit status --fix`): it makes a new key and saves its secret to the keychain."
+      ],
+      "done": "'POV detection key in the keychain' passes."
+    },
+    "malware": {
+      "title": "Block viruses and unwanted apps (with the customer's agreement)",
+      "who": "customer admin",
+      "console": "zia.malware_protection",
+      "match": [
+        {
+          "check": "zia.ca.malware"
+        },
+        {
+          "check": "malware_blocks"
+        }
+      ],
+      "steps": [
+        "Malware Protection is tenant-wide and the customer's, so the kit only reads it.",
+        "Search the console menu for 'Malware Protection'.",
+        "Check viruses, unwanted applications, trojans and worms are set to Block (the EICAR test relies on it).",
+        "Change them only if the customer agrees, then Save and Activate.",
+        "Click Check now."
+      ],
+      "done": "The kit's check shows viruses, unwanted apps, trojans and worms blocked."
+    },
+    "zcc-devices": {
+      "title": "Get the pilot devices registered",
+      "who": "customer (pilot users or IT)",
+      "console": "zcc.enrolled_devices",
+      "match": [
+        {
+          "check": "zcc.ca.devices"
+        },
+        {
+          "check": "zcc_devices"
+        },
+        {
+          "check": "zdx-devices"
+        }
+      ],
+      "steps": [
+        "In the kit, Next steps › Set up a pilot device: pick the pilot user and OS, then copy the one-line command or download the setup script.",
+        "Run it on the device: macOS in Terminal (approve the settings profile in System Settings when asked); Windows in PowerShell opened with Run as administrator.",
+        "Sign in to Client Connector as the pilot user. Check Internet Security shows On (More › Update Policy if not).",
+        "Search the console menu for 'Enrolled Devices' and check the device is there for that user.",
+        "ZDX: devices appear in ZDX after Client Connector has run with ZDX for a few minutes.",
+        "Click Check now."
+      ],
+      "done": "The kit's check finds each pilot device registered."
+    },
+    "zdx-app": {
+      "title": "Monitor an app in ZDX",
+      "who": "customer admin",
+      "match": [
+        {
+          "check": "zdx-app"
+        }
+      ],
+      "steps": [
+        "Deep traces need an app ZDX already monitors.",
+        "In the console, open Digital Experience and search the menu for 'Applications'. Enable a predefined app (for example Microsoft 365 or Zoom) or add a custom one with a web probe.",
+        "Wait for it to report (a few minutes once pilot devices run Client Connector with ZDX), then run the checks again."
+      ],
+      "done": "'A ZDX-monitored app to trace' passes."
+    },
+    "pov-end": {
+      "title": "Hand over the POV (or move the end date)",
+      "who": "SE",
+      "match": [
+        {
+          "check": "pov-end"
+        }
+      ],
+      "steps": [
+        "Agree with the customer what happens to the POV's objects: removed (teardown) or kept (Terraform export).",
+        "Removed: Handover › Remove it: teardown (or `pov-kit handover teardown`).",
+        "Kept: Handover › Export to Terraform (or `pov-kit handover terraform`), and give the customer the export.",
+        "Still running? Move the date: `pov-kit set ends YYYY-MM-DD` (or Status › Safety net › End date › Change).",
+        "Then delete the POV's API clients (Steps for people › Delete the POV's API clients)."
+      ],
+      "done": "The POV end date check passes."
+    },
+    "product-read": {
+      "title": "Let the kit read this product",
+      "who": "customer admin, with the SE",
+      "console": "oneapi.clients",
+      "fallback": true,
+      "match": [
+        {
+          "check": "*-read"
+        },
+        {
+          "check": "connect"
+        }
+      ],
+      "steps": [
+        "Read the message above: it names the API call that failed and Zscaler's reason.",
+        "In the Zscaler console, open Administration > API > OneAPI > API Clients and edit ZPOV <pov-id>: the product must be listed under its Resources (or Roles) with at least view access, as the role spec says.",
+        "Check the product is in this tenant's subscription: if its pages aren't in the console menu, it isn't licensed here. Take it out of the POV's products, or ask the account team to add it.",
+        "For ZPA, check Connect has the ZPA customer ID.",
+        "Run the checks again. If it still fails, click Download diagnostics on the Logs tab and send it to the kit's owner (no secrets or customer object names in it)."
+      ],
+      "done": "The product's 'readable' check passes."
+    },
+    "couldnt-check": {
+      "title": "When a check can't run",
+      "who": "SE",
+      "fallback": true,
+      "match": [
+        {
+          "detail": "couldn't check|failed:"
+        }
+      ],
+      "steps": [
+        "Open the Logs tab and find the failed call (it names the API and Zscaler's error).",
+        "Check Connect still signs in (Connect step › Connect).",
+        "Run the check again: some errors are momentary.",
+        "If it keeps failing, click Download diagnostics on the Logs tab and send it to the kit's owner. It holds no secrets or customer object names."
+      ],
+      "done": "The check gives a pass or a clear failure."
+    }
+  }
+}

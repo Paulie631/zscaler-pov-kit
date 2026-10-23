@@ -120,14 +120,14 @@ def c_preflight(a):
     if a.json:
         print(json.dumps(checks, indent=2))
     else:
-        print(render(checks))
+        print(render(checks, pov_id=p.id))
     return exit_code(checks)
 
 
 def c_discover(a):
     p = _pov(a)
     _, checks = lifecycle.discover(p, tenant_for)
-    print(render(checks))
+    print(render(checks, pov_id=p.id))
     print(f"Snapshot saved to {p.path('discovery.json')} (stays on this laptop).")
     return exit_code(checks)
 
@@ -135,7 +135,7 @@ def c_discover(a):
 def c_plan(a):
     p = _pov(a)
     items, notes, h, checks = lifecycle.plan(p, tenant_for)
-    print(render(checks))
+    print(render(checks, pov_id=p.id))
     creates = [i for i in items if i["action"] != "customer_action"]
     print(f"\nChange list {h[:16]}: {len(creates)} objects to create, {len(items) - len(creates)} customer actions.")
     for i in items:
@@ -170,7 +170,7 @@ def c_apply(a):
 def c_status(a):
     p = _pov(a)
     checks = lifecycle.status(p, tenant_for, fix=a.fix, log=say)
-    print(render(checks))
+    print(render(checks, pov_id=p.id))
     return exit_code(checks)
 
 
@@ -304,7 +304,7 @@ def c_handover(a):
         incl = bool(adopted) and (a.include_adopted or (not a.yes and yesno(
             f"Delete the {len(adopted)} adopted ones too (built by hand, or found by recover by name)?", False)))
         checks = lifecycle.teardown(p, tenant_for, say, include_adopted=incl)
-        print(render(checks))
+        print(render(checks, pov_id=p.id))
         if led.active():
             print("Some objects are still in the ledger; secrets and data are kept until teardown finishes.")
             return 2
@@ -612,6 +612,9 @@ def c_steps(a):
                 print(f"        {i}. {x.replace('<pov-id>', p.id)}")
             if s.get("detail") and s.get("result") is not True:
                 print(f"        Last check: {s['detail']}")
+            if s.get("howto"):
+                from .fixes import as_text
+                print(as_text(s["howto"], "        "))
     print("\n`pov-kit steps --check` checks what the API can see; `--done KEY --by NAME` records the rest; "
           "`--sheet` prints them for the customer's admin.")
     return 0
@@ -789,7 +792,9 @@ def main(argv=None):
     try:
         return args.fn(args) or 0
     except KitError as e:
-        print(f"\n  {e}\n", file=sys.stderr)
+        from .fixes import as_text, for_error
+        h = for_error(str(e))
+        print(f"\n  {e}\n" + (as_text(h, "  ") + "\n" if h else ""), file=sys.stderr)
         return 1
     except KeyboardInterrupt:
         print("\n  Stopped.", file=sys.stderr)

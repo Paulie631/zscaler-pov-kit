@@ -90,6 +90,8 @@ h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
 .checks>li:first-child{border-top:0}
 .ic{font-weight:700;text-align:center}.ic.ok{color:var(--ok)}.ic.warn{color:var(--warn)}.ic.fail{color:var(--bad)}.ic.info{color:var(--muted)}
 .checks .d{color:var(--muted);font-size:12.5px}.checks .fx{color:var(--warn);font-size:12.5px;margin-top:2px}
+.howto{border:1px solid var(--line,#ddd);border-left:3px solid var(--warn);border-radius:8px;padding:8px 12px;margin:8px 0;font-size:13px;color:var(--fg,inherit)}
+.howto>summary{cursor:pointer;font-weight:600}.howto ol{margin:6px 0;padding-left:20px}.howto li{margin:3px 0}.howto p{margin:4px 0}
 .group-h{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:16px 0 6px;font-weight:600}
 table{border-collapse:collapse;width:100%;font-size:13px}
 th{text-align:left;font-weight:600;font-size:12px;color:var(--muted);padding:8px 10px;background:var(--soft)}
@@ -286,28 +288,36 @@ function mdLite(t){return esc(t).replace(/\n {2,}/g," ").replace(/\*\*([^*]+)\*\
 async function api(path,body){
   const r=await fetch(path,{method:body===undefined?"GET":"POST",headers:{"X-POV-Token":TOKEN,"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   const j=await r.json().catch(()=>({error:"No answer from the kit. Is the console still running?"}));
-  if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j}
+  if(!r.ok){const e=new Error(j.error||("HTTP "+r.status));e.howto=j.howto;throw e}return j}
 function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div>`}
+/* the step-by-step fix the kit sends with an error or a failed check (fixes.json) */
+function howtoHTML(h,open){if(!h)return"";const id=S&&S.current?S.current.id:"",sub=t=>String(t||"").replaceAll("<pov-id>",id);
+  return `<details class="howto" ${open?"open":""}><summary>How to fix: ${esc(h.title)}${h.who?` <span class="muted" style="font-weight:normal">· ${esc(h.who)}</span>`:""}</summary>`+
+    (h.where?`<p><b>Where:</b> ${esc(h.where)}${h.verified?"":` <span class="muted">(not checked in a live console yet)</span>`}</p>`:"")+
+    (h.search?`<p><b>Console search:</b> <code>${esc(h.search)}</code></p>`:"")+
+    `<ol>${h.steps.map(x=>`<li>${mdLite(sub(x))}</li>`).join("")}</ol>`+(h.done?`<p class="muted"><b>Fixed when:</b> ${esc(sub(h.done))}</p>`:"")+`</details>`}
+function errNote(e){return note(e.message,"bad")+howtoHTML(e.howto,true)}
+function howtoText(h){if(!h)return"";return `\n    how to fix: ${h.title}${h.where?"\n      where: "+h.where:""}\n`+h.steps.map((x,i)=>`      ${i+1}. ${x}`).join("\n")+(h.done?`\n      fixed when: ${h.done}`:"")}
 async function runJob(id,el){let since=0;el.innerHTML="";
   for(;;){const j=await api(`/api/job?id=${id}&since=${since}`);
     for(const l of j.lines){const d=document.createElement("div");d.className=l.level;d.textContent=`${l.t}  ${l.msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight}
-    since+=j.lines.length;if(j.done){if(j.error)throw new Error(j.error);return j.result}
+    since+=j.lines.length;if(j.done){if(j.error){const e=new Error(j.error);e.howto=j.howto;throw e}return j.result}
     await new Promise(r=>setTimeout(r,700))}}
 const STATUS_ORDER={fail:0,warn:1,ok:2,info:3},ICON={ok:"✓",warn:"!",fail:"✗",info:"i"};
 function checksHTML(checks){if(!checks.length)return'<div class="empty">No checks.</div>';
   const groups={};for(const c of checks){const g=(c.label.match(/^([A-Za-z ]+?):\s/)||[,"General"])[1];(groups[g]=groups[g]||[]).push(c)}
-  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><ul class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<li><span class="ic ${esc(c.status)}">${ICON[c.status]||"·"}</span><div>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix&&c.status!="ok"?`<div class="fx">${c.status=="info"?"":"Fix: "}${esc(c.fix)}</div>`:""}</div></li>`).join("")}</ul>`).join("")}
+  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><ul class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<li><span class="ic ${esc(c.status)}">${ICON[c.status]||"·"}</span><div>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix&&c.status!="ok"?`<div class="fx">${c.status=="info"?"":"Fix: "}${esc(c.fix)}</div>`:""}${c.status=="fail"||c.status=="warn"?howtoHTML(c.howto,c.status=="fail"):""}</div></li>`).join("")}</ul>`).join("")}
 function preflightHTML(checks){
   const need=checks.filter(c=>c.status=="fail"), later=checks.filter(c=>c.waiting&&/-waiting$/.test(c.id));
   const laterOf=n=>checks.filter(c=>c.waiting&&c.product==n&&!/-waiting$/.test(c.id));
   const rest=checks.filter(c=>c.status!="fail"&&!c.waiting);
   const warn=rest.filter(c=>c.status=="warn");
   return (need.length?`<div class="group-h">Needs you · ${need.length}</div>`+checksHTML(need).replace(/<div class="group-h">[^<]*<\/div>/g,""):note("Nothing blocks the POV.","good"))+
-    (later.length?`<div class="group-h">Added later · ${later.length}</div><p class="muted" style="margin:2px 0 6px">The rest of the POV goes ahead without these. Fix them any time, run the checks again, and approve the new change list.</p><ul class="checks">${later.map(c=>`<li><span class="ic info">⏸</span><div>${esc(c.label.replace(/: added later$/,""))}<div class="d">${esc(c.detail)}</div>${laterOf(c.product).filter(x=>x.fix).map(x=>`<div class="fx">Fix: ${esc(x.fix)}</div>`).join("")}</div></li>`).join("")}</ul>`:"")+
+    (later.length?`<div class="group-h">Added later · ${later.length}</div><p class="muted" style="margin:2px 0 6px">The rest of the POV goes ahead without these. Fix them any time, run the checks again, and approve the new change list.</p><ul class="checks">${later.map(c=>`<li><span class="ic info">⏸</span><div>${esc(c.label.replace(/: added later$/,""))}<div class="d">${esc(c.detail)}</div>${laterOf(c.product).filter(x=>x.fix||x.howto).map(x=>(x.fix?`<div class="fx">Fix: ${esc(x.fix)}</div>`:"")+howtoHTML(x.howto)).join("")}</div></li>`).join("")}</ul>`:"")+
     (warn.length?`<div class="group-h">Worth a look · ${warn.length}</div>`+checksHTML(warn).replace(/<div class="group-h">[^<]*<\/div>/g,""):"")+
     `<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">Passed and for information · ${rest.length-warn.length}</summary>${checksHTML(rest.filter(c=>c.status!="warn"))}</details>`}
-function reportText(checks){return checks.map(c=>`[${c.status.toUpperCase()}] ${c.label}${c.detail?": "+c.detail:""}${c.fix&&c.status!="ok"?"\n    fix: "+c.fix:""}`).join("\n")}
+function reportText(checks){return checks.map(c=>`[${c.status.toUpperCase()}] ${c.label}${c.detail?": "+c.detail:""}${c.fix&&c.status!="ok"?"\n    fix: "+c.fix:""}${c.status=="fail"||c.status=="warn"?howtoText(c.howto):""}`).join("\n")}
 
 /* ---------------- state ---------------- */
 let S=null;
@@ -408,14 +418,14 @@ async function pilotPicker(s){
     if(!emails().includes(e))$("#s_pilot_emails").value=emails().concat(e).join(", ");$("#wpick").value="";who();sum()};
   $("#wadd").onclick=e=>{e.preventDefault();add()};$("#wpick").onkeydown=e=>{if(e.key=="Enter"){e.preventDefault();add()}};
   show();
-  try{W.opts=W.opts||await api("/api/pilot/options",{})}catch(e){$("#wwho").innerHTML=note("Couldn't read the tenant's groups and users: "+e.message);return}
+  try{W.opts=W.opts||await api("/api/pilot/options",{})}catch(e){$("#wwho").innerHTML=note("Couldn't read the tenant's groups and users: "+e.message)+howtoHTML(e.howto,true);return}
   $("#wgroups")&&($("#wgroups").innerHTML=W.opts.zia_groups.map(g=>`<option value="${esc(g)}">`).join(""));
   $("#wusers").innerHTML=W.opts.zid_users.map(u=>`<option value="${esc(u.login)}">${esc(u.name)}</option>`).join("");
   who()}
 async function deletePov(id){
   const m=$("#delmodal"),b=$("#delbody");m.classList.add("on");$("#delclose").onclick=()=>m.classList.remove("on");
   b.innerHTML='<div class="notice">Checking it\'s safe: looking up every object this POV still lists in the customer\'s tenant (read-only)…</div>';
-  let v;try{v=await api("/api/pov/delete/check",{id})}catch(e){b.innerHTML=note(e.message,"bad");return}
+  let v;try{v=await api("/api/pov/delete/check",{id})}catch(e){b.innerHTML=errNote(e);return}
   const list=a=>`<ul style="margin:6px 0 0 18px">${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`;
   b.innerHTML=`<p style="margin:0"><b>${esc(v.customer)}</b> <span class="muted">· ${esc(v.id)} · ${esc(v.state||"new")}</span></p>`+
     (v.ok?note("Safe to delete: nothing this POV created is left in the customer's tenant.","good")
@@ -427,7 +437,7 @@ async function deletePov(id){
   if(!v.ok)return;
   $("#delconf").oninput=()=>{$("#delgo").disabled=$("#delconf").value.trim()!==v.id};
   $("#delgo").onclick=async()=>{try{await api("/api/pov/delete",{id,confirm:$("#delconf").value});m.classList.remove("on");
-    S=null;await load();W.step=0;wizard()}catch(e){$("#delmsg").innerHTML=note(e.message,"bad")}};
+    S=null;await load();W.step=0;wizard()}catch(e){$("#delmsg").innerHTML=errNote(e)}};
 }
 async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.current;
   try{
@@ -460,14 +470,14 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     const prods=()=>$$('#wprods input').filter(x=>x.checked).map(x=>x.value);
     $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,lab:$("#wlab").checked,
         products:prods(),client_mode:($$('input[name=wmode]').find(x=>x.checked)||{}).value});
-      await load();W.checks=null;W.plan=null;W.opts=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}};
+      await load();W.checks=null;W.plan=null;W.opts=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=errNote(e)}};
     $("#wquick").onclick=async()=>{const b=$("#wquick");b.disabled=true;$("#wmsg").innerHTML="";
       const cd=($$('input[name=wcl]').find(x=>x.checked)||{}).value=="cd";
       try{const r=await api("/api/quickstart",{customer:$("#wcust").value,products:prods(),ends:$("#wends").value,from_claude_desktop:cd,lab:$("#wlab").checked,
           vanity_domain:$("#qvan").value,client_id:$("#qcid").value,secret:$("#qsec").value,customer_id:$("#qcust").value});
         $("#qsec").value="";$("#wqlog").style.display="block";
         const res=await runJob(r.job,$("#wqlog"));await load();W.checks=null;W.plan=null;W.opts=null;W.step=4;wizard()}
-      catch(e){$("#wmsg").innerHTML=note(e.message,"bad");b.disabled=false;await load()}};
+      catch(e){$("#wmsg").innerHTML=errNote(e);b.disabled=false;await load()}};
   }
   else if(W.step==1){
     const single=c.settings.client_mode!="separate", slot=single?"main":"discovery", cl=c.clients[slot]||{};
@@ -485,14 +495,14 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     $("#wqs")&&($("#wqs").onclick=async()=>{const b=$("#wqs");b.disabled=true;$("#wmsg").innerHTML="";
       try{const r=await api("/api/quickstart",{existing:true,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
         $("#wsec").value="";$("#wqlog2").style.display="block";await runJob(r.job,$("#wqlog2"));await load();W.checks=null;W.plan=null;W.opts=null;W.step=4;wizard()}
-      catch(e){$("#wmsg").innerHTML=note(e.message,"bad");b.disabled=false}});
-    $("#wcd")&&($("#wcd").onclick=async()=>{try{await api("/api/connect/claude-desktop",{});await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+      catch(e){$("#wmsg").innerHTML=errNote(e);b.disabled=false}});
+    $("#wcd")&&($("#wcd").onclick=async()=>{try{await api("/api/connect/claude-desktop",{});await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=errNote(e)}});
     $("#wcopyrole").onclick=async()=>{try{await navigator.clipboard.writeText(W.role);$("#wcopyrole").textContent="Copied ✓"}catch(e){download(`role-spec-${c.id}.md`,W.role,"text/markdown")}};
     $("#wdlrole").onclick=()=>download(`role-spec-${c.id}.md`,W.role,"text/markdown");
     $("#wshowrole").onclick=()=>{const p=$("#wrole");p.style.display=p.style.display=="none"?"block":"none"};
     bindNav(async()=>{$("#wmsg").innerHTML='<div class="notice">Signing in…</div>';
       try{await api("/api/connect",{slot,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
-        $("#wsec").value="";await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+        $("#wsec").value="";await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=errNote(e)}});
   }
   else if(W.step==2){
     const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), scope=s["zpa.scope"]||"scim", mk=s["identity.pilot"]||(+s["identity.test_users"]>0?"test":"existing");
@@ -532,7 +542,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       if($("#wnewusers"))vals["identity.create_users"]=$("#wnewusers").checked?"yes":"no";
       const pm=($$("input[name='s_identity.pilot']").find(x=>x.checked)||{}).value;if(pm&&pm!="test")vals["identity.test_users"]="0";
       ["placement","zpa.scope","identity.pilot"].forEach(k=>{const r=$$(`input[name='s_${k}']`).find(x=>x.checked);if(r)vals[k]=r.value});
-      try{await api("/api/settings",{values:vals});await load();W.checks=null;W.step=3;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+      try{await api("/api/settings",{values:vals});await load();W.checks=null;W.step=3;wizard()}catch(e){$("#wmsg").innerHTML=errNote(e)}});
   }
   else if(W.step==3){
     st.innerHTML=head(3,"Preflight","Read-only checks of this computer, each product, and the pilot users across products. Nothing is written.")+
@@ -543,7 +553,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       bindNav();$("#wrerun").onclick=run;
       $("#wcopy").onclick=async()=>{const t=reportText(W.checks);try{await navigator.clipboard.writeText(t);$("#wcopy").textContent="Copied ✓"}catch(e){download("pov-preflight.txt",t,"text/plain")}}};
     const run=async()=>{$("#wchecks").innerHTML='<div class="notice">Running the checks…</div>';$("#wgate").innerHTML="";
-      try{W.checks=(await api("/api/preflight",{})).checks;wsteps();draw()}catch(e){$("#wchecks").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}};
+      try{W.checks=(await api("/api/preflight",{})).checks;wsteps();draw()}catch(e){$("#wchecks").innerHTML=errNote(e)+nav(true,false);bindNav()}};
     W.checks?draw():run();
   }
   else if(W.step==4){
@@ -559,7 +569,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         ${r.notes.length?`<div class="group-h">Notes</div><ul class="muted">${r.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`:""}
         <div class="row" style="margin-top:12px"><button id="wopen">Open the customer page ↗</button><span class="hint">Printable, with a signature line.</span></div>`+nav(true,true,"Continue to approval ›");
       $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindNav();
-    }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
+    }catch(e){$("#wplan").innerHTML=errNote(e)+nav(true,false);bindNav()}
   }
   else if(W.step==5){
     const sep=c.settings.client_mode=="separate", ap=c.clients.apply||{};
@@ -582,7 +592,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     bindNav(async()=>{try{
       if(!ok)await api("/api/approve",{by:$("#wby").value,note:$("#wnote").value,reviewed:$("#wrev").checked});
       if(sep&&($("#wasec").value||!ap.saved))await api("/api/connect",{slot:"apply",client_id:$("#wacid").value,secret:$("#wasec").value});
-      await load();W.step=6;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+      await load();W.step=6;wizard()}catch(e){$("#wmsg").innerHTML=errNote(e)}});
   }
   else if(W.step==6){
     const ok=c.approval&&c.plan&&c.approval.hash==c.plan.hash, appliedN=(c.ledger.owned||0)+(c.ledger.adopted||0);
@@ -597,7 +607,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         $("#wafter").innerHTML='<div class="notice">Checking the result…</div>';
         const checks=await runJob((await api("/api/status",{})).job,document.createElement("div"));
         $("#wnav").innerHTML="";$("#wafter").innerHTML='<div class="group-h">Status after apply</div>'+checksHTML(checks)+nav(true,true,"Next steps ›");bindNav()}
-      catch(e){$("#wafter").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
+      catch(e){$("#wafter").innerHTML=errNote(e)}finally{b.disabled=false}};
   }
   else if(W.step==7){
     let plan=null;try{plan=(await api("/api/plan")).plan}catch(e){}
@@ -624,7 +634,7 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
     bindManual(()=>wizard());
     bindDevice(dev,()=>wizard());
     $("#ntraws")&&($("#ntraws").onclick=async()=>{try{const r=await api("/api/traffic/aws",{email:($("#duser")||{}).value||""});download(r.name,JSON.stringify(r.template,null,2),"application/json");
-      $("#ntrmsg").innerHTML=note(`Saved ${r.name} for ${esc(r.template.Parameters.PilotUser.Default)}. AWS console → CloudFormation → Create stack → Upload a template file. The stack's Outputs say how to connect; delete the stack to remove everything.`,"good")}catch(e){$("#ntrmsg").innerHTML=note(e.message,"bad")}});
+      $("#ntrmsg").innerHTML=note(`Saved ${r.name} for ${esc(r.template.Parameters.PilotUser.Default)}. AWS console → CloudFormation → Create stack → Upload a template file. The stack's Outputs say how to connect; delete the stack to remove everything.`,"good")}catch(e){$("#ntrmsg").innerHTML=errNote(e)}});
     api("/api/probe/status").then(ps=>{$("#npstat")&&($("#npstat").innerHTML=probeStatusHTML(ps))}).catch(()=>{});
     $("#npack").onclick=async()=>download(`pov-probe-pack-${c.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
     $("#ntpl")&&($("#ntpl").onclick=async()=>download(`pov-${c.id}-app-connectors.json`,JSON.stringify((await api("/api/zpa-template",{})).template,null,2),"application/json"));
@@ -637,7 +647,7 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
       lines.push("","# On the Windows pilot device: Next steps > Set up a pilot device > Windows, one-line command, then add:","#   -Msi C:\\ZPOV\\<the installer file>");
       $("#nkeyv").innerHTML=`<pre class="log" style="white-space:pre-wrap;margin-top:8px">${esc(lines.join("\n"))}</pre><div class="hint">The key is the POV's secret: paste it only into the connector machines. Building the blueprint once: see CLOUDSHARE.md in the kit's docs.</div>`});
     $("#nkey")&&($("#nkey").onclick=async()=>{const v=(await api("/api/reveal",{what:"zpa-key"})).value;$("#nkeyv").innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span><div class="hint">Paste it into the stack's ProvisioningKey field; don't save it anywhere else.</div>`});
-    const mcpGo=async b=>{try{const r=await api("/api/mcp",b);if(b.what=="config"){await navigator.clipboard.writeText(JSON.stringify(r.config,null,2)).catch(()=>download(`mcp-${c.id}.json`,JSON.stringify(r.config,null,2),"application/json"));$("#nmcpmsg").innerHTML=note("Copied: no secret in it.","good");return}await load();wizard()}catch(e){$("#nmcpmsg").innerHTML=note(e.message,"bad")}};
+    const mcpGo=async b=>{try{const r=await api("/api/mcp",b);if(b.what=="config"){await navigator.clipboard.writeText(JSON.stringify(r.config,null,2)).catch(()=>download(`mcp-${c.id}.json`,JSON.stringify(r.config,null,2),"application/json"));$("#nmcpmsg").innerHTML=note("Copied: no secret in it.","good");return}await load();wizard()}catch(e){$("#nmcpmsg").innerHTML=errNote(e)}};
     $("#nmcpok")&&($("#nmcpok").onclick=()=>mcpGo({what:"consent",by:$("#nmcpby").value}));
     $("#nmcpin")&&($("#nmcpin").onclick=()=>mcpGo({what:"install"}));
     $("#nmcprm")&&($("#nmcprm").onclick=()=>mcpGo({what:"remove"}));
@@ -645,7 +655,7 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
     $$(".nuser").forEach(b=>b.onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:b.dataset.n})).value;$("#nuser"+b.dataset.n).innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span>`});
     $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});
   }
-  }catch(e){st.innerHTML=note(e.message,"bad")+nav(W.step>0,false);bindNav()}
+  }catch(e){st.innerHTML=errNote(e)+nav(W.step>0,false);bindNav()}
 }
 
 
@@ -667,7 +677,7 @@ function manualHTML(steps){
   return `<div class="group-h">Steps for people <span class="muted" style="font-weight:normal">(${open?open+" open":"all done"} · the kit can't do these through the API)</span></div>
   <div class="row" style="gap:8px;margin:4px 0 10px"><button id="mchkall">Check them all</button><button id="msheet">Copy the steps for the customer's admin</button><button id="msheetdl">Download them</button></div><div id="mmsg"></div>`+
   steps.map(s=>{const h=s.phase!=last?`<div class="hint" style="margin:12px 0 4px;font-weight:600">${PHASE_H[s.phase]}</div>`:"";last=s.phase;n++;
-    const ok=s.status=="done", res=s.result===false?note(esc(s.detail),"bad"):s.result===null&&s.detail?note(esc(s.detail)):"";
+    const ok=s.status=="done", res=(s.result===false?note(s.detail,"bad"):s.result===null&&s.detail?note(s.detail):"")+howtoHTML(s.howto,true);
     return h+`<details class="card" style="margin:6px 0" ${s===steps.find(x=>x.status!="done")?"open":""}>
       <summary style="cursor:pointer"><b>${ok?"✓":"○"} ${n}. ${esc(s.title)}</b> <span class="muted">· ${esc(s.who||"")}${s.when?" · "+esc(s.when):""}</span>
         ${ok?`<span class="muted"> · done${s.by?" by "+esc(s.by):""}${s.at?" "+esc(s.at.slice(0,10)):""}</span>`:""}</summary>
@@ -686,14 +696,14 @@ function manualHTML(steps){
       </div></details>`}).join("");
 }
 function bindManual(redraw){
-  const msg=(t,k)=>$("#mmsg")&&($("#mmsg").innerHTML=note(t,k));
+  const msg=(t,k)=>$("#mmsg")&&($("#mmsg").innerHTML=note(t,k));const emsg=e=>$("#mmsg")&&($("#mmsg").innerHTML=errNote(e));
   $$(".mchk").forEach(b=>b.onclick=async()=>{b.disabled=true;b.textContent="Checking…";
-    try{await api("/api/manual/check",{key:b.dataset.k});redraw()}catch(e){msg(e.message,"bad");b.disabled=false;b.textContent="Check now"}});
+    try{await api("/api/manual/check",{key:b.dataset.k});redraw()}catch(e){emsg(e);b.disabled=false;b.textContent="Check now"}});
   $$(".mmark").forEach(b=>b.onclick=async()=>{const by=$$(".mby").find(i=>i.dataset.k==b.dataset.k).value;
-    try{await api("/api/manual/mark",{key:b.dataset.k,by});redraw()}catch(e){msg(e.message,"bad")}});
-  $$(".mundo").forEach(b=>b.onclick=async()=>{try{await api("/api/manual/mark",{key:b.dataset.k,undo:true});redraw()}catch(e){msg(e.message,"bad")}});
+    try{await api("/api/manual/mark",{key:b.dataset.k,by});redraw()}catch(e){emsg(e)}});
+  $$(".mundo").forEach(b=>b.onclick=async()=>{try{await api("/api/manual/mark",{key:b.dataset.k,undo:true});redraw()}catch(e){emsg(e)}});
   $("#mchkall")&&($("#mchkall").onclick=async()=>{const b=$("#mchkall");b.disabled=true;b.textContent="Checking…";
-    try{await runJob((await api("/api/manual/check",{})).job,document.createElement("div"));redraw()}catch(e){msg(e.message,"bad");b.disabled=false;b.textContent="Check them all"}});
+    try{await runJob((await api("/api/manual/check",{})).job,document.createElement("div"));redraw()}catch(e){emsg(e);b.disabled=false;b.textContent="Check them all"}});
   const sheet=async()=>(await api("/api/manual/sheet")).text;
   $("#msheet")&&($("#msheet").onclick=async()=>{const t=await sheet();try{await navigator.clipboard.writeText(t);msg("Copied as Markdown: paste it into an email or the shared POV doc. No secrets in it.","good")}catch(e){download(`pov-${S.current.id}-admin-steps.md`,t,"text/markdown")}});
   $("#msheetdl")&&($("#msheetdl").onclick=async()=>download(`pov-${S.current.id}-admin-steps.md`,await sheet(),"text/markdown"));
@@ -717,19 +727,19 @@ function bindDevice(d,redraw){
   const out=(h)=>$("#dout").innerHTML=h, email=()=>$("#duser").value.trim();
   const how=DEV_OS=="macos"?"Paste it into Terminal on the Mac. It asks the user to approve a settings profile in System Settings, and for the Mac password once.":"Paste it into PowerShell opened with Run as administrator.";
   $$("#dos button").forEach(b=>b.onclick=()=>{DEV_OS=b.dataset.o;redraw()});
-  const saveCloud=async body=>{try{const r=await api("/api/device/cloud",body);$("#dcloud").value=r.cloud||"";out(note(`Cloud: ${r.cloud}`,"good"))}catch(e){out(note(e.message,"bad"))}};
+  const saveCloud=async body=>{try{const r=await api("/api/device/cloud",body);$("#dcloud").value=r.cloud||"";out(note(`Cloud: ${r.cloud}`,"good"))}catch(e){out(errNote(e))}};
   $("#dcsave").onclick=()=>saveCloud({cloud:$("#dcloud").value.trim()});
   $("#dcdet").onclick=()=>saveCloud({detect:true});
   $("#dline").onclick=async()=>{try{if($("#dcloud").value.trim()!=(d.cloud||""))await api("/api/device/cloud",{cloud:$("#dcloud").value.trim()});
       const r=await api("/api/device/setup",{os:DEV_OS,email:email(),what:"line"});
       await navigator.clipboard.writeText(r.line).catch(()=>{});
       out(`<pre class="log" style="white-space:pre-wrap;margin-top:8px">${esc(r.line)}</pre><div class="hint">Copied. ${how} Then sign in to Client Connector as ${esc(email())}. The probe pack comes separately (Download probe pack); the setup script below has it inside.</div>`)}
-    catch(e){out(note(e.message,"bad"))}};
+    catch(e){out(errNote(e))}};
   $("#dscript").onclick=async()=>{try{if($("#dcloud").value.trim()!=(d.cloud||""))await api("/api/device/cloud",{cloud:$("#dcloud").value.trim()});
       const r=await api("/api/device/setup",{os:DEV_OS,email:email(),what:"script"});
       download(r.name,r.text,"text/plain");
       out(note(DEV_OS=="macos"?`Saved ${r.name}. On the Mac: bash ${r.name} (in Terminal). The customer's IT can read it first, or push it with their own tools.`:`Saved ${r.name}. On the PC, in PowerShell with Run as administrator: powershell -ExecutionPolicy Bypass -File .\\${r.name}. The customer's IT can read it first, or push it with their own tools.`,"good"))}
-    catch(e){out(note(e.message,"bad"))}};
+    catch(e){out(errNote(e))}};
 }
 
 
@@ -763,14 +773,14 @@ function ccDraw(){const el=$("#ccbody");
     $("#ccbuild").onclick=async()=>{const b=$("#ccbuild");b.disabled=true;$("#cclog").style.display="block";
       try{const r=await runJob((await api("/api/criteria/build",{rows:CC.rows})).job,$("#cclog"));
         $("#cclog").insertAdjacentHTML("beforeend",`<div class="ok">Next: Setup → Change list to review it with the customer, then Approval.</div>`);await load();criteria()}
-      catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
+      catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`+howtoHTML(e.howto,true))}finally{b.disabled=false}};
   } else if(CC.items.length){
     el.innerHTML=`<div class="group-h">${CC.items.length} criteria found${CC.source?" in "+esc(CC.source):""}</div><ol style="margin:4px 0 8px 18px">${CC.items.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>
       <div class="row" style="gap:10px"><button class="primary" id="ccmap">Map them ›</button><span class="hint">With the customer's agreement recorded (Use cases tab), Claude maps them; otherwise the kit matches keywords.</span></div>`;
   } else el.innerHTML="";
   $("#ccmap")&&($("#ccmap").onclick=async()=>{const b=$("#ccmap");b.disabled=true;$("#cclog").style.display="block";
     try{const r=await runJob((await api("/api/criteria/map",{items:CC.items,source:CC.source})).job,$("#cclog"));CC.rows=r.rows;ccDraw()}
-    catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
+    catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`+howtoHTML(e.howto,true))}finally{b.disabled=false}});
 }
 
 
@@ -779,7 +789,7 @@ let AG=null,AGsel=new Set(),AGhideMissed=false;
 async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
   if(!c.settings.products.includes("aiguard")){w.innerHTML='<div class="panel"><h2>AI Guard</h2><p class="muted">AI Guard isn\'t in this POV\'s products. Add it on Setup → Start a POV (Step by step), then make the change list again.</p></div>';return}
-  try{AG=await api("/api/aiguard")}catch(e){w.innerHTML=note(e.message,"bad");return}
+  try{AG=await api("/api/aiguard")}catch(e){w.innerHTML=errNote(e);return}
   const px=AG.proxy, det=AG.detectors, never=new Set(AG.never_block);
   const custom=AG.custom||{};
   w.innerHTML=`
@@ -835,11 +845,11 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   const drawRes=rs=>{$("#agres").innerHTML=rs.length?`<div class="tablewrap" style="margin-top:8px"><table><tr><th>Test</th><th>User</th><th>Action</th><th>Detected</th>${mode=="proxy"?"<th>Reply</th>":""}</tr>${rs.map(r=>`<tr><td>${esc(r.name)}<div class="muted" style="font-size:12px">${esc((r.text||"").slice(0,90))}</div></td><td>${esc(r.user||"")}</td><td><b>${esc(r.action||r.error||"")}</b></td><td>${(r.detectors||[]).map(d=>`<span class="chip">${esc(AG.panels[d]||d)}</span>`).join(" ")}${!AGhideMissed&&r.missed&&r.missed.length?` <span style="color:var(--warn)">expected: ${esc(r.missed.join(", "))}</span>`:""}</td>${mode=="proxy"?`<td style="font-size:12px">${esc((r.reply||"").slice(0,200))}</td>`:""}</tr>`).join("")}</table></div>`:""};
   $("#agrun").onclick=async()=>{if(!AGsel.size){$("#agres").innerHTML=note("Pick tests: a preset, a pack, or one by one.");return}const b=$("#agrun");b.disabled=true;$("#aglog").style.display="block";
     try{const r=await runJob((await api("/api/aiguard/run",{ids:[...AGsel],mode,tags:$("#agtags").checked,users:$("#agusers").value.split(",").map(x=>x.trim()).filter(Boolean),rounds:+$("#agrounds").value||1})).job,$("#aglog"));AG.last=r.results;drawRes(r.results)}
-    catch(e){$("#agres").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
+    catch(e){$("#agres").innerHTML=errNote(e)}finally{b.disabled=false}};
   $("#agrep").onclick=e=>{e.preventDefault();window.open(`/aiguard-report?t=${encodeURIComponent(TOKEN)}`,"_blank")};
   // live
   const live=async m=>{$("#aglivres").innerHTML='<div class="notice">Scanning…</div>';try{const r=(await runJob((await api("/api/aiguard/run",{text:$("#aglive").value,direction:$("#aglivedir").value,mode:m,tags:true})).job,document.createElement("div"))).results[0];
-      $("#aglivres").innerHTML=`<p><b>${esc(r.action||r.error||"")}</b> ${(r.detectors||[]).map(d=>`<span class="chip">${esc(AG.panels[d]||d)}</span>`).join(" ")||'<span class="muted">nothing detected</span>'}</p>${r.reply?`<pre class="log" style="white-space:pre-wrap">${esc(r.reply)}</pre>`:""}`}catch(e){$("#aglivres").innerHTML=note(e.message,"bad")}};
+      $("#aglivres").innerHTML=`<p><b>${esc(r.action||r.error||"")}</b> ${(r.detectors||[]).map(d=>`<span class="chip">${esc(AG.panels[d]||d)}</span>`).join(" ")||'<span class="muted">nothing detected</span>'}</p>${r.reply?`<pre class="log" style="white-space:pre-wrap">${esc(r.reply)}</pre>`:""}`}catch(e){$("#aglivres").innerHTML=errNote(e)}};
   $("#aglivego").onclick=()=>live("detect");$("#aglivemodel").onclick=()=>live("proxy");
   // customer prompts
   $("#agcsv").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const r=await api("/api/aiguard/pack",{name:$("#agpackname").value||f.name.replace(/\.csv$/i,""),csv:await f.text()});$("#agpackmsg").innerHTML=note(`${r.count} prompts imported: criterion ${r.criterion}. It's in Success criteria; Run API proofs proves it.`,"good");aiguardTab()}catch(err){$("#agpackmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
@@ -847,7 +857,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   const pxShow=()=>{const m=$("#agpx").value;$$(".agpxc").forEach(x=>x.style.display=m=="customer"?"":"none");$$(".agpxs").forEach(x=>x.style.display=m=="se"?"":"none")};$("#agpx").onchange=pxShow;pxShow();
   $("#agpxsave").onclick=async()=>{try{if($("#agsekey").value)await api("/api/aiguard/provider-key",{key:$("#agsekey").value});$("#agsekey").value="";
     const r=await api("/api/aiguard/settings",{proxy:$("#agpx").value,provider:$("#agprov").value,model:$("#agmodel").value,competitor:$("#agcomp").value,...($("#agpx").value=="customer"&&$("#agcred").value?{provider_credential:$("#agcred").value}:{})});
-    $("#agpxmsg").innerHTML=note("Saved. "+(r.note||""),"good")}catch(e){$("#agpxmsg").innerHTML=note(e.message,"bad")}};
+    $("#agpxmsg").innerHTML=note("Saved. "+(r.note||""),"good")}catch(e){$("#agpxmsg").innerHTML=errNote(e)}};
   if(typeof storiesHTML=="function")storiesHTML();
 }
 
@@ -898,7 +908,7 @@ let GDPRE=null,GDTICK=null;
 function gdNote(){const b=$("#gdrun");if(!b||b.textContent=="Mark as shown")return;const n=gdLeft();b.textContent=n?`Run step · ${n}s`:"Run step"}
 async function gdSetPolicy(m){try{await api("/api/aiguard-policy",{profile:m});GD.policy=m;GD.changed=Date.now();
   $$("#agprof button").forEach(x=>x.classList.toggle("on",x.dataset.p==m));clearInterval(GDTICK);GDTICK=setInterval(()=>{gdNote();if(!gdLeft())clearInterval(GDTICK)},500);return true}
-  catch(e){$("#gdverdict").innerHTML=note("Couldn't switch the policy: "+e.message,"bad");return false}}
+  catch(e){$("#gdverdict").innerHTML=note("Couldn't switch the policy: "+e.message,"bad")+howtoHTML(e.howto,true);return false}}
 function gdPreApply(){clearTimeout(GDPRE);GDPRE=setTimeout(async()=>{const m=gdMode(GD.step);if(!m||m==GD.policy||!AG.keys.detection)return;await gdSetPolicy(m);gdSteps()},700)}
 async function gdScan(test,mode,tags,user){const r=await runJob((await api("/api/aiguard/run",{ids:test.id=="live"?undefined:[test.id],text:test.id=="live"?test.text:undefined,direction:test.direction,mode,tags,users:[user]})).job,document.createElement("div"));return r.results[0]}
 async function gdRunStep(){const s=GD.story.steps[GD.step],t=gdTest(s),v=$("#gdverdict");if(!t)return;const b=$("#gdrun");b.disabled=true;
@@ -914,7 +924,7 @@ async function gdRunStep(){const s=GD.story.steps[GD.step],t=gdTest(s),v=$("#gdv
       ${r.reply_detectors&&r.reply_detectors.length?`<div class="hint">Reply check: ${r.reply_detectors.map(d=>esc(AG.panels[d]||d)).join(", ")}</div>`:""}
       ${r.error?note(r.error,"bad"):""}`;
     gdDone(GD.step,{title:s.title,mode:GD.policy,verdict:big,dets:r.detectors||[],owasp:s.owasp||[]})}
-  catch(e){v.innerHTML=note(e.message,"bad")}b.disabled=false;gdNote()}
+  catch(e){v.innerHTML=errNote(e)}b.disabled=false;gdNote()}
 function gdDone(i,entry){GD.ran[i]=Object.assign(GD.ran[i]||{},{[entry.mode||"-"]:entry});GD.done.add(i);gdSteps()}
 function gdRecap(){const st=GD.story,rows=st.steps.flatMap((s,i)=>Object.values(GD.ran[i]||{}).map(r=>[s,r]));const v=$("#gdverdict");
   if(!rows.length){v.innerHTML='<span class="muted">Run some steps first; the recap lists what each one caught.</span>';return}
@@ -957,19 +967,19 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $("#uclib").innerHTML=UC.library.length?`<h2>From the library</h2><p class="muted" style="margin-top:0">Use cases that worked before, with the customer's names taken out. Using one checks it against this tenant; no AI call. Folder: <code>${esc(UC.library_folder)}</code></p>`+
     UC.library.map(e=>`<div class="row" style="justify-content:space-between;border-top:1px solid var(--line);padding:8px 0"><div><b>${esc(e.title)}</b> ${e.proved?'<span class="badge b-ok">proved</span>':""}<div class="muted" style="font-size:12.5px">${esc(e.summary||"")}</div></div><button class="ucuse" data-n="${esc(e.id)}">Use it</button></div>`).join(""):"";
   $("#uclib").style.display=UC.library.length?"":"none";
-  $$(".ucuse").forEach(b=>b.onclick=async()=>{b.disabled=true;$("#uclog").style.display="block";try{await runJob((await api("/api/library/use",{name:b.dataset.n})).job,$("#uclog"));usecases()}catch(e){$("#ucmsg").innerHTML=note(e.message,"bad")}finally{b.disabled=false}});
-  $("#ucagree")&&($("#ucagree").onclick=async()=>{try{await api("/api/ai/consent",{by:$("#ucby").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
-  $("#ucsavedirect")&&($("#ucsavedirect").onclick=async()=>{try{await api("/api/ai/key",{key:$("#ucdirect").value,direct:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
-  $("#ucrmdirect")&&($("#ucrmdirect").onclick=async()=>{try{await api("/api/ai/key",{direct:true,remove:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
-  $("#ucsavekey")&&($("#ucsavekey").onclick=async()=>{try{await api("/api/ai/key",{key:$("#uckey").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
+  $$(".ucuse").forEach(b=>b.onclick=async()=>{b.disabled=true;$("#uclog").style.display="block";try{await runJob((await api("/api/library/use",{name:b.dataset.n})).job,$("#uclog"));usecases()}catch(e){$("#ucmsg").innerHTML=errNote(e)}finally{b.disabled=false}});
+  $("#ucagree")&&($("#ucagree").onclick=async()=>{try{await api("/api/ai/consent",{by:$("#ucby").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=errNote(e)}});
+  $("#ucsavedirect")&&($("#ucsavedirect").onclick=async()=>{try{await api("/api/ai/key",{key:$("#ucdirect").value,direct:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=errNote(e)}});
+  $("#ucrmdirect")&&($("#ucrmdirect").onclick=async()=>{try{await api("/api/ai/key",{direct:true,remove:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=errNote(e)}});
+  $("#ucsavekey")&&($("#ucsavekey").onclick=async()=>{try{await api("/api/ai/key",{key:$("#uckey").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=errNote(e)}});
   const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").textContent=ready?"Takes about a minute: the kit reads the tenant first.":"Record the customer's agreement and a key first.";
   $("#ucex").innerHTML=UC_EX.map(x=>`<button class="ucx" style="font-size:12.5px">${esc(x)}</button>`).join("");
   $$(".ucx").forEach(b=>b.onclick=()=>{$("#ucprompt").value=b.textContent});
   $("#uclist").innerHTML=UC.usecases.length?UC.usecases.map(ucCard).join(""):'<div class="panel empty">No use cases yet.</div>';
   $$(".ucref").forEach(b=>b.onclick=async()=>{const id=b.dataset.id,box=$("#ucrf"+id),out=$("#ucrl"+id);b.disabled=true;out.style.display="block";
-    try{await runJob((await api("/api/usecase/refine",{id,feedback:box.value})).job,out);await load();usecases()}catch(e){out.insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
-  $$(".ucsave").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/library/save",{id:b.dataset.id});b.textContent="Saved as "+r.entry.id;b.disabled=true;usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
-  $$(".ucact").forEach(b=>b.onclick=async()=>{try{await api("/api/usecase/status",{id:b.dataset.id,status:b.dataset.s});await load();usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
+    try{await runJob((await api("/api/usecase/refine",{id,feedback:box.value})).job,out);await load();usecases()}catch(e){out.insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`+howtoHTML(e.howto,true))}finally{b.disabled=false}});
+  $$(".ucsave").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/library/save",{id:b.dataset.id});b.textContent="Saved as "+r.entry.id;b.disabled=true;usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",errNote(e))}});
+  $$(".ucact").forEach(b=>b.onclick=async()=>{try{await api("/api/usecase/status",{id:b.dataset.id,status:b.dataset.s});await load();usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",errNote(e))}});
   $$(".ucdl").forEach(b=>b.onclick=async()=>{const r=await api(`/api/usecase/directions?id=${encodeURIComponent(b.dataset.id)}`);download(`${b.dataset.id}-directions.md`,r.text,"text/markdown")});
   $$(".ucplan").forEach(b=>b.onclick=()=>{W.step=4;$$("#tabs button").find(x=>x.dataset.t=="setup").click()})}
 function ucDetail(ch){const skip=new Set(["kind","name","why"]);return Object.entries(ch).filter(([k])=>!skip.has(k)).map(([k,v])=>`<span class="muted">${esc(k.replace(/_/g," "))}:</span> ${esc(Array.isArray(v)?v.join(", "):v)}`).join(" · ")}
@@ -995,12 +1005,12 @@ function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",dir
     </div></div>`}
 $("#ucask").onclick=async()=>{const b=$("#ucask");b.disabled=true;$("#uclog").style.display="block";$("#ucmsg").innerHTML="";
   try{await runJob((await api("/api/usecase/propose",{prompt:$("#ucprompt").value})).job,$("#uclog"));$("#ucprompt").value="";usecases()}
-  catch(e){$("#ucmsg").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
+  catch(e){$("#ucmsg").innerHTML=errNote(e)}finally{b.disabled=false}};
 
 /* ---------------- status ---------------- */
 async function status(fix){const out=$("#stout");out.innerHTML='<div class="log" id="stlog"></div>';
   try{const checks=await runJob((await api("/api/status",{fix})).job,$("#stlog"));out.innerHTML=checksHTML(checks);await load()}
-  catch(e){out.innerHTML=note(e.message,"bad")}}
+  catch(e){out.innerHTML=errNote(e)}}
 function safety(){const c=S&&S.current;if(!c){$("#stsafe").innerHTML="";return}
   $("#stsafe").innerHTML=`<h2>Safety net</h2><p class="muted" style="margin-top:0">So no POV ends with its objects still in ${esc(c.customer)}'s tenant, even if this laptop is lost.</p>
     <div class="cards">
@@ -1010,9 +1020,9 @@ function safety(){const c=S&&S.current;if(!c){$("#stsafe").innerHTML="";return}
         <input type="text" id="sfdir" placeholder="Folder, e.g. ~/OneDrive/pov-backups" style="width:100%;margin-bottom:6px"><input type="password" id="sfpw" placeholder="Passphrase (12+ characters)" style="width:100%;margin-bottom:6px" autocomplete="new-password"><button id="sfgo">Turn on backups</button>`}</div>
       <div class="card"><h4>Daily reminder</h4><p class="muted" style="margin:4px 0 10px">A scheduled task on this computer checks every POV's end date and backup each morning (no tenant calls) and shows a notification when something needs doing.</p><button id="sfrem">Turn on reminders</button></div>
     </div><div id="sfmsg"></div>`;
-  $("#sfendgo").onclick=async()=>{try{await api("/api/settings",{values:{ends:$("#sfend").value}});await load();safety()}catch(e){$("#sfmsg").innerHTML=note(e.message,"bad")}};
-  $("#sfgo")&&($("#sfgo").onclick=async()=>{try{await api("/api/backup",{folder:$("#sfdir").value,passphrase:$("#sfpw").value});await load();safety()}catch(e){$("#sfmsg").innerHTML=note(e.message,"bad")}});
-  $("#sfrem").onclick=async()=>{try{$("#sfmsg").innerHTML=note((await api("/api/remind/install",{})).message,"good")}catch(e){$("#sfmsg").innerHTML=note(e.message,"bad")}}}
+  $("#sfendgo").onclick=async()=>{try{await api("/api/settings",{values:{ends:$("#sfend").value}});await load();safety()}catch(e){$("#sfmsg").innerHTML=errNote(e)}};
+  $("#sfgo")&&($("#sfgo").onclick=async()=>{try{await api("/api/backup",{folder:$("#sfdir").value,passphrase:$("#sfpw").value});await load();safety()}catch(e){$("#sfmsg").innerHTML=errNote(e)}});
+  $("#sfrem").onclick=async()=>{try{$("#sfmsg").innerHTML=note((await api("/api/remind/install",{})).message,"good")}catch(e){$("#sfmsg").innerHTML=errNote(e)}}}
 $("#stcheck").onclick=()=>status(false);$("#stfix").onclick=()=>status(true);
 
 /* ---------------- criteria ---------------- */
@@ -1033,19 +1043,19 @@ function detail(r,i){const c=r.criterion;
   const proof=([k,p])=>`<div style="margin:6px 0"><span class="badge b-${esc(p.status)}">${esc(k)}</span> ${esc(p.detail||"")}${p.attestation?` <span class="muted">· ${esc(p.attestation.note)} (${esc(p.attestation.by)}, ${esc(p.attestation.at)})</span>`:""}${p.results?`<ul style="margin:4px 0 0 18px;padding:0">${p.results.map(x=>`<li>${esc(x.spec?(x.spec.url||x.spec.host||x.spec.name||x.spec.type):(x.expect||x.device||""))}: ${esc(x.outcome??(x.detected||x.scores||[]).join?.(", ")??"")} ${x.expect&&x.spec?`<span class="muted">(expected ${esc(x.expect)})</span>`:""}</li>`).join("")}</ul>`:""}</div>`;
   return `<tr class="detail"><td colspan="4"><div>${esc(c.statement||"")}</div>${Object.entries(r.proofs).map(proof).join("")}${c.attest?`<div class="hint">To attest: ${esc(c.attest)}</div>`:""}
     <div class="row" style="margin-top:10px;gap:8px"><input type="text" id="att${i}" placeholder="What was seen, e.g. the block in Web Insights for the pilot user" style="flex:1;min-width:240px"><input type="text" id="attby${i}" placeholder="Who" style="width:140px"><button class="attgo" data-i="${i}">Record attestation</button></div><div id="attmsg${i}"></div></td></tr>`}
-$("#crapi").onclick=async()=>{$("#crmsg").innerHTML='<div class="log" id="crlog"></div>';try{await runJob((await api("/api/test-api",{})).job,$("#crlog"));$("#crmsg").innerHTML=note("API proofs done.","good");criteria()}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
+$("#crapi").onclick=async()=>{$("#crmsg").innerHTML='<div class="log" id="crlog"></div>';try{await runJob((await api("/api/test-api",{})).job,$("#crlog"));$("#crmsg").innerHTML=note("API proofs done.","good");criteria()}catch(e){$("#crmsg").innerHTML=errNote(e)}};
 $("#crpack").onclick=async()=>download(`pov-probe-pack-${S.current.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
 $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
   try{const r=await api("/api/import-probe",{data:JSON.parse(await f.text())});$("#crmsg").innerHTML=note(`Imported probe run ${r.run_id}: ${r.results} results.`,"good");criteria()}catch(err){$("#crmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
 $("#crsumgo").onclick=async()=>{const b=$("#crsumgo");b.disabled=true;$("#crsumlog").style.display="block";
-  try{await runJob((await api("/api/summary",{note:$("#crsumnote").value})).job,$("#crsumlog"));criteria()}catch(e){$("#crsumlog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
-$("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
+  try{await runJob((await api("/api/summary",{note:$("#crsumnote").value})).job,$("#crsumlog"));criteria()}catch(e){$("#crsumlog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`+howtoHTML(e.howto,true))}finally{b.disabled=false}};
+$("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=errNote(e)}};
 
 /* ---------------- handover ---------------- */
 async function handover(body){$("#hoout").style.display="block";
   try{const r=await runJob((await api("/api/handover",body)).job,$("#holog"));
     if(r&&r.checks)$("#holog").insertAdjacentHTML("beforeend",`<div class="ok">${r.finished?"Done.":"Not finished: see above."}</div>`);await load()}
-  catch(e){$("#holog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}}
+  catch(e){$("#holog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`+howtoHTML(e.howto,true))}}
 $("#hotf").onclick=()=>{if(!$("#hotfok").checked){$("#hotfok").parentElement.style.borderColor="var(--bad)";return}handover({how:"terraform"})};
 $("#hotd").onclick=()=>handover({how:"teardown",confirm:$("#hoconfirm").value,include_adopted:$("#hoadopt").checked});
 
@@ -1058,7 +1068,7 @@ function labTools(){const c=S&&S.current;if(!c){$("#lglab").innerHTML="";return}
     <div class="card"><h4>Record API traffic</h4><p class="muted" style="margin:4px 0 8px">Saves every call and response, redacted, in this POV's folder. <code>pov-kit record export NAME</code> turns it into a test fixture with no customer data.</p>
       <label class="chk"><input type="checkbox" id="lgrec" ${c.record?"checked":""}>Recording ${c.record?"on":"off"}</label></div></div>`;
   $("#lgself")&&($("#lgself").onclick=async()=>{const b=$("#lgself");b.disabled=true;$("#lgselflog").style.display="block";
-    try{const r=await runJob((await api("/api/selftest",{lab:$("#lglabok").checked})).job,$("#lgselflog"));await load();labTools();logs()}catch(e){$("#lgselflog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
+    try{const r=await runJob((await api("/api/selftest",{lab:$("#lglabok").checked})).job,$("#lgselflog"));await load();labTools();logs()}catch(e){$("#lgselflog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`+howtoHTML(e.howto,true))}finally{b.disabled=false}});
   $("#lgrec").onchange=async e=>{await api("/api/record",{on:e.target.checked});await load();labTools()}}
 const LOGS={items:[],cleared:0,open:null};
 function logMatch(e){const k=$("#logkind").value,q=$("#logq").value.toLowerCase();
@@ -1079,7 +1089,7 @@ $("#logclear").onclick=()=>{LOGS.cleared=LOGS.items.length;drawLogs()};
 setInterval(()=>{if(tab()=="logs")refreshLogs()},5000);
 $("#lgdiag").onclick=()=>window.open(`/diagnostics?t=${encodeURIComponent(TOKEN)}`,"_blank");
 
-load().then(()=>{W.step=firstOpen();wizard()}).catch(e=>{$("#wstage").innerHTML=note(e.message,"bad")});
+load().then(()=>{W.step=firstOpen();wizard()}).catch(e=>{$("#wstage").innerHTML=errNote(e)});
 </script>
 </body>
 </html>

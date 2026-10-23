@@ -20,6 +20,7 @@ from . import VERSION, evidence, handover, installer, lifecycle, mcp, products, 
 from .core import KitError, pov as povs, secrets
 from .core.changelist import ChangeList
 from .core.checks import exit_code
+from .fixes import for_error
 
 HERE = Path(__file__).resolve().parent
 JOBS: dict[str, dict] = {}
@@ -143,7 +144,7 @@ def start_job(kind, work):
     if busy:
         raise KitError(f"This POV's {busy} is still running. Wait for it to finish (the Logs tab shows it).")
     jid = uuid.uuid4().hex[:8]
-    job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None}
+    job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None, "howto": None}
 
     def log(level, msg):
         job["lines"].append({"level": level, "msg": str(msg), "t": time.strftime("%H:%M:%S")})
@@ -157,6 +158,8 @@ def start_job(kind, work):
         except Exception as e:   # never let a job thread die silently
             job["error"] = f"{type(e).__name__}: {e}"
             log("fail", job["error"])
+        if job["error"]:
+            job["howto"] = for_error(job["error"], pid)
         job["done"] = True
     threading.Thread(target=run, daemon=True).start()
     return jid
@@ -233,7 +236,8 @@ def api(method, path, body, q):
             if not j:
                 return 404, {"error": "no such job"}
             since = int(q.get("since", 0))
-            return 200, {"done": j["done"], "lines": j["lines"][since:], "result": j["result"], "error": j["error"]}
+            return 200, {"done": j["done"], "lines": j["lines"][since:], "result": j["result"], "error": j["error"],
+                         "howto": j.get("howto")}
         if path == "/api/plan":
             p = current()
             cl = ChangeList(p.dir)
@@ -838,9 +842,9 @@ def serve(port=8790, open_browser=True):
             try:
                 code, out = api(method, u.path, body, q)
             except KitError as e:
-                code, out = 400, {"error": str(e)}
+                code, out = 400, {"error": str(e), "howto": for_error(str(e))}
             except Exception as e:
-                code, out = 500, {"error": f"{type(e).__name__}: {e}"}
+                code, out = 500, {"error": f"{type(e).__name__}: {e}", "howto": for_error(str(e))}
             self._send(code, out)
 
         def do_GET(self):
