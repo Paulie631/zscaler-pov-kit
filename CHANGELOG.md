@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.4
+
+From the live lab test, and mirroring the SE demo kit:
+- **Test users made by the kit**, a third choice in the Pilot users step, made the way the demo kit makes its
+  traffic-generator user: a group, a department and 1 to 10 users (`zpov-pilot-1@<your domain>`…) straight in ZIA,
+  with generated passwords in the keychain, so there's nothing to entitle or wait for. When ZIA refuses because the
+  tenant keeps its users in ZIdentity ("UNMODIFIABLE … OneIdentityUserLogin"), apply says so and the next change list
+  makes them in ZIdentity on `<vanity>.zslogin.net`, where ZIdentity can give them a password even when the company
+  domain signs in through Okta. SAML tenants go to ZIdentity straight away; directory tenants are told to use their
+  own group. This replaces the old "N test users" field, which refused any tenant with ZIdentity in front.
+- **Entitlement first, as the demo kit learned.** 0.9.3 said a ZIdentity group reaches ZIA at a member's first
+  sign-in; the demo kit's experience is that ZIdentity sends entitled users and groups within about a minute. Apply
+  now checks the members' Internet & SaaS entitlement and stops at once with the fix if it's missing, otherwise waits
+  up to three minutes (as the demo kit does). The "signs in once" customer action is gone.
+- **Teardown empties the pilot group before deleting it.** Live ZIdentity refuses to delete a group with members
+  ("Resource in use"); teardown now takes the remaining members out first (the users themselves are untouched), and
+  a ZIdentity error no longer stops the rest of teardown.
+
 ## 0.9.3
 
 From the live lab test:

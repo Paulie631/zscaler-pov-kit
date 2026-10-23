@@ -117,6 +117,12 @@ def gen_password(n=20):
             return pw
 
 
+def zid_managed(e):
+    """ZIA refuses user and group changes when ZIdentity owns the users ('UNMODIFIABLE ... OneIdentityUserLogin
+    enabled users will have read only access'), whatever the API role allows. From the demo kit."""
+    return bool(re.search(r"UNMODIFIABLE|OneIdentity", str(e), re.I))
+
+
 def key_for(kind, n):
     return f"zia.{kind}.{re.sub(r'[^a-z0-9]+', '-', n.lower()).strip('-')}"
 
@@ -229,7 +235,8 @@ class ZIA(Product):
 
     def role_scopes(self, pov=None):
         # Placeholders: the exact ZIA role scope names are an open question in the design (confirm in a lab tenant).
-        users = bool(pov and int((pov.cfg.get("identity") or {}).get("test_users") or 0))
+        from .zid import test_mode, users_in_zidentity
+        users = bool(pov and test_mode(pov.cfg) and not users_in_zidentity(pov.cfg))
         return {"discovery": [("ZIA: all policy and administration areas", "view only")],
                 "apply": [("ZIA policy: URL filtering, SSL inspection, Cloud App Control, file type control, DLP web "
                            "rules, firewall and DNS control, rule labels, custom URL categories, network services",
@@ -282,28 +289,37 @@ class ZIA(Product):
 
         want = (pov.cfg.get("pilot_group") or "").strip()
         snap["pilot_group"] = None
-        n_test = int((pov.cfg.get("identity") or {}).get("test_users") or 0)
         snap["test_users"] = None
-        from .zid import enabled as zid_pilot, group_name, ZIA_GROUP_KEY
-        if zid_pilot(pov.cfg):   # the POV makes its own pilot group in ZIdentity, which provisions it to ZIA
+        from .zid import enabled as zid_pilot, group_name, test_count, test_mode, ZIA_GROUP_KEY
+        testing = test_mode(pov.cfg)
+        n_test = test_count(pov.cfg) if testing else 0
+        if zid_pilot(pov.cfg):   # the POV makes its own pilot group in ZIdentity, which sends it to ZIA
             gname = group_name(pov.prefix)
             snap["pilot_group"] = {"id": "{ref:%s}" % ZIA_GROUP_KEY, "name": gname}
-            checks.append(check("zia-pilot", "Pilot group", INFO, f"'{gname}', made by the POV in ZIdentity",
-                                "ZIA gets it when a member first signs in (after any entitlement it needs); apply "
-                                "stops until then and carries on next time."))
-        elif n_test and (mode != "hosted" or snap["zidentity"]):
-            checks.append(check("zia-testusers", "Hosted DB test users", FAIL,
-                                "this tenant's users come from " + ("ZIdentity" if snap["zidentity"] else "an IdP or directory"),
-                                "ZIA can only hold its own test users when it uses its Hosted DB. Use a pilot group from "
-                                "the customer's directory instead (`set identity.test_users 0`, `set pilot_group NAME`)."))
-        elif n_test:
+            checks.append(check("zia-pilot", "Pilot group", INFO, f"'{gname}', made by the POV in ZIdentity"
+                                + (" with its test users" if testing else ""),
+                                "ZIdentity sends it to ZIA once it has the Internet & SaaS entitlement; apply checks "
+                                "and waits for it."))
+        elif testing and mode == "directory":
+            checks.append(check("zia-testusers", "Test users", FAIL, "this tenant signs users in from a directory",
+                                "The test users have to be made in that directory. Make them there, then choose 'Use "
+                                "one of the customer's groups' with their group."))
+        elif testing and mode == "saml":   # as the demo kit: SAML tenants get their test users in ZIdentity
+            pov.cfg.setdefault("identity", {})["users_in"] = "zidentity"
+            pov.save()
+            checks.append(check("zia-testusers", "Test users", FAIL, "users sign in with SAML, so they go in ZIdentity",
+                                "Run the checks again: the change list now makes the test users in ZIdentity."))
+        elif testing:   # as the demo kit: ZIA first; apply switches to ZIdentity if ZIA refuses
             dom = (pov.cfg.get("identity") or {}).get("test_domain") or test_domain(t)
             snap["test_users"] = {"count": n_test, "domain": dom}
             gname = naming.safe_name(naming.name(pov.prefix, "pilot users"), pov.prefix)
             snap["pilot_group"] = {"id": "{ref:zia.user_group}", "name": gname}
-            checks.append(check("zia-testusers", "Hosted DB test users", OK if dom else FAIL,
-                                f"{n_test} users at {dom}" if dom else "couldn't tell the users' email domain",
-                                "" if dom else "`pov-kit set identity.test_domain acme.com`"))
+            checks.append(check("zia-testusers", "Test users", OK if dom else FAIL,
+                                f"{n_test} made in ZIA at {dom}, with a group and department" if dom
+                                else "couldn't tell the users' email domain",
+                                ("If ZIA refuses because ZIdentity owns the users, apply says so and the next change "
+                                 "list makes them in ZIdentity instead." if snap["zidentity"] else "")
+                                if dom else "`pov-kit set identity.test_domain acme.com`"))
         elif not want:
             checks.append(check("zia-pilot", "Pilot group chosen", FAIL, "none yet",
                                 "The customer names an existing group of pilot users: `pov-kit set pilot_group NAME`."))
@@ -581,13 +597,23 @@ class ZIA(Product):
         for kind in [k for k in KINDS if not KINDS[k]["rule"]]:
             for it in [i for i in mine if i["kind"] == kind]:
                 k = KINDS[kind]
-                if kind == "user":
-                    n = it["key"].rsplit(".", 1)[-1]
-                    pw = secrets.get(pov.id, TEST_PW.format(n=n)) or gen_password()
-                    secrets.put(pov.id, TEST_PW.format(n=n), pw)
-                    t.create(it["key"], k["res"], k["add"], stamped=False, **dict(it["body"], password=pw))
-                else:
-                    t.create(it["key"], k["res"], k["add"], stamped=kind not in UNSTAMPED, **it["body"])
+                try:
+                    if kind == "user":
+                        n = it["key"].rsplit(".", 1)[-1]
+                        pw = secrets.get(pov.id, TEST_PW.format(n=n)) or gen_password()
+                        secrets.put(pov.id, TEST_PW.format(n=n), pw)
+                        t.create(it["key"], k["res"], k["add"], stamped=False, **dict(it["body"], password=pw))
+                    else:
+                        t.create(it["key"], k["res"], k["add"], stamped=kind not in UNSTAMPED, **it["body"])
+                except KitError as e:
+                    if kind in UNSTAMPED and zid_managed(e):   # the demo kit's rule: ZIdentity owns the users
+                        pov.cfg.setdefault("identity", {})["users_in"] = "zidentity"
+                        pov.save()
+                        raise KitError("This tenant keeps its users in ZIdentity, so ZIA can't hold the POV's test "
+                                       "users. Make the change list again: it now creates them in ZIdentity, on "
+                                       "<vanity>.zslogin.net, and the customer approves it. Nothing else was changed "
+                                       "beyond what's in the ledger.") from e
+                    raise
                 log("ok", f"Created {it['name']}")
         for kind in RULE_KINDS:
             group = [i for i in mine if i["kind"] == kind]

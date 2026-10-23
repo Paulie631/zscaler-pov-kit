@@ -326,7 +326,7 @@ const W={step:0,checks:null,plan:null,role:null};
 function done(i){const c=S&&S.current;if(!c)return false;
   const clients=Object.values(c.clients);const s=c.settings;
   return [true, clients.length&&clients[0].saved,
-    !!(s.pilot_group||s["identity.test_users"]||s["identity.pilot"]=="create"), W.checks&&!W.checks.some(x=>x.status=="fail"),
+    !!(s.pilot_group||+s["identity.test_users"]>0||["create","test"].includes(s["identity.pilot"])), W.checks&&!W.checks.some(x=>x.status=="fail"),
     !!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), (c.ledger.owned||0)+(c.ledger.adopted||0)>0, false][i]}
 function firstOpen(){if(!S.current)return 0;for(let i=1;i<7;i++)if(!done(i))return i;return 7}
 function wsteps(){$("#wsteps").innerHTML=STEPS.map((t,i)=>`<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":i+1}</span><span>${esc(t)}</span></li>`).join("");
@@ -346,8 +346,8 @@ const KIND={label:"rule label",url_category:"custom URL category",network_servic
 async function pilotPicker(s){
   const mode=()=>($$("input[name='s_identity.pilot']").find(x=>x.checked)||{}).value||"existing";
   const emails=()=>$("#s_pilot_emails").value.split(/[\s,;]+/).map(x=>x.trim().toLowerCase()).filter(Boolean);
-  const show=()=>{const m=mode();$("#wexisting")&&($("#wexisting").style.display=m=="create"?"none":"");$("#wcreate")&&($("#wcreate").style.display=m=="create"?"":"none");
-    $$(".wtest").forEach(x=>x.style.display=m=="create"?"none":"");who()};
+  const show=()=>{const m=mode();$("#wexisting")&&($("#wexisting").style.display=m=="existing"?"":"none");$("#wcreate")&&($("#wcreate").style.display=m=="create"?"":"none");
+    $("#wtestopt")&&($("#wtestopt").style.display=m=="test"?"":"none");$$(".wpilot").forEach(x=>x.style.display=m=="test"?"none":"");who()};
   const who=()=>{const o=W.opts;if(!o||!o.zidentity){$("#wwho").textContent="";return}
     const known=new Set(o.zid_users.map(u=>u.login.toLowerCase())),es=emails(),miss=es.filter(e=>!known.has(e));
     const make=mode()=="create"&&$("#wnewusers")&&$("#wnewusers").checked;
@@ -420,23 +420,24 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         $("#wsec").value="";await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }
   else if(W.step==2){
-    const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), scope=s["zpa.scope"]||"scim", mk=s["identity.pilot"]||"existing";
+    const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), scope=s["zpa.scope"]||"scim", mk=s["identity.pilot"]||(+s["identity.test_users"]>0?"test":"existing");
     st.innerHTML=head(2,"Pilot users","Who the POV applies to. Every rule the kit creates is scoped to these users only. The next step checks each product can see them and that they're entitled.")+
       `<div class="form">
         ${zia||has("zpa")?`<span class="lbl">Pilot group</span><div>
-          <label class="opt" style="margin-top:0"><input type="radio" name="s_identity.pilot" value="existing" ${mk!="create"?"checked":""}><span><b>Use one of the customer's groups</b><br><span class="muted">Every POV rule applies to its members only.</span></span></label>
-          <div id="wexisting" style="margin:6px 0 0 26px;${mk=="create"?"display:none":""}">${zia?`<input type="text" id="s_pilot_group" list="wgroups" value="${esc(s.pilot_group||"")}" placeholder="pick or type the group's name as ZIA lists it"><datalist id="wgroups"></datalist>`:""}</div>
+          <label class="opt" style="margin-top:0"><input type="radio" name="s_identity.pilot" value="existing" ${mk=="existing"?"checked":""}><span><b>Use one of the customer's groups</b><br><span class="muted">Every POV rule applies to its members only.</span></span></label>
+          <div id="wexisting" style="margin:6px 0 0 26px;${mk!="existing"?"display:none":""}">${zia?`<input type="text" id="s_pilot_group" list="wgroups" value="${esc(s.pilot_group||"")}" placeholder="pick or type the group's name as ZIA lists it"><datalist id="wgroups"></datalist>`:""}</div>
           <label class="opt"><input type="radio" name="s_identity.pilot" value="create" ${mk=="create"?"checked":""}><span><b>Create one for the POV in ZIdentity</b><br><span class="muted"><code>${esc(c.prefix)} - pilot users</code>, with the users below in it. In the change list like everything else, so it's made only after approval, and removed at teardown. The customer then gives it its entitlements (ZIdentity's API can't).</span></span></label>
           <div id="wcreate" style="margin:6px 0 0 26px;${mk=="create"?"":"display:none"}"><label class="chk"><input type="checkbox" id="wnewusers" ${s["identity.create_users"]=="yes"?"checked":""}>Also create the users who don't exist in ZIdentity yet <span class="muted">(lab tenants; you set their passwords in ZIdentity)</span></label></div>
+          ${zia?`<label class="opt"><input type="radio" name="s_identity.pilot" value="test" ${mk=="test"?"checked":""}><span><b>Test users made by the kit</b> <span class="muted">(labs, or no pilot group yet)</span><br><span class="muted">Like the SE demo kit: a group, a department and the users in ZIA, with passwords kept in this computer's keychain. If the tenant keeps its users in ZIdentity, they're made there instead, on <code>${esc((c.settings.vanity_domain||"vanity").replace(/\.zslogin\.net$/,""))}.zslogin.net</code>, and you set their passwords there.</span></span></label>
+          <div id="wtestopt" style="margin:6px 0 0 26px;${mk=="test"?"":"display:none"}"><input type="number" id="s_identity.test_users" min="1" max="10" value="${esc(s["identity.test_users"]||1)}" style="width:70px"> users, named <code>${esc(c.prefix.toLowerCase())}-pilot-1</code>, <code>-2</code>… at <input type="text" id="s_identity.test_domain" value="${esc(s["identity.test_domain"]||"")}" placeholder="your users' domain (detected)" style="width:220px"></div>`:""}
         </div>`:""}
-        <span class="lbl">Pilot users</span><div>
+        <span class="lbl wpilot">Pilot users</span><div class="wpilot">
           <div class="row" style="gap:8px"><input type="text" id="wpick" list="wusers" placeholder="add a user: start typing a name or email" style="flex:1"><datalist id="wusers"></datalist><button id="wadd">Add</button></div>
           <textarea id="s_pilot_emails" placeholder="jane@acme.com, raj@acme.com" style="margin-top:8px">${esc((s.pilot_emails||[]).join(", "))}</textarea>
           <div id="wwho" class="hint"></div></div>
         <span class="lbl">Identity provider</span><select id="s_identity.idp"><option value="">Detect it</option>${["okta","entra","ping","duo","google","onelogin"].map(x=>`<option ${s["identity.idp"]==x?"selected":""}>${x}</option>`).join("")}</select>
         ${has("zia")?`<span class="lbl">Sign-in sites not decrypted</span><input type="text" id="s_identity.bypass_domains" value="${esc((s["identity.bypass_domains"]||[]).join(", "))}" placeholder="leave empty to use the IdP's own sites">
-        <span class="lbl">Rule placement</span><div><label class="chk"><input type="radio" name="s_placement" value="top" ${s.placement!="bottom"?"checked":""}>Above the customer's rules</label> <label class="chk"><input type="radio" name="s_placement" value="bottom" ${s.placement=="bottom"?"checked":""}>Below them</label></div>
-        <span class="lbl wtest">No pilot group yet?</span><div class="wtest"><input type="number" id="s_identity.test_users" min="0" max="10" value="${esc(s["identity.test_users"]||0)}" style="width:80px"> test users created by the POV <div class="hint">Only where ZIA keeps its own users (Hosted DB). Not usable for ZPA, which takes users from the IdP.</div></div>`:""}
+        <span class="lbl">Rule placement</span><div><label class="chk"><input type="radio" name="s_placement" value="top" ${s.placement!="bottom"?"checked":""}>Above the customer's rules</label> <label class="chk"><input type="radio" name="s_placement" value="bottom" ${s.placement=="bottom"?"checked":""}>Below them</label></div>`:""}
       </div>
       ${has("zpa")?`<div class="group-h">Private Access (ZPA)</div><div class="form">
         <span class="lbl">POV app name</span><input type="text" id="s_zpa.app_name" value="${esc(s["zpa.app_name"]||"")}" placeholder="HR portal">
@@ -451,6 +452,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     bindNav(async()=>{const vals={};
       $$("#wstage [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
       if($("#wnewusers"))vals["identity.create_users"]=$("#wnewusers").checked?"yes":"no";
+      const pm=($$("input[name='s_identity.pilot']").find(x=>x.checked)||{}).value;if(pm&&pm!="test")vals["identity.test_users"]="0";
       ["placement","zpa.scope","identity.pilot"].forEach(k=>{const r=$$(`input[name='s_${k}']`).find(x=>x.checked);if(r)vals[k]=r.value});
       try{await api("/api/settings",{values:vals});await load();W.checks=null;W.step=3;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }

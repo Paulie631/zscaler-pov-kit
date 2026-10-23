@@ -87,16 +87,18 @@ def discover(t, pov, snaps):
     elif zpa.get("pilot_saml"):
         parts.append(f"ZPA: SAML attribute {zpa['pilot_saml']['name']}")
     checks.append(check("id-signin", "How pilot users sign in", INFO, "; ".join(parts)))
-    if (zia.get("test_users") or {}).get("count"):
-        checks.append(check("id-testusers", "Pilot users", INFO,
-                            f"{zia['test_users']['count']} test users the POV creates in ZIA's Hosted DB",
-                            "They exist only in ZIA, so ZPA (SCIM or SAML from the IdP) can't use them."))
-
-    if not emails:
+    from .products.zid import test_mode, users_in_zidentity
+    if test_mode(pov.cfg):   # kit-made test users: nothing of the customer's to check, only where they'll live
+        where = ("ZIdentity, on its own domain (set their passwords there)" if users_in_zidentity(pov.cfg)
+                 else "ZIA (passwords in this computer's keychain)")
+        checks.append(check("id-testusers", "Pilot users", INFO, f"test users the POV creates in {where}",
+                            "Like the SE demo kit: ZIA first, or ZIdentity when the tenant keeps its users there. "
+                            "ZPA takes users from the IdP, so it can't use them."))
+        emails = []
+    elif not emails:
         checks.append(check("id-emails", "Pilot users named", WARN, "no pilot_emails yet",
                             "`pov-kit set pilot_emails a@acme.com,b@acme.com`, so the kit can check each user is in "
                             "the pilot group and entitled."))
-        return snap, checks
 
     grp = (zia.get("pilot_group") or {})
     missing, outside, unentitled = [], [], []
@@ -134,10 +136,12 @@ def discover(t, pov, snaps):
         snap["users"].append(u)
 
     made_here = str(grp.get("id") or "").startswith("{ref:")   # the POV makes the group (and maybe the users)
-    if "zia" in pov.products and made_here and c.get("pilot") == "create":
+    if not emails:
+        pass
+    elif "zia" in pov.products and made_here and c.get("pilot") == "create":
         checks.append(check("id-zia-users", "Pilot users are in ZIA", INFO if missing else OK,
                             f"not yet: {', '.join(missing)}" if missing else f"all {len(emails)}",
-                            "ZIA gets each user, and the POV's group, at their first sign-in."
+                            "ZIdentity sends them, with the POV's group, once they're entitled."
                             if missing else ""))
     elif "zia" in pov.products:
         checks.append(check("id-zia-users", "Pilot users are in ZIA", WARN if missing else OK,
@@ -150,7 +154,9 @@ def discover(t, pov, snaps):
                                 "Add them to the group in the customer's directory; the POV rules only apply to "
                                 "members." if outside else ""))
     from .products.zid import enabled as zid_pilot
-    if zid and zid_pilot(pov.cfg):   # the group is the POV's own: its entitlement is a customer action after apply
+    if not emails:
+        pass
+    elif zid and zid_pilot(pov.cfg):   # the group is the POV's own: its entitlement is a customer action after apply
         checks.append(check("id-entitlements", "ZIdentity entitlements", INFO if unentitled else OK,
                             "; ".join(unentitled) if unentitled else "every pilot user is entitled",
                             "If your tenant entitles chosen users or groups, give the POV's pilot group its "

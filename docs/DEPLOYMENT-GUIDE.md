@@ -121,14 +121,18 @@ checking its SHA-256, and **Roll back** goes back one version.
 2. **Pilot users**: the pilot group, its members, their identity provider (so its sign-in and MFA sites stay out of
    SSL inspection), and per-product details: the ZPA app, SCIM group or SAML attribute, the CASB tenant.
    - **Use one of the customer's groups:** pick it from the list the kit reads from ZIA (or type its name).
-   - **Create one for the POV in ZIdentity:** the kit makes `ZPOV - pilot users` and puts the users in it, once the
-     change list is approved, and removes it at teardown. Existing users are only added to the group. In a lab tenant,
-     tick **Also create the users who don't exist** and the kit creates them too (you set their passwords in
-     ZIdentity). ZIA only learns ZIdentity users and their groups when they sign in, so Apply creates the group and
-     then stops until **one pilot user has signed in once** (Client Connector, or the ZIA sign-in page); click
-     **Apply** again after that and it carries on. Where the tenant entitles chosen users or groups rather than
-     everyone, the customer also gives the group Internet & SaaS (and Private Access with ZPA) in ZIdentity, since its
-     API can't grant entitlements.
+   - **Create one for the POV in ZIdentity:** the kit makes `ZPOV - pilot users` and adds the customer's users to
+     it, once the change list is approved, and removes it at teardown. Existing users are only added to the group.
+     ZIdentity only sends users and groups to ZIA once they have the **Internet & SaaS** entitlement, and its API can't
+     grant it: where the tenant entitles chosen users or groups (common with Okta), the customer gives the group that
+     entitlement in ZIdentity. Apply checks it, stops at once if it's missing, and otherwise waits up to three minutes
+     for ZIA to have the group; click **Apply** again after granting it and it carries on.
+   - **Test users made by the kit** (labs, or no pilot group yet): as the SE demo kit does, a group, a department
+     and 1 to 10 users (`zpov-pilot-1@<your domain>`…) straight in ZIA, with generated passwords in your keychain
+     (**Next steps → Test users → Show password**). Nothing to entitle or wait for. If ZIA refuses because the tenant
+     keeps its users in ZIdentity, apply says so, and the next change list makes them in ZIdentity on
+     `<vanity>.zslogin.net` instead, where you set their passwords (Administration → Authentication → Directory →
+     Users); a domain your IdP owns, such as Okta's, can't take a ZIdentity password.
    - Add users by typing a name or email: the list comes from ZIdentity, and the step shows who isn't there.
 3. **Preflight**: read-only checks of every product and of the pilot users across products. Fix every FAIL before
    going on; each one says how.
@@ -199,7 +203,9 @@ repository is public).
 | Preflight: ZIdentity entitlements FAIL | ZIdentity's API can't grant them: the customer assigns the missing service to the pilot group in ZIdentity |
 | Preflight: pilot group doesn't exist | Pick an existing group from the list, or choose **Create one for the POV in ZIdentity** |
 | Preflight: ZDX readable FAIL (403) | The API client has no ZDX role: in ZIdentity → API Clients, add one (view only is enough), or take ZDX out of the POV |
-| Apply stops: "ZIA doesn't have it yet" | Have one pilot user sign in once (Client Connector or the ZIA sign-in page); grant the group's entitlement first if the tenant needs it. Then click **Apply** again: it carries on and creates nothing twice |
+| Apply stops: "don't have the Internet & SaaS entitlement" | In ZIdentity, give the POV's pilot group that entitlement, then click **Apply** again: it carries on and creates nothing twice. In a lab, **Test users made by the kit** avoids it |
+| Apply stops: "keeps its users in ZIdentity" | Make the change list again (the test users now go in ZIdentity, on `<vanity>.zslogin.net`), get it approved, apply, then set their passwords in ZIdentity |
+| No option to set a user's password in ZIdentity | The user is on a domain your IdP (Okta, Entra…) owns, which signs them in. Use a user on `<vanity>.zslogin.net` |
 | Delete: "still in the customer's tenant" | Remove the POV first (Handover → Remove the POV) or export it to Terraform, then delete |
 | Apply: "ZIA has changes waiting to be activated" | Another admin's changes are pending. The customer activates or discards them; the kit never does |
 | Apply: "the tenant changed since the customer approved" | Something the plan depends on changed. Make the change list again and get it approved again |

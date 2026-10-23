@@ -34,7 +34,6 @@ def test_plan_makes_the_group_users_and_customer_actions(zpov, tenant_for):
     assert by["zid.user.new-user-acme-com"]["body"]["login_name"] == "new.user@acme.com"
     assert by["zid.group.members"]["body"]["users"] == ["z1", "{ref:zid.user.new-user-acme-com}"]
     assert by["zid.ca.entitlement"]["action"] == "customer_action" and by["zid.ca.passwords"]
-    assert by["zid.ca.signin"]["action"] == "customer_action"
     rules = [i for i in items if i["product"] == "zia" and i["body"].get("groups")]
     assert rules and all(i["body"]["groups"] == ["{ref:zid.zia_group}"] for i in rules)
     assert not [c for c in checks if c["status"] == "fail"]
@@ -178,7 +177,8 @@ def test_fix_drift_recreates_a_deleted_group_and_rescopes_the_rules(zpov, tenant
     approve(zpov, tenant_for)
     lifecycle.apply(zpov, tenant_for, log)
     old = tenant.zid_groups[0]["id"]
-    tenant.call("zid.groups", "delete_group", old)              # deleted in the ZIdentity console
+    tenant.zid_groups[0]["members"] = []                        # emptied and deleted in the ZIdentity console
+    tenant.call("zid.groups", "delete_group", old)
     lifecycle.status(zpov, tenant_for, fix=True)
     new = next(g for g in tenant.groups if g.get("_zid") == tenant.zid_groups[0]["id"])
     assert tenant.zid_groups[0]["id"] != old
@@ -210,3 +210,62 @@ def test_delete_refused_while_a_job_runs_and_ids_are_checked(pov, monkeypatch):
     assert pov.dir.exists()
     with pytest.raises(KitError, match="isn't a POV ID"):
         povs.Pov("../../etc")
+
+
+# ---- test users made by the kit, as the SE demo kit makes them (0.9.4)
+@pytest.fixture
+def tpov(home, tenant, monkeypatch):
+    monkeypatch.setattr(zidmod, "WAIT", (0, 0))
+    tenant.zidentity = True
+    tenant.saml = False                                          # ZIA's own users (Hosted DB), ZIdentity in front
+    p = povs.new("Acme Corp", ["zia", "zcc"])
+    p.cfg.update(vanity_domain="acme", identity={"pilot": "test", "test_users": 2})
+    p.save()
+    return p
+
+
+def test_test_users_go_in_zia_first(tpov, tenant, tenant_for, home):
+    items, checks = approve(tpov, tenant_for)
+    assert not [c for c in checks if c["status"] == "fail"], [c for c in checks if c["status"] == "fail"]
+    by = {i["key"]: i for i in items}
+    assert by["zia.user_group"]["name"] == "ZPOV - pilot users" and by["zia.user.2"]
+    assert not [i for i in items if i["product"] == "zid"]
+    lifecycle.apply(tpov, tenant_for, log)
+    grp = next(g for g in tenant.groups if g["name"] == "ZPOV - pilot users")
+    assert tenant.by_name("url_filtering", "ZPOV: Block gambling")["groups"] == [grp["id"]]
+    assert (tpov.id, "zia-test-user-1") in home                  # its password, in the keychain
+
+
+def test_test_users_switch_to_zidentity_when_zia_refuses(tpov, tenant, tenant_for):
+    approve(tpov, tenant_for)
+    tenant.zia_users_zid_managed = True
+    with pytest.raises(KitError, match="keeps its users in ZIdentity"):
+        lifecycle.apply(tpov, tenant_for, log)
+    assert tpov.cfg["identity"]["users_in"] == "zidentity" and tpov.products[0] == "zid"
+    items, checks = approve(tpov, tenant_for)
+    assert not [c for c in checks if c["status"] == "fail"]
+    by = {i["key"]: i for i in items}
+    assert by["zid.user.zpov-pilot-1-acme-zslogin-net"]["body"]["login_name"] == "zpov-pilot-1@acme.zslogin.net"
+    assert not [i for i in items if i["kind"] in ("user", "user_group") and i["product"] == "zia"]
+    lifecycle.apply(tpov, tenant_for, log)
+    zg = tenant.zid_groups[0]
+    assert len(zg["members"]) == 2
+    lifecycle.teardown(tpov, tenant_for, log)
+    assert not tenant.zid_groups and not lifecycle.ledger(tpov).active()
+
+
+def test_apply_stops_at_once_when_the_group_isnt_entitled(zpov, tenant, tenant_for):
+    tenant.zid_entitle_new = False
+    tenant.entitlements = {}
+    tenant.zid_provisions = False
+    approve(zpov, tenant_for)
+    with pytest.raises(KitError, match="Internet & SaaS entitlement, so ZIdentity won't send them"):
+        lifecycle.apply(zpov, tenant_for, log)
+
+
+def test_teardown_takes_members_out_before_deleting_the_group(zpov, tenant, tenant_for):
+    approve(zpov, tenant_for)
+    lifecycle.apply(zpov, tenant_for, log)
+    lifecycle.teardown(zpov, tenant_for, log)
+    assert not tenant.zid_groups
+    assert any(u["id"] == "z1" for u in tenant.zid_users)        # Jane herself is untouched

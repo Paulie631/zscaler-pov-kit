@@ -62,6 +62,8 @@ class FakeTenant:
         self.zid_users = [{"id": "z1", "loginName": "jane@acme.com"}, {"id": "z2", "loginName": "raj@acme.com"}]
         self.zid_groups = []
         self.zid_provisions = True    # ZIdentity provisions its groups to ZIA (once entitled, in a real tenant)
+        self.zid_entitle_new = True   # new ZIdentity users get Internet & SaaS (a tenant that entitles everyone)
+        self.zia_users_zid_managed = False   # ZIA refuses user/group writes: ZIdentity owns the users
         self.entitlements = {"z1": ["Internet & SaaS", "Private Access"], "z2": ["Internet & SaaS"]}
         self.users = [{"id": 91, "name": "Jane Roe", "email": "jane@acme.com", "groups": [{"id": 77}]},
                       {"id": 92, "name": "Raj Patel", "email": "raj@acme.com", "groups": [{"id": 78}]}]
@@ -92,6 +94,8 @@ class FakeTenant:
                     raise KitError("409 user exists")
                 o = {"id": f"zu{self._id()}", "loginName": kw["login_name"], "displayName": kw.get("display_name")}
                 self.zid_users.append(o)
+                if self.zid_entitle_new:   # a tenant that entitles everyone
+                    self.entitlements[o["id"]] = ["Internet & SaaS"]
                 return copy.deepcopy(o)
             if method in ("get_user", "delete_user"):
                 hit = next((u for u in self.zid_users if u["id"] == str(a[0])), None)
@@ -127,6 +131,12 @@ class FakeTenant:
             if method == "add_users_to_group":
                 hit["members"] += [str(x) for x in kw["id"] if str(x) not in hit["members"]]
                 return {}
+            if method == "remove_user_from_group":
+                hit["members"] = [m for m in hit["members"] if m != str(a[1])]
+                return {}
+            if method == "delete_group" and hit["members"]:   # as live ZIdentity answers (2026-10)
+                raise KitError("409 Resource in use - Group cannot be deleted because it is associated with one or "
+                               "more users.")
             if method == "delete_group":
                 self.zid_groups.remove(hit)
                 self.groups = [g for g in self.groups if g.get("_zid") != hit["id"]]   # ZIdentity deprovisions it
@@ -213,6 +223,8 @@ class FakeTenant:
         if method.startswith("list"):
             q = str((kw.get("query_params") or {}).get("search", "")).lower()
             return copy.deepcopy([r for r in rows if q in r["name"].lower() or q in str(r.get("email", "")).lower()])
+        if method.startswith("add") and self.zia_users_zid_managed:
+            raise KitError("400 UNMODIFIABLE: OneIdentityUserLogin enabled users will have read only access")
         if method.startswith("add"):
             if any(r["name"] == kw["name"] for r in rows):
                 raise KitError("400 duplicate name")
