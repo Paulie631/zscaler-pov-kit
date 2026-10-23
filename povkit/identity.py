@@ -89,7 +89,8 @@ def discover(t, pov, snaps):
     checks.append(check("id-signin", "How pilot users sign in", INFO, "; ".join(parts)))
     from .products.zid import test_mode, users_in_zidentity
     if test_mode(pov.cfg):   # kit-made test users: nothing of the customer's to check, only where they'll live
-        where = ("ZIdentity, on its own domain (set their passwords there)" if users_in_zidentity(pov.cfg)
+        in_zid = users_in_zidentity(pov.cfg) or c.get("pilot") == "create"   # a ZIdentity POV group's test users
+        where = ("ZIdentity, on its own domain (set their passwords there)" if in_zid
                  else "ZIA (passwords in this computer's keychain)")
         checks.append(check("id-testusers", "Pilot users", INFO, f"test users the POV creates in {where}",
                             "Like the SE demo kit: ZIA first, or ZIdentity when the tenant keeps its users there. "

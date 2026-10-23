@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.16
+
+- Preflight says the right place for a ZIdentity POV group's test users (ZIdentity, not ZIA). Seen live.
+
 ## 0.9.15
 
 - **Quick start.** Start a POV asks for the customer, the products and the API client (or the one Claude Desktop uses).
