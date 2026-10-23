@@ -1,9 +1,9 @@
 """Proving success criteria. A criterion passes only when every proof it lists agrees.
 
   probe     the newest imported probe run that covers it: every probe spec got its expected outcome
-  api       the product's automated API proof (`pov-kit test --api`: connector health, Detection API scans,
-            device scores, rule scoping...). Where a product has none yet (ZIA's log checks), an attestation stands
-            in for it ("event seen in Web Insights"), marked so in the report
+  api       the product's automated API proof (`pov-kit test --api`: ZIA rule state, scoping and URL categories,
+            connector health, Detection API scans, device scores...). Where a criterion has none, an attestation
+            stands in for it, marked so in the report
   attested  a person's note (and optional screenshot) recorded with `pov-kit attest`
 """
 from __future__ import annotations

@@ -12,7 +12,7 @@ import re
 from . import GuardError
 from .changelist import resolve_refs
 
-READ = re.compile(r"^(list|get|search|status)")
+READ = re.compile(r"^(list|get|search|status|lookup)")
 
 
 def is_read(method: str) -> bool:

@@ -35,9 +35,11 @@ ACTIONS = {
     "file_type": {"filtering_action": {"BLOCK", "ALLOW", "CAUTION"}, "operation": {"DOWNLOAD", "UPLOAD", "UPLOAD_DOWNLOAD"}},
     "dlp": {"action": {"BLOCK", "ALLOW"}},
     "dns": {"action": {"BLOCK", "ALLOW"}},
+    "firewall": {"action": {"BLOCK_DROP", "BLOCK_RESET", "ALLOW"}},
 }
 # kind -> the product that builds it
 KINDS = {"url_filtering": "zia", "ssl": "zia", "cloud_app_control": "zia", "file_type": "zia", "dlp": "zia", "dns": "zia",
+         "firewall": "zia",
          "zpa_app": "zpa", "aiguard_block": "aiguard", "zdx_deeptrace": "zdx", "casb_dlp": "casb"}
 SHORT = {"zia": "ZIA", "zcc": "Client Connector", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB"}
 IPV4 = re.compile(r"^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$")
@@ -77,6 +79,9 @@ ZIA (Internet Access), scoped to the pilot group:
    "operation": "DOWNLOAD|UPLOAD|UPLOAD_DOWNLOAD", "file_types": [file type names from the snapshot]}
   {"kind": "dlp", "action": "BLOCK|ALLOW", "engines": [DLP engine names from the snapshot]}
   {"kind": "dns", "action": "BLOCK|ALLOW", "res_categories": [category IDs from the snapshot]}
+  {"kind": "firewall", "action": "BLOCK_DROP|BLOCK_RESET|ALLOW", "tcp_ports": ["3389", "6000-6010"],
+   "udp_ports": ["..."], "dest_addresses": ["203.0.113.10", "198.51.100.0/24"] (optional; any destination if empty)}
+  (Firewall rules see traffic only from devices on Z-Tunnel 2.0.)
 ZPA (Private Access): another private app, published through the POV's own App Connectors, with its own access rule
 for the pilot users only. Its domains must not belong to a customer segment (zpa.segment_domains in the snapshot).
   {"kind": "zpa_app", "domains": ["app.internal.example", "10.1.2.3"], "tcp_ports": ["443", "8000-8080"],
@@ -217,6 +222,20 @@ def zia_change(ch, out, zia, snaps):
         if bad or not types_:
             return None, f"file types not in this tenant: {', '.join(bad) or 'none given'}"
         out["file_types"] = types_
+    if kind == "firewall":
+        tcp = [str(x).strip() for x in ch.get("tcp_ports") or [] if str(x).strip()]
+        udp = [str(x).strip() for x in ch.get("udp_ports") or [] if str(x).strip()]
+        bad = [x for x in tcp + udp if not PORTS.match(x) or any(int(n) > 65535 or int(n) < 1
+                                                                  for n in re.findall(r"\d+", x))]
+        if bad or not (tcp or udp):
+            return None, f"not ports: {', '.join(bad) or 'none given'}"
+        if len(tcp) + len(udp) > 20:
+            return None, "more than 20 ports; a person should build a service that large"
+        dests = [str(x).strip() for x in ch.get("dest_addresses") or [] if str(x).strip()]
+        bad = [x for x in dests if not IPV4.match(x) or x.endswith("/0")]
+        if bad:
+            return None, f"not IPv4 addresses or ranges: {', '.join(bad)}"
+        out.update(tcp_ports=tcp, udp_ports=udp, dest_addresses=dests[:20])
     if kind == "dlp":
         engines = [str(x) for x in ch.get("engines") or []]
         known = zia.get("dlp_engines") or {}
@@ -561,6 +580,18 @@ def zia_items(pov, snap, scope, affects, placement, cac_actions):
                         severity="RULE_SEVERITY_HIGH" if ch["action"] == "BLOCK" else "RULE_SEVERITY_MEDIUM")
         elif ch["kind"] == "dns":
             body.update(action=ch["action"], res_categories=ch["res_categories"])
+        elif ch["kind"] == "firewall":   # its own network service, then the rule that uses it
+            sname = naming.safe_name(naming.name(P, f"UC{n} {ch['name']}"), P)
+            skey = f"zia.network_service.uc{n:02d}-{i}"
+            # the SDK takes (dest, protocol, start[, end]) per port or range
+            ports = ([["dest", "tcp", *p.split("-")] for p in ch.get("tcp_ports") or []]
+                     + [["dest", "udp", *p.split("-")] for p in ch.get("udp_ports") or []])
+            out.append(item("zia", "network_service", skey, sname, criteria=[u["id"]],
+                            affects="nobody until a rule uses it", why=f"Ports for {u['id']}.",
+                            body={"name": sname, "ports": ports, "description": desc}))
+            body.update(action=ch["action"], nw_services=["{ref:" + skey + "}"], enable_full_logging=True)
+            if ch.get("dest_addresses"):
+                body["dest_addresses"] = ch["dest_addresses"]
         out.append(item("zia", ch["kind"], key, nm, rule_type=rule_type, placement=placement, affects=affects,
                         criteria=[u["id"]], why=f"{u['id']}: {ch['why'] or u['spec']['summary']}"[:300], body=body))
     return out, notes

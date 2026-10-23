@@ -148,6 +148,11 @@ class FakeTenant:
             return [{"id": "sa1", "name": "memberOf"}, {"id": "sa2", "name": "department"}]
         if resource == "user_management":
             return self._users(method, a, kw)
+        if resource == "url_categories" and method == "lookup":
+            cat = {"www.bet365.com": "GAMBLING", "www.pokerstars.com": "GAMBLING"}
+            return ([{"url": h, "urlClassifications": [cat.get(h, "OTHER_GAMES")]} for h in kw["urls"]], None)
+        if resource == "zins.web_traffic":
+            return [{"name": "BLOCK", "total": 42}]
         if resource == "url_categories":
             if method == "list_categories" and not (kw.get("query_params") or {}).get("custom_only"):
                 return [{"id": c} for c in self.cats] + copy.deepcopy(self.rules["url_category"])

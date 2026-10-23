@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.8
+
+- **ZIA's success criteria get an automated proof.** For each criterion, the POV rules behind it are checked in the
+  tenant (present, enabled, applying only to the pilot group), and ZIA's own URL lookup confirms each test site falls
+  in the rule's categories. Insights adds tenant-wide context (blocked transactions in the 7 days to yesterday:
+  Insights can't filter to one user or rule and lags a day). The probe pack stays the proof that pilot traffic was
+  handled; attestations are still accepted where neither applies.
+- **Firewall use cases.** Claude can propose a cloud firewall rule (ports, optional destinations, block or allow):
+  the kit builds its own network service and a rule scoped to the pilot group, like every other use case.
+- **ZPA preflight** says to set the ZPA customer ID when ZPA answers "not found" without one (seen live).
+
 ## 0.9.7
 
 Follow-ups from the live lab test:

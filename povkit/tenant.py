@@ -67,7 +67,7 @@ class Tenant:
                 recorder.write(self.pov, resource, method, a, kw, _plain(out))
             return _plain(out)
         result, resp, err = out
-        write = not re.match(r"(list|get|search|status)", method)
+        write = not re.match(r"(list|get|search|status|lookup)", method)
         if err or write:
             self.pov.log("api", f"{self.which} {resource}.{method}", "error" if err else "ok",
                          ms=int((time.time() - t0) * 1000), **({"error": str(err)[:500]} if err else {}))

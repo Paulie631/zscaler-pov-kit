@@ -318,3 +318,40 @@ def test_release_notes_and_handover_export(tpov, tenant, tenant_for, home):
     out = list((BASE / "fixtures").glob(f"{tpov.id}-*.jsonl"))
     assert out and "Acme Sales" not in out[0].read_text()
     assert not tpov.path("recordings").exists()
+
+
+def test_zia_api_proof_checks_config_and_url_categories(tpov, tenant, tenant_for):
+    approve(tpov, tenant_for)
+    lifecycle.apply(tpov, tenant_for, log)
+    ran = lifecycle.api_proofs(tpov, tenant_for, ["IS-URL-01"])
+    assert ran["IS-URL-01"]["status"] == "pass", ran
+    assert "Insights: 42 blocked" in ran["IS-URL-01"]["detail"]
+    tenant.by_name("url_filtering", "ZPOV: Block gambling")["state"] = "DISABLED"
+    ran = lifecycle.api_proofs(tpov, tenant_for, ["IS-URL-01"])
+    assert ran["IS-URL-01"]["status"] == "fail" and "disabled" in ran["IS-URL-01"]["detail"]
+    all_ran = lifecycle.api_proofs(tpov, tenant_for)
+    zia_ids = [k for k in all_ran if k.startswith(("IS-", "AI-GEN"))]
+    assert len(zia_ids) >= 10                                   # ZIA's criteria now have an automated proof
+
+
+def test_firewall_use_case_validates_and_builds(pov, tenant, tenant_for):
+    from povkit import usecases
+    ok, why = usecases.validate_change({"kind": "firewall", "name": "No RDP", "action": "BLOCK_DROP",
+                                        "tcp_ports": ["3389", "6000-6010"], "dest_addresses": ["203.0.113.10"]},
+                                       {"zia": {}}, pov)
+    assert ok and not why and ok["tcp_ports"] == ["3389", "6000-6010"]
+    bad, why = usecases.validate_change({"kind": "firewall", "name": "x", "action": "BLOCK_DROP",
+                                         "tcp_ports": ["99999"]}, {"zia": {}}, pov)
+    assert not bad and "not ports" in why
+    bad, why = usecases.validate_change({"kind": "firewall", "name": "x", "action": "ALLOW", "tcp_ports": ["22"],
+                                         "dest_addresses": ["0.0.0.0/0"]}, {"zia": {}}, pov)
+    assert not bad and "not IPv4" in why
+    usecases.save(pov, [{"id": "UC-01", "status": "accepted", "title": "No RDP out",
+                         "spec": {"summary": "Block RDP from pilot devices", "changes": [ok], "test": {}}}])
+    items, _, _, _ = lifecycle.plan(pov, tenant_for)
+    by = {i["key"]: i for i in items}
+    svc = by["zia.network_service.uc01-1"]
+    assert svc["body"]["ports"] == [["dest", "tcp", "3389"], ["dest", "tcp", "6000", "6010"]]
+    rule = by["zia.uc01.1"]
+    assert rule["kind"] == "firewall" and rule["body"]["nw_services"] == ["{ref:zia.network_service.uc01-1}"]
+    assert rule["body"]["groups"] == [77] and rule["body"]["dest_addresses"] == ["203.0.113.10"]

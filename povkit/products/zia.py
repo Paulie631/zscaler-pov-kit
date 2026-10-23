@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 
 from ..core import GuardError, KitError, naming, secrets
@@ -759,6 +760,73 @@ class ZIA(Product):
             log("ok", "ZIA changes activated")
         out.append(check("zia-teardown", "ZIA POV objects removed", OK if not out else WARN, f"{deleted} deleted"))
         return out
+
+    # ---------------------------------------------------------------- proofs (read-only)
+    def api_proof(self, t, pov, ledger, criterion):
+        """ZIA's automated proof for a success criterion, in two parts:
+          configuration  every POV rule behind it is in the tenant, enabled, applies only to the pilot group, and
+                         (for URL criteria) ZIA's own URL lookup puts each test site in the rule's categories
+          activity       Insights counts since the approval (tenant-wide: Insights can't filter to one user or
+                         rule), reported as context; the probe pack stays the proof that pilot traffic was handled
+        Passes when the configuration is right."""
+        from ..core.changelist import ChangeList
+        try:
+            plan_items = ChangeList(pov.dir).plan()["items"]
+        except KitError:
+            return {"status": "incomplete", "detail": "no change list yet"}
+        rules = [i for i in plan_items if i["product"] == "zia" and i["action"] == "create"
+                 and i["kind"] in RULE_KINDS and criterion["id"] in (i.get("criteria") or [])]
+        if not rules:
+            return None   # nothing of the POV's to check (an attestation stands in)
+        problems, checked = [], []
+        for it in rules:
+            e = ledger.find(it["key"])
+            live = self.live_object(t, e) if e else None
+            if not live:
+                problems.append(f"'{it['name']}' isn't in ZIA")
+                continue
+            if g(live, "state") not in (None, "ENABLED"):
+                problems.append(f"'{it['name']}' is disabled")
+            ids = {str(g(x, "id") if isinstance(x, dict) else x) for x in (g(live, "groups") or [])}
+            if ids != want_groups(it, ledger):
+                problems.append(f"'{it['name']}' no longer applies only to the pilot group")
+            checked.append(it["name"])
+        urls = [p["url"] for p in criterion.get("probe") or [] if p.get("type") == "http" and p.get("url")]
+        cat_rules = [it for it in rules if it["body"].get("url_categories")]
+        if urls and cat_rules:
+            want = {str(c) for it in cat_rules for c in it["body"]["url_categories"] if not str(c).startswith("{ref:")}
+            custom = any(str(c).startswith("{ref:") for it in cat_rules for c in it["body"]["url_categories"])
+            hosts = [re.sub(r"^https?://([^/]+).*$", r"\1", u) for u in urls]
+            try:
+                res = t.call("url_categories", "lookup", urls=hosts)
+                if isinstance(res, tuple):
+                    res = res[0]
+                for row in items(res) if not isinstance(res, list) else res:
+                    cats = {str(c) for c in (g(row, "url_classifications") or [])}
+                    if want and not (cats & want) and not custom:
+                        problems.append(f"ZIA puts {g(row, 'url')} in {', '.join(sorted(cats)) or 'no category'}, "
+                                        "not in the rule's categories")
+            except KitError as err:
+                problems.append(f"URL lookup didn't run ({str(err)[:80]})")
+        detail = (f"{len(checked)} POV rule{'s' * (len(checked) != 1)} in place, enabled and scoped to the pilot group"
+                  if not problems else "; ".join(problems))
+        activity = self._activity(t, pov)
+        if activity:
+            detail += f". {activity}"
+        return {"status": "fail" if problems else "pass", "detail": detail, "rules": checked}
+
+    def _activity(self, t, pov):
+        """Tenant-wide Insights context: blocked transactions in the 7 days to yesterday. Insights only answers
+        7- or 14-day windows that end at least a day ago (seen live, 2026-10), and can't filter to the POV."""
+        try:
+            end = int(time.time() * 1000) - 86400 * 1000
+            rows = items(t.call("zins.web_traffic", "get_no_grouping", start_time=end - 7 * 86400 * 1000,
+                                end_time=end, action_filter="BLOCK"))
+            total = sum(int(g(r, "total") or 0) for r in rows)
+            return (f"Insights: {total} blocked transactions tenant-wide in the 7 days to yesterday "
+                    "(Insights lags a day and can't filter to the POV)")
+        except Exception:
+            return ""
 
     def terraform(self, entry, live):
         if entry["kind"] not in KINDS or not KINDS[entry["kind"]].get("tf"):
