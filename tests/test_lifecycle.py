@@ -227,7 +227,9 @@ def test_catalog_ids_unique_and_every_product_covered():
 def test_every_product_has_the_full_lifecycle():
     for name in products.ORDER:
         p = products.get(name)
-        assert p.ready, name
+        if not p.ready:   # a draft product (Endpoint AI): criteria and probe tests only, no tenant objects
+            assert p.criteria() and p.role_scopes() == {"discovery": [], "apply": []}, name
+            continue
         for m in ("role_scopes", "discover", "plan", "apply", "live_object", "drift", "teardown"):
             assert getattr(type(p), m) is not getattr(products.base.Product, m), f"{name}.{m}"
         assert p.criteria() or name == "zid", name    # from its catalog file (zid only serves the pilot group)

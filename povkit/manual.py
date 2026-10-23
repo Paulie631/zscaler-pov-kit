@@ -109,7 +109,9 @@ def _ping(product):
 
 def _check_signin(t, pov, led):
     from . import products
-    first = next(n for n in products.ORDER if n in pov.products)
+    first = next((n for n in products.ORDER if n in pov.products and n != "eai"), None)
+    if not first:
+        return None, "no product with an API in this POV"
     t.call(*_ping(first))
     return True, "the POV's API client signs in"
 

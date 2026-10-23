@@ -186,6 +186,9 @@ def c_probe_pack(a):
 
 def c_probe(a):
     from . import probe
+    if a.cleanup:
+        print(f"Removed {probe.cleanup_ai()} Endpoint AI test item(s).")
+        return 0
     if a.pack:
         crit = json.loads(Path(a.pack).read_text(encoding="utf-8"))["criteria"]
     else:   # no pack: the catalog's tests that need no POV values
@@ -206,6 +209,8 @@ def c_probe(a):
     for r in res["results"]:
         say("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['outcome']} (expected {r['expect']}) {r['detail']}")
     print(f"{ok} of {len(res['results'])} as expected. Send {out} to the SE: `pov-kit import-probe {out.name}`.")
+    if any(r["spec"]["type"] == "ai_artifacts" for r in res["results"]):
+        print("Endpoint AI test files stay for the console's inventory; remove them afterwards: `pov-kit probe --cleanup`.")
 
 
 def c_import_probe(a):
@@ -680,6 +685,7 @@ def parser():
     s = cmd("probe", c_probe, "on a pilot device: run the probe tests (no keys)")
     s.add_argument("--pack")
     s.add_argument("--wait", type=int, default=0, help="minutes to wait for traffic to go through Zscaler first")
+    s.add_argument("--cleanup", action="store_true", help="remove the Endpoint AI test files a probe run left")
     s.add_argument("--criteria")
     s.add_argument("--out")
     s = cmd("import-probe", c_import_probe, "import a probe results file")

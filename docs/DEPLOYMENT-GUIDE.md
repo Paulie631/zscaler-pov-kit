@@ -223,6 +223,29 @@ clients at the end. **Next steps → Steps for people** lists the ones this POV 
 **Copy the steps for the customer's admin** gives the same list as Markdown to paste into an email or the shared POV
 doc (no secrets in it). From the command line: `pov-kit steps` (`--check`, `--done KEY --by NAME`, `--sheet`).
 
+### AI Guard and Endpoint AI
+
+**AI Guard** proves eight criteria automatically, by scanning test prompts and model replies through AI Guard's
+Detection API with the POV's own app key (**Run API proofs**). The tests are the SE demo kit's library (synthetic data
+only): prompt injection (AI-AIG-01), secrets, PII and personal data (02), evasion with gibberish and invisible text
+(03), source code (04), responsible-AI topics such as toxicity, financial or legal advice, competitors and brand risk
+(05), model replies that leak data, are toxic, carry malicious links or refuse (06), topic and language tagging (07),
+and everyday prompts that must not be flagged (08). Industry packs are optional criteria for the customer's sector:
+financial services (AI-AIG-P1), healthcare (P2) and legal (P3); add them with `pov-kit set criteria ...,AI-AIG-P2`.
+The competitor named in the responsible-AI tests is `aiguard.competitor` (`pov-kit set aiguard.competitor "Name"`).
+Results show which tests behaved as expected, and the AI Guard policy switch (Monitor, Block attacks, + data leakage)
+shows detection turning into blocking.
+
+**AI Endpoint Security (Endpoint AI)** is a *draft* product in the kit: Zscaler announced it in October 2026, and it
+has no API in the Zscaler SDK yet, so the kit creates nothing for it. Tick it on Start a POV to add five draft
+criteria (EP-AIE-01 to 05: shadow AI inventoried, a malicious skill file blocked, dangerous agent commands stopped,
+PII in a prompt to a local model flagged, agent activity visible per user and device). The probe proves the device
+side with harmless, clearly named test files: a local model file, an MCP server definition and an agent skill
+(`zpov-test-…`), an inert "risky" skill (`zpov-risky-…`, removed by the probe), and a prompt with synthetic PII to a
+local Ollama model if one is installed. A person records what the admin console shows. Afterwards, on the device:
+`pov-kit probe --cleanup`. Replace the draft criteria with Zscaler's internal POV plan for the product when you have
+it.
+
 ### A POV lab on CloudShare
 
 No cloud account for the connectors? [CLOUDSHARE.md](CLOUDSHARE.md) builds a CloudShare blueprint once (two App

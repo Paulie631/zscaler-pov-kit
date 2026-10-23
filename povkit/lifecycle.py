@@ -15,7 +15,7 @@ from .core.guard import LedgerTenant, ReadOnlyTenant
 from .core.ledger import Ledger
 
 
-SHORT = {"zid": "ZIdentity", "zia": "ZIA", "zcc": "ZCC", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB"}
+SHORT = {"zid": "ZIdentity", "zia": "ZIA", "zcc": "ZCC", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB", "eai": "Endpoint AI"}
 
 
 def ledger(pov):
@@ -59,7 +59,8 @@ def discover(pov, tenant_for):
     snaps, checks = {}, []
     for p in products.selected(pov.products):
         if not p.ready:
-            checks.append(check(f"{p.name}-later", p.title, INFO, f"arrives in {p.phase}; its criteria are in the catalog"))
+            checks.append(check(f"{p.name}-later", p.title, INFO, getattr(p, "later_note", "")
+                                or f"arrives in {p.phase}; its criteria are in the catalog"))
             continue
         try:
             s, c = p.discover(t, pov)

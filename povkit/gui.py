@@ -96,8 +96,9 @@ PING = {"zia": ("activate", "status"), "zcc": ("zcc.forwarding_profile", "list_b
 def sign_in_check(p, which):
     from .core.guard import ReadOnlyTenant
     t = ReadOnlyTenant(tf(p, which))
-    first = next(n for n in products.ORDER if n in p.products)
-    t.call(*PING[first])
+    first = next((n for n in products.ORDER if n in p.products and n in PING), None)
+    if first:   # a POV of draft products only (Endpoint AI) has nothing to sign in to
+        t.call(*PING[first])
 
 
 def pilot_options(p):

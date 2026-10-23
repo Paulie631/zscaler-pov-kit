@@ -689,7 +689,7 @@ const UC_EX=["Marketing can use ChatGPT but can't upload files to it","Block a l
   "Report credit card numbers in files shared in our Microsoft 365"];
 const KNAME={url_filtering:"ZIA · URL filtering rule",ssl:"ZIA · SSL inspection rule",cloud_app_control:"ZIA · Cloud App Control rule",file_type:"ZIA · file type control rule",dlp:"ZIA · DLP rule",dns:"ZIA · DNS control rule",
   zpa_app:"ZPA · app segment and its own access rule",aiguard_block:"AI Guard · its own app, key and blocking policy",zdx_deeptrace:"ZDX · deep trace on each pilot device",casb_dlp:"CASB · DLP rule, report only"};
-const PSHORT={zid:"ZIdentity",zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard:"AI Guard",zdx:"ZDX",casb:"CASB"};
+const PSHORT={zid:"ZIdentity",zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard:"AI Guard",zdx:"ZDX",casb:"CASB",eai:"Endpoint AI"};
 let UC=null;
 async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a POV in Setup first.","bad");return}
   UC=await api("/api/usecases");const c=S.current;

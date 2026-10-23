@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.19
+
+- **AI Guard: the SE demo kit's full test library as success criteria.** Eight criteria, each proved automatically
+  through AI Guard's Detection API: prompt injection, secrets/PII/personal data, evasion (gibberish, invisible text),
+  source code, responsible AI (toxicity, financial and legal advice, competitors, brand risk), model replies (leaked
+  data, toxicity, malicious links, refusals), topic and language tagging, and no false positives on everyday prompts.
+  Industry packs for financial services, healthcare and legal are optional criteria (`pov-kit set criteria`).
+- **AI Endpoint Security (draft).** A new product to tick on Start a POV, with five draft criteria from Zscaler's
+  public description, to be replaced by the internal POV plan. No API yet, so nothing is created in the tenant; the
+  probe plants harmless, clearly named test files on a pilot device (a local model file, an MCP definition, agent
+  skills, a PII prompt to a local Ollama model) and a person records what the console shows. `pov-kit probe
+  --cleanup` removes the test files.
+
 ## 0.9.18
 
 - **SE Deployment Guide and Quick Start rewritten** for Zscaler and partner SEs, leading with Quick start, and checked
