@@ -71,7 +71,7 @@ def test_mark_done_needs_a_name_and_can_be_reopened(pov_all, tenant_for):
 def test_sheet_for_the_admin_has_steps_and_no_secrets(pov_all, tenant_for):
     planned(pov_all, tenant_for)
     md = manual.sheet_md(pov_all)
-    assert "## Before we start" in md and "## When the POV ends" in md
+    assert "## To connect the POV kit" in md and "## When the POV ends" in md
     assert "Console search:" in md and pov_all.id in md and "<pov-id>" not in md
     assert "fake-provisioning-secret" not in md
 

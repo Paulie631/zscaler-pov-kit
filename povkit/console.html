@@ -89,6 +89,9 @@ h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
 .checks>li{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
 .checks>li:first-child{border-top:0}
 .ic{font-weight:700;text-align:center}.ic.ok{color:var(--ok)}.ic.warn{color:var(--warn)}.ic.fail{color:var(--bad)}.ic.info{color:var(--muted)}
+details.how{margin-top:6px;font-size:12.5px}details.how>summary{cursor:pointer;color:var(--accent);list-style:none}details.how>summary::-webkit-details-marker{display:none}
+details.how .body{margin-top:6px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}details.how .body b{display:block;margin:8px 0 2px}details.how .body b:first-child{margin-top:0}details.how ul{margin:2px 0 0 18px;padding:0}
+.gate{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:16px 0 4px}.gate.passed{border-color:var(--good)}
 .checks .d{color:var(--muted);font-size:12.5px}.checks .fx{color:var(--warn);font-size:12.5px;margin-top:2px}
 .group-h{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:16px 0 6px;font-weight:600}
 table{border-collapse:collapse;width:100%;font-size:13px}
@@ -295,9 +298,11 @@ async function runJob(id,el){let since=0;el.innerHTML="";
     since+=j.lines.length;if(j.done){if(j.error)throw new Error(j.error);return j.result}
     await new Promise(r=>setTimeout(r,700))}}
 const STATUS_ORDER={fail:0,warn:1,ok:2,info:3},ICON={ok:"✓",warn:"!",fail:"✗",info:"i"};
+function howHTML(h,label){if(!h)return "";const li=a=>`<ul>${(a||[]).map(x=>`<li>${esc(String(x).replaceAll("<pov-id>",(S&&S.current&&S.current.id)||"<pov-id>"))}</li>`).join("")}</ul>`;
+  return `<details class="how"><summary>${esc(label||"How to verify")} ›</summary><div class="body">${h.what?`<b>What it checks</b>${esc(h.what)}`:""}${h.why?`<b>Why it matters</b>${esc(h.why)}`:""}${h.verify?`<b>Verify by hand</b>${li(h.verify)}`:""}${h.fix?`<b>Fix</b>${li(h.fix)}`:""}${h.retest?`<b>Re-test</b>${esc(h.retest)}`:""}</div></details>`}
 function checksHTML(checks){if(!checks.length)return'<div class="empty">No checks.</div>';
   const groups={};for(const c of checks){const g=(c.label.match(/^([A-Za-z ]+?):\s/)||[,"General"])[1];(groups[g]=groups[g]||[]).push(c)}
-  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><ul class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<li><span class="ic ${esc(c.status)}">${ICON[c.status]||"·"}</span><div>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix&&c.status!="ok"?`<div class="fx">${c.status=="info"?"":"Fix: "}${esc(c.fix)}</div>`:""}</div></li>`).join("")}</ul>`).join("")}
+  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><ul class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<li><span class="ic ${esc(c.status)}">${ICON[c.status]||"·"}</span><div>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix&&c.status!="ok"?`<div class="fx">${c.status=="info"?"":"Fix: "}${esc(c.fix)}</div>`:""}${c.status!="ok"?howHTML(c.help):""}</div></li>`).join("")}</ul>`).join("")}
 function preflightHTML(checks){
   const need=checks.filter(c=>c.status=="fail"), later=checks.filter(c=>c.waiting&&/-waiting$/.test(c.id));
   const laterOf=n=>checks.filter(c=>c.waiting&&c.product==n&&!/-waiting$/.test(c.id));
@@ -322,7 +327,7 @@ async function load(){S=await api("/api/state");const c=S.current;
 $("#povsel").onchange=async e=>{await api("/api/pov/use",{id:e.target.value});await load();W.step=firstOpen();W.checks=null;W.plan=null;wizard();refreshTab()};
 $$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".view").forEach(v=>v.classList.toggle("on",v.id=="v-"+b.dataset.t));refreshTab()});
 function tab(){return $("#tabs button.on").dataset.t}
-function goManual(){W.step=7;$$("#tabs button").find(x=>x.dataset.t=="setup").click();setTimeout(()=>{const m=$("#manualtop");m&&m.scrollIntoView({behavior:"smooth"})},400)}
+function goManual(){W.step=8;$$("#tabs button").find(x=>x.dataset.t=="setup").click();setTimeout(()=>{const m=$("#manualtop");m&&m.scrollIntoView({behavior:"smooth"})},400)}
 $("#polsel").onchange=async e=>{const v=e.target.value;$("#polstate").textContent="switching…";
   try{await api("/api/aiguard-policy",{profile:v});$("#polstate").textContent="applied";await load()}catch(err){$("#polstate").textContent="failed";alert(err.message)}};
 
@@ -367,14 +372,15 @@ setTimeout(()=>checkUpd(false),1500);
 function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria"){criteria();ccInit()}if(t=="logs")logs();if(t=="usecases")usecases();if(t=="aiguard")aiguardTab()}
 
 /* ---------------- setup wizard ---------------- */
-const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Approval","Apply","Next steps"];
+const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Approval","Apply","Finish setup","Next steps"];
 const W={step:0,checks:null,plan:null,role:null};
 function done(i){const c=S&&S.current;if(!c)return false;
   const clients=Object.values(c.clients);const s=c.settings;
   return [true, clients.length&&clients[0].saved,
     !!(s.pilot_group||+s["identity.test_users"]>0||["create","test"].includes(s["identity.pilot"])), W.checks&&!W.checks.some(x=>x.status=="fail"),
-    !!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), (c.ledger.owned||0)+(c.ledger.adopted||0)>0, false][i]}
-function firstOpen(){if(!S.current)return 0;for(let i=1;i<7;i++)if(!done(i))return i;return 7}
+    !!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), (c.ledger.owned||0)+(c.ledger.adopted||0)>0,
+    (c.ledger.owned||0)+(c.ledger.adopted||0)>0&&!!(c.manual_open&&c.manual_open.stages&&c.manual_open.stages.finish.passed), false][i]}
+function firstOpen(){if(!S.current)return 0;for(let i=1;i<8;i++)if(!done(i))return i;return 8}
 function wsteps(){$("#wsteps").innerHTML=STEPS.map((t,i)=>`<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":i+1}</span><span>${esc(t)}</span></li>`).join("");
   $$("#wsteps li").forEach(li=>li.onclick=()=>{const i=+li.dataset.i;if(i>0&&!S.current)return;W.step=i;wizard()})}
 function head(i,title,desc){return `<div class="kicker">STEP ${i+1} OF ${STEPS.length}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
@@ -545,7 +551,6 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       ${has("casb")?`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`:""}
       <div id="wmsg"></div>`+nav(true,true,"Save ›");
     pilotPicker(s);
-    inlineManual(["zid.ca.entitlement","zia.ca.entitlement","zid.ca.passwords"],"For the pilot users, a person also does these",()=>wizard());
     bindNav(async()=>{const vals={};
       $$("#wstage [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
       if($("#wnewusers"))vals["identity.create_users"]=$("#wnewusers").checked?"yes":"no";
@@ -555,14 +560,20 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   }
   else if(W.step==3){
     st.innerHTML=head(3,"Preflight","Read-only checks of this computer, each product, and the pilot users across products. Nothing is written.")+
-      `<div id="wchecks">${W.checks?preflightHTML(W.checks):'<div class="notice">Running the checks…</div>'}</div><div id="wgate"></div>`;
-    const draw=()=>{const fails=W.checks.filter(x=>x.status=="fail");$("#wchecks").innerHTML=preflightHTML(W.checks);
+      `<div id="wchecks">${W.checks?preflightHTML(W.checks):'<div class="notice">Running the checks…</div>'}</div><div id="wpeople"></div><div id="wgate"></div>`;
+    const draw=async()=>{const fails=W.checks.filter(x=>x.status=="fail");$("#wchecks").innerHTML=preflightHTML(W.checks);
+      const passed=await gate($("#wpeople"),"preflight",{title:"Steps for people before the change list",listTitle:"In the Zscaler console",
+        intro:"These need a person in the Zscaler console. Until they're done, some checks above can't pass, or a product sits out the change list.",redraw:()=>draw()});
       $("#wgate").innerHTML=(fails.length?note(`${fails.length} thing${fails.length>1?"s":""} to fix first (often in the Pilot users step), then run the checks again.`,"bad"):"")+
-        `<div class="row" style="margin-top:14px"><button id="wback">‹ Back</button><button id="wrerun">Run checks again</button><button id="wcopy" title="Checks only. No secrets.">Copy report</button><button class="primary" id="wnext" ${fails.length?"disabled":""}>Continue ›</button></div>`;
+        (!passed?note("Finish the steps for people above, or Continue anyway (recorded).","bad"):"")+
+        `<div class="row" style="margin-top:14px"><button id="wback">‹ Back</button><button id="wrerun">Run checks again</button><button id="wcopy" title="Checks only. No secrets.">Copy report</button><button class="primary" id="wnext" ${fails.length||!passed?"disabled":""}>Continue ›</button></div>`;
       bindNav();$("#wrerun").onclick=run;
       $("#wcopy").onclick=async()=>{const t=reportText(W.checks);try{await navigator.clipboard.writeText(t);$("#wcopy").textContent="Copied ✓"}catch(e){download("pov-preflight.txt",t,"text/plain")}}};
     const run=async()=>{$("#wchecks").innerHTML='<div class="notice">Running the checks…</div>';$("#wgate").innerHTML="";
-      try{W.checks=(await api("/api/preflight",{})).checks;wsteps();draw()}catch(e){$("#wchecks").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}};
+      try{W.checks=(await api("/api/preflight",{})).checks;wsteps();
+        // the steps for people the API can see: check them now, so ones already done tick themselves
+        try{await runJob((await api("/api/manual/check",{stage:"preflight"})).job,document.createElement("div"))}catch(e){}
+        draw()}catch(e){$("#wchecks").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}};
     W.checks?draw():run();
   }
   else if(W.step==4){
@@ -609,24 +620,38 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       (ok?"":note("The change list isn't approved yet (step 6).","bad"))+
       (appliedN?note(`${appliedN} POV objects are in the ledger.`,"good"):"")+
       `<div class="row" style="margin-top:6px"><button class="primary" id="wapply" ${ok?"":"disabled"}>${appliedN?"Apply again (fills in anything missing)":`Apply to ${esc(c.customer)}'s tenant`}</button></div>
-      <div class="log" id="wlog" style="display:none"></div><div id="wafter"></div><div id="wnav">${nav(true,!!appliedN,"Next steps ›")}</div>`;
+      <div class="log" id="wlog" style="display:none"></div><div id="wafter"></div><div id="wnav">${nav(true,!!appliedN,"Finish setup ›")}</div>`;
     bindNav();
     $("#wapply").onclick=async()=>{const b=$("#wapply");b.disabled=true;$("#wlog").style.display="block";
       try{await runJob((await api("/api/apply",{})).job,$("#wlog"));await load();wsteps();
         $("#wafter").innerHTML='<div class="notice">Checking the result…</div>';
         const checks=await runJob((await api("/api/status",{})).job,document.createElement("div"));
-        $("#wnav").innerHTML="";$("#wafter").innerHTML='<div class="group-h">Status after apply</div>'+checksHTML(checks)+nav(true,true,"Next steps ›");bindNav()}
+        $("#wnav").innerHTML="";$("#wafter").innerHTML='<div class="group-h">Status after apply</div>'+checksHTML(checks)+nav(true,true,"Finish setup ›");bindNav()}
       catch(e){const m=/Use prefix (\S+) on the Apply step/.exec(e.message);
         $("#wafter").innerHTML=note(e.message,"bad")+(m?`<div class="row" style="gap:10px;margin-top:8px"><button class="primary" id="wuseprefix">Use prefix ${esc(m[1])} for this POV</button><span class="hint">Renames this POV's planned objects. Then review the new change list and approve it again; nothing is in the tenant yet.</span></div>`:"");
         $("#wuseprefix")&&($("#wuseprefix").onclick=async()=>{try{await api("/api/settings",{values:{prefix:m[1]}});await load();W.step=4;wizard()}catch(err){$("#wafter").insertAdjacentHTML("beforeend",note(err.message,"bad"))}})}
       finally{b.disabled=false}};
   }
   else if(W.step==7){
+    const appliedN=(c.ledger.owned||0)+(c.ledger.adopted||0);
+    st.innerHTML=head(7,"Finish setup","The POV's objects are in the tenant. These steps need a person, in this order; the kit checks each one it can see. When they're done, the POV is ready to test.")+
+      (appliedN?"":note("Apply first (step 7): these steps follow it.","bad"))+`<div id="wfin"></div><div id="wfintools"></div><div id="wfinnav"></div>`;
+    if(!appliedN){$("#wfinnav").innerHTML=nav(true,false);bindNav();return}
+    if(has("zcc")||has("zia")){const dev=await api("/api/device");
+      $("#wfintools").innerHTML=`<div class="group-h" style="margin-top:16px">For the pilot devices</div>`+deviceHTML(dev)+(has("zpa")?`<p class="hint">The App Connector templates and the provisioning key are on Next steps → ZPA App Connectors (open it from the list on the left).</p>`:"");
+      bindDevice(dev,()=>wizard())}
+    const draw=async()=>{const passed=await gate($("#wfin"),"finish",{title:"After Apply",listTitle:"In order",
+        intro:"Entitlements, passwords, connectors and pilot devices: the things Zscaler's API can't do.",redraw:()=>draw()});
+      await load();wsteps();
+      $("#wfinnav").innerHTML=(passed?note("Setup is finished: the POV is ready to test. Next steps has the probe pack, the traffic generator and the rest.","good"):"")+nav(true,true,passed?"Next steps ›":"Next steps (finish these first) ›",!passed);bindNav()};
+    await draw();
+  }
+  else if(W.step==8){
     let plan=null;try{plan=(await api("/api/plan")).plan}catch(e){}
     const man=(await api("/api/manual")).steps;
     const dev=await api("/api/device");
     const users=c.test_users?(await api("/api/users")).users:[];
-    st.innerHTML=head(7,"Next steps","What's left for the customer, and the things to hand to the pilot devices.")+
+    st.innerHTML=head(8,"Next steps","What's left for the customer, and the things to hand to the pilot devices.")+
       manualHTML(man)+
       `<div class="group-h">For the pilot devices and you</div>`+deviceHTML(dev)+`<div class="cards">
         <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The tests for the criteria the customer chose, and what the traffic generator sends for them. The device setup installs it with the POV probe (no keys, nothing in the tenant). After the criteria change, send the new pack: <code>pov-probe pack install &lt;file&gt;</code>, then <code>pov-probe test</code>.</p><button id="npack">Download probe pack</button><div id="npstat"></div></div>
@@ -685,18 +710,18 @@ function probeStatusHTML(ps){
 }
 
 /* ---------------- steps people do (the API can't) ---------------- */
-const PHASE_H={setup:"Before we start",customer:"During the POV",end:"When the POV ends"};
+const STAGE_H={connect:"To connect the POV kit",preflight:"Before the change list",finish:"After Apply: finish setup",end:"When the POV ends"};
 function manualHTML(steps,opts={}){
   const open=steps.filter(s=>s.status!="done").length;
   let last=null,n=0;
   return (opts.compact?`<div class="group-h" style="margin-top:16px">${esc(opts.title||"Done by a person in the Zscaler console")} <span class="muted" style="font-weight:normal">(${open?open+" open":"all done"})</span></div><div id="mmsg"></div>`:
   `<div class="group-h" id="manualtop">Steps for people <span class="muted" style="font-weight:normal">(${open?open+" open":"all done"} · the kit can't do these through the API)</span></div>
   <div class="row" style="gap:8px;margin:4px 0 10px"><button id="mchkall">Check them all</button><button id="msheet">Copy the steps for the customer's admin</button><button id="msheetdl">Download them</button></div><div id="mmsg"></div>`)+
-  steps.map(s=>{const h=!opts.compact&&s.phase!=last?`<div class="hint" style="margin:12px 0 4px;font-weight:600">${PHASE_H[s.phase]}</div>`:"";last=s.phase;n++;
+  steps.map(s=>{const h=!opts.compact&&s.stage!=last?`<div class="hint" style="margin:12px 0 4px;font-weight:600">${STAGE_H[s.stage]||""}</div>`:"";last=s.stage;n++;
     const ok=s.status=="done", res=s.result===false?note(esc(s.detail),"bad"):s.result===null&&s.detail?note(esc(s.detail)):"";
-    return h+`<details class="card" style="margin:6px 0" ${s===steps.find(x=>x.status!="done")?"open":""}>
-      <summary style="cursor:pointer"><b>${ok?"✓":"○"} ${n}. ${esc(s.title)}</b> <span class="muted">· ${esc(s.who||"")}${s.when?" · "+esc(s.when):""}</span>
-        ${ok?`<span class="muted"> · done${s.by?" by "+esc(s.by):""}${s.at?" "+esc(s.at.slice(0,10)):""}</span>`:""}</summary>
+    return h+`<details class="card" style="margin:6px 0" ${s===steps.find(x=>x.status=="open")?"open":""}>
+      <summary style="cursor:pointer"><b>${ok?"✓":s.status=="skipped"?"⏭":"○"} ${n}. ${esc(s.title)}</b> <span class="muted">· ${esc(s.who||"")}${s.when?" · "+esc(s.when):""}</span>
+        ${ok?`<span class="muted"> · done${s.by?" by "+esc(s.by):""}${s.at?" "+esc(s.at.slice(0,10)):""}</span>`:s.status=="skipped"?`<span class="muted"> · continued without it${s.skipped_by?" ("+esc(s.skipped_by)+")":""}: still to do</span>`:""}</summary>
       ${s.item&&s.item!=s.title?`<p style="margin:8px 0 4px">${esc(s.item)}</p>`:""}
       ${s.why?`<p class="muted" style="margin:4px 0">${esc(s.why)}</p>`:""}
       ${s.path?`<p style="margin:8px 0 4px"><b>Where:</b> ${esc(s.path)}${s.verified?"":" <span class=\"muted\">(not checked in a live console yet)</span>"}</p>`:""}
@@ -705,6 +730,7 @@ function manualHTML(steps,opts={}){
       ${s.values&&s.values.length?`<div style="margin:8px 0 4px"><b>Values to use</b> <span class="muted">(copy, don't retype)</span>${s.values.map(x=>`<div class="row" style="gap:8px;margin:4px 0;align-items:center"><span class="muted" style="min-width:170px">${esc(x.label)}</span><code class="mval">${esc(x.value)}</code><button class="mcopy" data-v="${esc(x.value)}" style="padding:2px 10px;font-size:12px">Copy</button></div>`).join("")}</div>`:s.names?`<p style="margin:4px 0"><b>Exact names:</b> ${s.names.map(x=>`<code>${esc(x)}</code>`).join(" ; ")}</p>`:""}
       ${s.criteria&&s.criteria.length&&s.status!="done"?`<p class="muted" style="margin:4px 0"><b>Holds up:</b> ${s.criteria.slice(0,14).map(x=>`<code>${esc(x)}</code>`).join(" ")}${s.criteria.length>14?` and ${s.criteria.length-14} more`:""}: they can't pass until this is done.</p>`:""}
       ${s.done?`<p class="muted" style="margin:4px 0"><b>Done when:</b> ${esc(s.done)}</p>`:""}
+      ${howHTML(s.help,"How to verify, and what to do if it fails")}
       ${res}${s.checked_at?`<div class="hint">Last checked ${esc(s.checked_at.replace("T"," ").slice(0,16))} UTC${s.detail&&s.result?": "+esc(s.detail):""}</div>`:""}
       <div class="row" style="gap:8px;margin-top:8px">
         <a href="${esc(s.url||"https://console.zscaler.com")}" target="_blank" rel="noopener"><button>Open the Zscaler console ↗</button></a>
@@ -712,6 +738,34 @@ function manualHTML(steps,opts={}){
         ${ok?`<button class="mundo" data-k="${esc(s.key)}">Reopen</button>`:`<input type="text" class="mby" data-k="${esc(s.key)}" placeholder="Who did it" style="width:160px"><button class="mmark" data-k="${esc(s.key)}">Mark done</button>`}
       </div></details>`}).join("");
 }
+// a gate: the steps for people this point of the setup waits on, like the SE demo kit's preflight. It passes when
+// each step is done (checked, or marked by a person), or someone decides to continue without it (recorded).
+async function gate(el,stageName,opts){
+  const M=await api("/api/manual"),G=M.stages[stageName],steps=M.steps.filter(x=>x.stage==stageName),live=M.mode!="async";
+  if(!steps.length){el.innerHTML="";return true}
+  const open=steps.filter(x=>x.status=="open"), skipped=steps.filter(x=>x.status=="skipped");
+  el.innerHTML=`<div class="gate ${G.passed?"passed":""}">
+    <div class="row" style="justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap"><b>${esc(opts.title)} · ${G.passed?(skipped.length?`continuing with ${skipped.length} still to do`:"all done"):`${open.length} to do`}</b>
+      <div class="seg" id="gmode"><button data-m="live" class="${live?"on":""}">With the admin, now</button><button data-m="async" class="${live?"":"on"}">Admin does them later</button></div></div>
+    <p class="muted" style="margin:6px 0 4px">${esc(opts.intro)} ${live?"Walk through them together: each has the console path, the exact values to paste and a Check now.":"Send them to the customer's admin, then come back here and Check them all when they say they're done. The POV picks up where it stopped."}</p>
+    ${live?"":`<div class="row" style="gap:8px;margin:8px 0"><button id="gsend">Copy these steps for the admin</button><button id="gsenddl">Download them</button><span class="hint">Markdown, with the values to use. No secrets in it.</span></div>`}
+    ${manualHTML(steps,{compact:true,title:opts.listTitle||"The steps"})}
+    <div class="row" style="gap:8px;margin-top:10px"><button id="gcheck">Check them all</button></div><div class="log" id="glog" style="display:none;margin-top:8px"></div>
+    ${G.passed?"":`<details style="margin-top:12px"><summary class="muted" style="cursor:pointer">Continue anyway, with ${open.length} still to do…</summary>
+      <p class="muted" style="margin:6px 0">They stay on the list, the criteria they hold up can't pass until they're done, and the record shows who decided.</p>
+      <div class="row" style="gap:8px"><input type="text" id="gby" placeholder="Who decided (name)" style="width:200px"><input type="text" id="gwhy" placeholder="Why (optional)" style="flex:1;min-width:180px"><button id="gskip">Continue anyway</button></div><div id="gmsg"></div></details>`}
+  </div>`;
+  const again=()=>opts.redraw();
+  bindManual(again);
+  $$("#gmode button").forEach(b=>b.onclick=async()=>{await api("/api/settings",{values:{"manual.mode":b.dataset.m}});again()});
+  const sheet=async()=>(await api("/api/manual/sheet?stage="+stageName)).text;
+  $("#gsend")&&($("#gsend").onclick=async()=>{const t=await sheet();try{await navigator.clipboard.writeText(t);$("#gsend").textContent="Copied ✓"}catch(e){download(`pov-${S.current.id}-steps-${stageName}.md`,t,"text/markdown")}});
+  $("#gsenddl")&&($("#gsenddl").onclick=async()=>download(`pov-${S.current.id}-steps-${stageName}.md`,await sheet(),"text/markdown"));
+  $("#gcheck").onclick=async()=>{const b=$("#gcheck");b.disabled=true;$("#glog").style.display="block";
+    try{await runJob((await api("/api/manual/check",{stage:stageName})).job,$("#glog"));await load();again()}catch(e){$("#glog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`);b.disabled=false}};
+  $("#gskip")&&($("#gskip").onclick=async()=>{try{await api("/api/manual/skip",{stage:stageName,by:$("#gby").value,why:$("#gwhy").value});await load();again()}catch(e){$("#gmsg").innerHTML=note(e.message,"bad")}});
+  return G.passed}
+
 // the steps for people that belong to the screen being shown, right there instead of only at Next steps
 async function inlineManual(keys,title,redraw){
   try{const m=(await api("/api/manual")).steps.filter(x=>keys.includes(x.key));if(!m.length)return;

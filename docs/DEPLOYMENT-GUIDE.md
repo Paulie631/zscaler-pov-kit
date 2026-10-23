@@ -181,9 +181,16 @@ Live progress, then a status check. Client Connector profiles are created for th
 profile to copy or its API refuses them, the console prints the exact spec to build by hand (Windows, plus macOS for
 Mac pilot devices), and **Status → Fix drift** adopts them by name.
 
-### 5. Next steps
+### 5. Finish setup
 
-- **Steps for people:** everything the API can't do, in order, with instructions (see below).
+After Apply, the setup stops at **Finish setup**: the steps for people that follow Apply, in order (entitle the POV's
+group, set test users' passwords, Client Connector profiles if the API refused them, App Connectors, ZPA in Client
+Connector, pilot devices), with **Set up a pilot device** on the same page. It works like Preflight (see **Steps the
+API can't do** below), and the POV is ready to test once they're done.
+
+### 6. Next steps
+
+- **Steps for people:** every step, done or not, with instructions (see below).
 - **Set up a pilot device** (see below).
 - **ZPA App Connectors:** the AWS or Azure template (with the test app inside when no app is named), the provisioning
   key, and **CloudShare commands**.
@@ -269,6 +276,19 @@ clients at the end. **Next steps → Steps for people** lists the ones this POV 
   pilot users are entitled, Malware Protection blocks viruses, devices are registered, connectors are up, a SaaS
   tenant is connected, profiles are adopted. A passing check ticks the step; **Check them all** runs every one;
 - **Mark done** with a name, for the rest.
+
+**The setup stops where they're needed**, like the SE demo kit's preflight:
+
+- **Preflight** lists the steps for people needed before the change list (ZDX role, ZPA customer ID, Malware
+  Protection, a SaaS tenant), under the read-only checks. **Finish setup** lists the ones after Apply.
+- **Continue** waits until each step is done: its check passes (Preflight checks the ones the API can see as it runs),
+  or someone marks it done. **Continue anyway**, with a name (and why), lets the setup go on. Those steps stay on the
+  list and keep holding up their criteria, and the record shows who decided.
+- **With the admin, now** (on a call) or **Admin does them later**: the second gives **Copy these steps for the
+  admin**, with only what this point of the setup waits on. Come back when they're done and **Check them all**; the
+  POV picks up where it stopped.
+- Every step, and every preflight check that isn't passing, has **How to verify**: what it checks, why it matters,
+  how to verify by hand, the fix, and how to re-test.
 
 **Copy the steps for the customer's admin** gives the same list as Markdown to paste into an email or the shared POV
 doc (no secrets in it). From the command line: `pov-kit steps` (`--check`, `--done KEY --by NAME`, `--sheet`).

@@ -1,0 +1,251 @@
+{
+ "_about": "How to verify and fix each preflight check, like the SE demo kit's preflight help. Keyed by check ID; an ID ending in -* matches a prefix (zia-read-* covers every ZIA area). Shown under each check as 'How to verify'.",
+ "keychain": {
+  "what": "The kit writes, reads and deletes a test value in this computer's keychain.",
+  "why": "API client secrets, the provisioning key and test users' passwords live only in the keychain, never in files.",
+  "verify": [
+   "Mac: Keychain Access opens and the login keychain is unlocked.",
+   "Windows: Credential Manager opens."
+  ],
+  "fix": [
+   "Mac: unlock the login keychain (Keychain Access > File > Unlock).",
+   "Linux: install and start a keyring service (gnome-keyring or KWallet)."
+  ],
+  "retest": "Run checks again."
+ },
+ "connect": {
+  "what": "The POV's API client signs in to the tenant.",
+  "why": "Nothing else can be checked or built without it.",
+  "verify": [
+   "Administration > API > OneAPI > API Clients lists the client, and its client ID matches the one in Connect."
+  ],
+  "fix": [
+   "Check the vanity domain, client ID and secret in Connect.",
+   "A lost secret: create a new one on the client and enter it in Connect."
+  ],
+  "retest": "Run checks again."
+ },
+ "zia-read-*": {
+  "what": "The kit lists one ZIA area (rules, categories, groups...) with the API client.",
+  "why": "The kit reads each area before planning, to find the customer's own objects and keep clear of them.",
+  "verify": [
+   "Open the POV's API client: Internet Access (ZIA) is listed with at least view access."
+  ],
+  "fix": [
+   "Give the client view access to this ZIA area (the role spec lists them all)."
+  ],
+  "retest": "Run checks again."
+ },
+ "zia-activation": {
+  "what": "The kit reads ZIA's activation status.",
+  "why": "ZIA changes take effect only when activated, and activation applies everyone's pending changes. The kit never activates someone else's work.",
+  "verify": [
+   "The console's Activation menu shows no pending changes."
+  ],
+  "fix": [
+   "Ask the admin to activate or discard their pending changes."
+  ],
+  "retest": "Run checks again."
+ },
+ "zia-names": {
+  "what": "The kit looks for objects in the tenant with the names the POV would use, that aren't this POV's.",
+  "why": "The kit never takes over or overwrites an object it didn't make.",
+  "verify": [
+   "The detail lists each taken name and whether another POV on this laptop owns it."
+  ],
+  "fix": [
+   "Give this POV its own prefix (Use prefix ZPOV2 on the Apply step, or `pov-kit set prefix ZPOV2`), then approve the new change list.",
+   "Or remove the other POV first (Handover)."
+  ],
+  "retest": "Run checks again."
+ },
+ "aiguard-names": {
+  "same": "zia-names"
+ },
+ "zpa-names": {
+  "same": "zia-names"
+ },
+ "zcc-names": {
+  "same": "zia-names"
+ },
+ "casb-names": {
+  "same": "zia-names"
+ },
+ "zia-pilot": {
+  "what": "The kit looks for the pilot group the POV's rules will apply to.",
+  "why": "Every POV rule applies to the pilot group only, so nobody else in the company is affected.",
+  "verify": [
+   "Pilot users shows the group, or the POV makes its own."
+  ],
+  "fix": [
+   "Choose who tests in the Pilot users step."
+  ],
+  "retest": "Run checks again."
+ },
+ "zid-read": {
+  "what": "The kit lists ZIdentity users and groups.",
+  "why": "The POV can make its own pilot group and test users in ZIdentity, and checks pilot users' entitlements there.",
+  "verify": [
+   "The POV's API client lists ZIdentity with view access (and user management, if the POV makes its group)."
+  ],
+  "fix": [
+   "Give the client ZIdentity access from the role spec, or name an existing pilot group instead (Pilot users step)."
+  ],
+  "retest": "Run checks again."
+ },
+ "id-entitlements": {
+  "what": "For each pilot user, the kit reads ZIdentity's service entitlements.",
+  "why": "Unentitled users aren't sent to ZIA, so the POV's rules never see their traffic.",
+  "verify": [
+   "The entitlements page (search: Entitlement) lists the pilot group under Internet & SaaS."
+  ],
+  "fix": [
+   "Entitle the pilot group to Internet & SaaS (a step for the customer's admin)."
+  ],
+  "retest": "Run checks again."
+ },
+ "id-read": {
+  "what": "The kit reads who the pilot users are, across products.",
+  "why": "It needs them to scope every rule and check the users exist.",
+  "verify": [
+   "The detail says what couldn't be read."
+  ],
+  "fix": [
+   "Give the API client view access to ZIdentity and ZIA users (role spec)."
+  ],
+  "retest": "Run checks again."
+ },
+ "id-zia-group": {
+  "what": "The kit checks each named pilot user is a member of the pilot group.",
+  "why": "The POV's rules apply only to members, so a user outside the group isn't part of the POV.",
+  "verify": [
+   "The customer's directory lists each pilot user in the group."
+  ],
+  "fix": [
+   "Add them to the group in the customer's directory (it syncs to Zscaler)."
+  ],
+  "retest": "Run checks again (after the directory syncs)."
+ },
+ "zpa-customer-id": {
+  "what": "The kit looks for the ZPA customer ID saved in Connect.",
+  "why": "ZPA's API needs it, even through OneAPI.",
+  "verify": [
+   "Administration > API > Legacy API > Private Access API > Copy ID shows it."
+  ],
+  "fix": [
+   "Paste it into Connect > ZPA customer ID."
+  ],
+  "retest": "Run checks again."
+ },
+ "zpa-read": {
+  "what": "The kit reads ZPA with the customer ID.",
+  "why": "Planning ZPA needs the tenant's segments, groups and certificates.",
+  "verify": [
+   "The customer ID in Connect matches Copy ID digit for digit, and the client has view access to ZPA."
+  ],
+  "fix": [
+   "Copy the customer ID again (a 404 means it's wrong or cut short).",
+   "Add ZPA access to the API client."
+  ],
+  "retest": "Run checks again."
+ },
+ "zpa-cert": {
+  "what": "The kit looks for ZPA's connector enrollment certificate.",
+  "why": "The POV's provisioning key needs it to enroll App Connectors.",
+  "verify": [
+   "Every ZPA tenant has one named Connector (search: Enrollment Certificates)."
+  ],
+  "fix": [
+   "Check the API client's view access to ZPA certificates."
+  ],
+  "retest": "Run checks again."
+ },
+ "zpa-overlap": {
+  "what": "The kit checks the POV app's domains aren't already in one of the customer's segments.",
+  "why": "ZPA matches the most specific segment, so a shared domain would follow the customer's rules, not the POV's.",
+  "verify": [
+   "The detail names the customer's segment that has the domain."
+  ],
+  "fix": [
+   "Use the kit's test app, or a domain only the POV uses (Pilot users / ZPA settings)."
+  ],
+  "retest": "Run checks again."
+ },
+ "zpa-pilot": {
+  "what": "The kit looks for the pilot users in ZPA (a SCIM group, or a SAML attribute).",
+  "why": "ZPA takes users from the identity provider, so the access rule needs a ZPA-side way to match them.",
+  "verify": [
+   "ZPA lists the group under the IdP's SCIM groups, or the SAML attribute under its SAML attributes."
+  ],
+  "fix": [
+   "Set the SCIM group or SAML attribute in Pilot users (ZPA)."
+  ],
+  "retest": "Run checks again."
+ },
+ "zcc-read": {
+  "what": "The kit reads Client Connector's app and forwarding profiles.",
+  "why": "The POV copies the default Windows profiles for its own pilot-only profile.",
+  "verify": [
+   "The API client lists Client Connector with view access."
+  ],
+  "fix": [
+   "Add Client Connector access from the role spec."
+  ],
+  "retest": "Run checks again."
+ },
+ "zcc-source": {
+  "what": "The kit looks for a default Windows app profile with a forwarding profile to copy.",
+  "why": "Without one, the POV's profiles are built by hand (a step for people after Apply).",
+  "verify": [
+   "Search the console menu for App Profiles: a default Windows profile exists."
+  ],
+  "fix": [
+   "Nothing to fix: follow the 'Build the POV's Client Connector profiles by hand' step after Apply."
+  ],
+  "retest": "Run checks again."
+ },
+ "aiguard-read": {
+  "what": "The kit reads AI Guard's apps, policies and rules.",
+  "why": "The POV adds its own app and policy next to the customer's, never changing theirs.",
+  "verify": [
+   "The API client lists ZGUARD (AI Guard) with view access."
+  ],
+  "fix": [
+   "Add AI Guard access from the role spec."
+  ],
+  "retest": "Run checks again."
+ },
+ "casb-read": {
+  "what": "The kit reads SaaS security.",
+  "why": "The POV's CASB DLP rule scans a connected SaaS tenant.",
+  "verify": [
+   "The API client lists ZIA SaaS security with view access."
+  ],
+  "fix": [
+   "Add the access from the role spec."
+  ],
+  "retest": "Run checks again."
+ },
+ "casb-tenant": {
+  "what": "The kit looks for a connected SaaS tenant.",
+  "why": "The CASB criterion needs one to scan.",
+  "verify": [
+   "Search: SaaS Application Tenants. One shows as connected."
+  ],
+  "fix": [
+   "Connect one (the step for people, with the SaaS admin's consent)."
+  ],
+  "retest": "Run checks again."
+ },
+ "zdx-*": {
+  "what": "The kit reads ZDX with the POV's API client.",
+  "why": "ZDX criteria need the pilot devices' scores and probes.",
+  "verify": [
+   "The API client has a ZDX role."
+  ],
+  "fix": [
+   "Give the client a view-only ZDX role (a step for people)."
+  ],
+  "retest": "Run checks again."
+ }
+}

@@ -41,10 +41,12 @@ def tf(pov, which):
 def _manual_open(p):
     from . import manual
     try:
-        steps = [s for s in manual.guide(p) if s["status"] != "done" and s["phase"] != "end"]
+        every = manual.guide(p)
     except Exception:   # noqa: BLE001 - never let the badge break the page
         return None
-    return {"open": len(steps), "next": steps[0]["title"] if steps else None}
+    steps = [s for s in every if s["status"] != "done" and s["phase"] != "end"]
+    return {"open": len(steps), "next": steps[0]["title"] if steps else None,
+            "stages": {n: {k: v for k, v in manual.stage(p, n, every).items() if k != "steps"} for n in manual.STAGES}}
 
 
 def pov_state(p):
@@ -287,7 +289,11 @@ def api(method, path, body, q):
         if path == "/api/manual":
             from . import manual
             p = current()
-            return 200, {"steps": manual.guide(p), "console": manual.GUIDE["console"]}
+            steps = manual.guide(p)
+            return 200, {"steps": steps, "console": manual.GUIDE["console"],
+                         "mode": (p.cfg.get("manual") or {}).get("mode") or "live",
+                         "stages": {n: {k: v for k, v in manual.stage(p, n, steps).items() if k != "steps"}
+                                    for n in manual.STAGES}}
         if path == "/api/probe/status":
             return 200, evidence.pack_status(current())
         if path == "/api/device":
@@ -327,7 +333,7 @@ def api(method, path, body, q):
                                                                 for c in criteria_import.catalog(p)])
         if path == "/api/manual/sheet":
             from . import manual
-            return 200, {"text": manual.sheet_md(current())}
+            return 200, {"text": manual.sheet_md(current(), q.get("stage") or None)}
         if path == "/api/users":
             p = current()
             plan = {i["key"]: i for i in (ChangeList(p.dir).plan()["items"] if ChangeList(p.dir).plan_file.exists() else [])}
@@ -405,6 +411,11 @@ def api(method, path, body, q):
                         "" if good else "Unlock the login keychain (Mac) or install a keyring service (Linux).")]
         _, more = lifecycle.discover(p, tf)
         checks += more
+        from . import manual
+        for c in checks:
+            h = manual.check_help(c["id"])
+            if h:
+                c["help"] = h
         return 200, {"checks": checks, "exit": exit_code(checks)}
     if path == "/api/plan":
         p = current()
@@ -558,7 +569,13 @@ def api(method, path, body, q):
         p = current()
         if body.get("key"):
             return 200, manual.check(p, body["key"], tf)
-        return 200, {"job": start_job("manual", lambda log: manual.check_all(p, tf, log))}
+        return 200, {"job": start_job("manual", lambda log: manual.check_all(p, tf, log, body.get("stage")))}
+    if path == "/api/manual/skip":
+        from . import manual
+        p = current()
+        keys = body.get("keys") or [s["key"] for s in manual.stage(p, body.get("stage") or "")["steps"]
+                                     if s["status"] == "open"]
+        return 200, {"skipped": manual.skip(p, keys, body.get("by"), body.get("why") or "")}
     if path == "/api/test-api":
         p = current()
         return 200, {"job": start_job("proofs", lambda log: lifecycle.api_proofs(p, tf))}

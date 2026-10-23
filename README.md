@@ -60,12 +60,15 @@ kit's wizard:
    (straight to the keychain).
 3. **Pilot users**: the pilot group (or Hosted DB test users), their emails, the IdP, and per-product details such as
    the ZPA app and whether ZPA scopes by SCIM group or SAML attribute.
-4. **Preflight**: read-only checks of every product and of the pilot users across products.
+4. **Preflight**: read-only checks of every product and of the pilot users across products, and the steps for people
+   needed before the change list (each with How to verify; Continue waits for them, or Continue anyway is recorded).
 5. **Change list**: everything the kit will create, who it affects, and what only the customer does.
 6. **Approval**: who approved this exact change list, recorded here or by the customer on the change-list page
    (it has an approval form that saves a file you import).
 7. **Apply**: live progress, then a status check.
-8. **Next steps**: customer actions, the probe pack, the ZPA connector template (AWS or Azure) and key, the AI Guard
+8. **Finish setup**: the steps for people after Apply, in order, with the admin or sent to them, and pilot device
+   setup.
+9. **Next steps**: customer actions, the probe pack, the ZPA connector template (AWS or Azure) and key, the AI Guard
    profile, test users' sign-ins.
 
 **Status** compares the tenant with what was approved (and fixes drift on POV objects only) and holds the safety net

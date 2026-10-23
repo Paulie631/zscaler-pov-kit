@@ -27,10 +27,12 @@
    read-only, runs preflight and opens the change list. Fix anything under **Needs you**; products not ready yet are
    **added later** without holding up the rest.
 3. **Change list → Approval:** walk the admin through it, or send them the customer page and import their approval.
-4. **Apply:** watch it run, then check the status.
+4. **Apply:** watch it run, then check the status. **Finish setup** then walks the steps for people that follow Apply
+   (entitlement, connectors, pilot devices), with the admin or sent to them; the POV is ready to test once they're
+   done. Preflight does the same for the steps before the change list.
 5. **Who tests** (Pilot users, any time): a group they have, people you name, or test accounts. A change means a new
    approval.
-6. **Next steps:** Steps for people (with instructions and checks), **Set up a pilot device** (one line per device;
+6. **Next steps:** every step for people (with instructions and checks), **Set up a pilot device** (one line per device;
    never your own work laptop), the ZPA connector template or CloudShare commands.
 7. **Success criteria:** import probe results, run the API proofs, record attestations, draft the summary, build the
    report.

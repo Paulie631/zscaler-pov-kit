@@ -47,6 +47,8 @@ def guide(pov):
         keys.append(("setup", "setup.zdx_role"))
     if "zpa" in pov.products:
         keys.append(("setup", "setup.zpa_customer_id"))
+    # before the change list exists, the steps Preflight waits on (they come back as customer actions in the plan)
+    keys += [("customer", k) for k, need in (("zia.ca.malware", "zia"), ("casb.ca.tenant", "casb")) if need in pov.products]
     for i in plan:
         if i["action"] == "customer_action":
             keys.append(("customer", i["key"]))
@@ -72,7 +74,9 @@ def guide(pov):
         if k == "zcc.by_hand":
             e["names"] = [i["name"] for i in zcc_by_hand]
         d = done.get(k) or {}
-        e["status"] = "done" if d.get("done") else "open"
+        e["status"] = "done" if d.get("done") else "skipped" if d.get("skipped") else "open"
+        e["stage"] = e.get("stage") or STAGE_OF_PHASE.get(phase, "finish")
+        e["skipped_by"], e["skip_why"] = d.get("skipped_by"), d.get("skip_why")
         e.update({x: d.get(x) for x in ("by", "at", "how", "detail", "checked_at", "result")})
         e["url"] = GUIDE.get("console")
         e["check"] = check_name(k)
@@ -80,7 +84,57 @@ def guide(pov):
         e["criteria"] = [i for i in (crit.get(k) or [])]
         out.append(e)
     blocks_by_rule(pov, out)
+    out.sort(key=lambda e: (STAGES.index(e["stage"]), FINISH_ORDER.index(e["key"]) if e["key"] in FINISH_ORDER else 50))
     return out
+
+
+# where the setup flow stops for each step, and the order the Finish setup step walks them in
+STAGES = ("connect", "preflight", "finish", "end")
+STAGE_H = {"connect": "To connect the POV kit", "preflight": "Before the change list",
+           "finish": "After the POV's objects are created", "end": "When the POV ends"}
+STAGE_OF_PHASE = {"setup": "preflight", "customer": "finish", "end": "end"}
+FINISH_ORDER = ["zid.ca.entitlement", "zid.ca.passwords", "zcc.by_hand", "zpa.ca.connectors", "zpa.ca.users",
+                "zcc.ca.devices"]
+
+
+def stage(pov, name, steps=None):
+    """-> {steps, open, passed}: one stage's steps; passed when each is done, or skipped on purpose."""
+    st = [s for s in (steps if steps is not None else guide(pov)) if s["stage"] == name]
+    left = [s for s in st if s["status"] == "open"]
+    return {"steps": st, "open": len(left), "skipped": sum(s["status"] == "skipped" for s in st), "passed": not left}
+
+
+def skip(pov, keys, by, why=""):
+    """'Continue anyway' at a gate: records who let the setup go on with these steps still open. They stay on the
+    list (and keep holding up their criteria) until they're done."""
+    by = (by or "").strip()
+    if not by:
+        raise KitError("Say who decided to continue (name), so the record shows it.")
+    known = {s["key"] for s in guide(pov)}
+    done = pov.read_json(DONE_FILE, {}) or {}
+    for k in keys:
+        if k not in known:
+            raise KitError(f"No step called {k}.")
+        cur = done.get(k) or {}
+        if not cur.get("done"):
+            cur.update(skipped=True, skipped_by=by, skipped_at=_now(), skip_why=(why or "")[:200])
+        done[k] = cur
+    pov.write_json(DONE_FILE, done)
+    pov.log("manual", f"continued with {len(keys)} step(s) open, decided by {by}: {', '.join(keys)}")
+    return len(keys)
+
+
+HELP = json.loads((Path(__file__).with_name("check_help.json")).read_text(encoding="utf-8"))
+
+
+def check_help(check_id):
+    """The 'How to verify' panel for a preflight check, if there is one."""
+    h = HELP.get(check_id)
+    if h is None:
+        h = next((v for k, v in HELP.items() if k.endswith("-*") and check_id.startswith(k[:-1])), None)
+    if h and h.get("same"):
+        h = HELP.get(h["same"])
+    return h
 
 
 # ---------------------------------------------------------------- what each step holds up, and the values to paste
@@ -194,7 +248,7 @@ def mark(pov, key, by, undo=False):
     if undo:
         cur.update(done=False, by=None, at=None, how=None)
     else:
-        cur.update(done=True, by=by, at=_now(), how="marked")
+        cur.update(done=True, by=by, at=_now(), how="marked", skipped=False)
     done[key] = cur
     pov.write_json(DONE_FILE, done)
     pov.log("manual", f"{key}: {'reopened' if undo else 'marked done by ' + by}")
@@ -335,7 +389,7 @@ def check(pov, key, tenant_for):
     cur = done.get(key) or {}
     cur.update(checked_at=_now(), result=ok, detail=detail)
     if ok:
-        cur.update(done=True, by="the kit's check", at=_now(), how="checked")
+        cur.update(done=True, by="the kit's check", at=_now(), how="checked", skipped=False)
     elif ok is False and cur.get("how") == "checked":
         cur.update(done=False)   # a check that passed before and fails now reopens the step
     done[key] = cur
@@ -344,10 +398,10 @@ def check(pov, key, tenant_for):
     return {"ok": ok, "detail": detail}
 
 
-def check_all(pov, tenant_for, log=lambda *a: None):
+def check_all(pov, tenant_for, log=lambda *a: None, only_stage=None):
     out = {}
     for s in guide(pov):
-        if not check_name(s["key"]) or s["phase"] == "end":
+        if not check_name(s["key"]) or s["phase"] == "end" or (only_stage and s["stage"] != only_stage):
             continue
         r = check(pov, s["key"], tenant_for)
         log("ok" if r["ok"] else "warn" if r["ok"] is False else "info", f"{s['title']}: {r['detail']}")
@@ -356,20 +410,20 @@ def check_all(pov, tenant_for, log=lambda *a: None):
 
 
 # ---------------------------------------------------------------- a sheet for the customer's admin
-def sheet_md(pov):
-    """The open steps as a Markdown sheet the SE sends the customer's admin (no secrets in it)."""
-    steps = [s for s in guide(pov)]
+def sheet_md(pov, only_stage=None):
+    """The steps as a Markdown sheet the SE sends the customer's admin (no secrets in it): all of them, or one
+    stage's (what the setup is waiting on now)."""
+    steps = [s for s in guide(pov) if only_stage is None or s["stage"] == only_stage]
     lines = [f"# {pov.cfg.get('customer') or pov.id}: Zscaler POV steps for your admin", "",
              "The POV kit does everything it can through Zscaler's API. These steps need a person in the Zscaler "
              f"console ({GUIDE['console']}). If a menu has moved, use the console's Search menu with the term "
              "given. Never send secrets (API client secrets, passwords, keys) by email or chat.", ""]
-    phase_h = {"setup": "Before we start", "customer": "During the POV", "end": "When the POV ends"}
     last = None
     n = 0
     for s in steps:
-        if s["phase"] != last:
-            lines += [f"## {phase_h[s['phase']]}", ""]
-            last = s["phase"]
+        if s["stage"] != last:
+            lines += [f"## {STAGE_H[s['stage']]}", ""]
+            last = s["stage"]
         n += 1
         tick = "[x]" if s["status"] == "done" else "[ ]"
         lines.append(f"### {tick} {n}. {s['title']}")
@@ -379,6 +433,9 @@ def sheet_md(pov):
         if s.get("search"):
             meta.append(f"Console search: \"{s['search']}\"")
         lines += ["", " · ".join(meta), ""]
+        h = s.get("help") or {}
+        if h.get("verify"):
+            lines += ["How to check it's done:"] + [f"- {x.replace('<pov-id>', pov.id)}" for x in h["verify"]] + [""]
         if s.get("why"):
             lines += [f"Why: {s['why']}", ""]
         lines += [f"{i}. {x.replace('<pov-id>', pov.id)}" for i, x in enumerate(s.get("steps") or [], 1)]

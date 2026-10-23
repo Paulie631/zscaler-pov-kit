@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.30
+
+- **The setup stops for the steps for people, like the SE demo kit.**
+  - **Preflight** now lists the steps needed before the change list (ZDX role, ZPA customer ID, Malware Protection,
+    a SaaS tenant) under its checks. A new **Finish setup** step after Apply walks the rest in order (entitlement,
+    passwords, Client Connector profiles, App Connectors, ZPA in Client Connector, pilot devices), with Set up a
+    pilot device on the same page.
+  - **Continue** waits until each step is checked or marked done. **Continue anyway** records who decided and why;
+    those steps stay on the list and keep holding up their criteria.
+  - **With the admin, now** or **Admin does them later** (per POV). The second sends just this stage's steps to the
+    admin; **Check them all** picks up when they're done.
+  - **How to verify** on every step and on every preflight check that isn't passing: what it checks, why it
+    matters, how to verify by hand, the fix, and how to re-test.
+
 ## 0.9.29
 
 - **Steps for people, where they're needed.**
