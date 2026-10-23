@@ -203,6 +203,13 @@ def api(method, path, body, q):
         if path == "/api/usecase/directions":
             from . import usecases
             return 200, {"text": usecases.directions_md(usecases.get(current(), q.get("id")))}
+        if path == "/api/manual":
+            from . import manual
+            p = current()
+            return 200, {"steps": manual.guide(p), "console": manual.GUIDE["console"]}
+        if path == "/api/manual/sheet":
+            from . import manual
+            return 200, {"text": manual.sheet_md(current())}
         if path == "/api/users":
             p = current()
             plan = {i["key"]: i for i in (ChangeList(p.dir).plan()["items"] if ChangeList(p.dir).plan_file.exists() else [])}
@@ -341,6 +348,15 @@ def api(method, path, body, q):
         if body.get("lab") is not True:
             raise KitError("Tick the box to confirm this is your own lab tenant.")
         return 200, {"job": start_job("selftest", lambda log: selftest.run(p, tf, log, lab=True))}
+    if path == "/api/manual/mark":
+        from . import manual
+        return 200, manual.mark(current(), body.get("key"), body.get("by"), undo=bool(body.get("undo")))
+    if path == "/api/manual/check":
+        from . import manual
+        p = current()
+        if body.get("key"):
+            return 200, manual.check(p, body["key"], tf)
+        return 200, {"job": start_job("manual", lambda log: manual.check_all(p, tf, log))}
     if path == "/api/test-api":
         p = current()
         return 200, {"job": start_job("proofs", lambda log: lifecycle.api_proofs(p, tf))}

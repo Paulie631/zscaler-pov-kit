@@ -525,11 +525,11 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   }
   else if(W.step==7){
     let plan=null;try{plan=(await api("/api/plan")).plan}catch(e){}
-    const acts=plan?plan.items.filter(i=>i.action=="customer_action"):[];
+    const man=(await api("/api/manual")).steps;
     const users=c.test_users?(await api("/api/users")).users:[];
     st.innerHTML=head(7,"Next steps","What's left for the customer, and the things to hand to the pilot devices.")+
-      `<div class="cards">
-        <div class="card"><h4>Customer actions</h4>${acts.length?`<ul style="padding-left:18px;margin:6px 0">${acts.map(a=>`<li>${esc(a.name)}</li>`).join("")}</ul><div class="hint">Record each one done in Success criteria (attest), and check Status.</div>`:'<p class="muted">None.</p>'}</div>
+      manualHTML(man)+
+      `<div class="group-h">For the pilot devices and you</div><div class="cards">
         <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The POV's own tests. On a pilot device signed in to Client Connector: <code>pov-kit probe --pack &lt;file&gt;</code>. No keys needed.</p><button id="npack">Download probe pack</button></div>
         ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A template for two connectors in the customer's AWS account or Azure subscription, plus the provisioning key to paste into it.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>AWS template</button><button id="ntplaz" ${c.zpa_key?"":"disabled"}>Azure template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button></div><div id="nkeyv"></div></div>`:""}
         ${has("aiguard")?`<div class="card"><h4>AI Guard policy</h4><p class="muted" style="margin:4px 0 10px">What the POV's own policy blocks. Takes about 30 seconds to apply.</p><div class="seg" id="nag"><button data-p="monitor">Monitor</button><button data-p="attacks">Block attacks</button><button data-p="data">+ data leakage</button></div><div id="nagmsg" class="hint"></div></div>`:""}
@@ -539,6 +539,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         ${users.length?`<div class="card"><h4>Test users</h4>${users.map(u=>`<div class="row" style="gap:8px;margin:4px 0"><code>${esc(u.email)}</code><button data-n="${esc(u.n)}" class="nuser">Show password</button></div><div id="nuser${esc(u.n)}"></div>`).join("")}</div>`:""}
       </div>`+nav(true,true,"Go to Success criteria ›");
     bindNav(()=>{$$("#tabs button").find(b=>b.dataset.t=="criteria").click()});
+    bindManual(()=>wizard());
     $("#npack").onclick=async()=>download(`pov-probe-pack-${c.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
     $("#ntpl")&&($("#ntpl").onclick=async()=>download(`pov-${c.id}-app-connectors.json`,JSON.stringify((await api("/api/zpa-template",{})).template,null,2),"application/json"));
     $("#ntplaz")&&($("#ntplaz").onclick=async()=>download(`pov-${c.id}-app-connectors-azure.json`,JSON.stringify((await api("/api/zpa-template",{cloud:"azure"})).template,null,2),"application/json"));
@@ -552,6 +553,47 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});
   }
   }catch(e){st.innerHTML=note(e.message,"bad")+nav(W.step>0,false);bindNav()}
+}
+
+
+/* ---------------- steps people do (the API can't) ---------------- */
+const PHASE_H={setup:"Before we start",customer:"During the POV",end:"When the POV ends"};
+function manualHTML(steps){
+  const open=steps.filter(s=>s.status!="done").length;
+  let last=null,n=0;
+  return `<div class="group-h">Steps for people <span class="muted" style="font-weight:normal">(${open?open+" open":"all done"} · the kit can't do these through the API)</span></div>
+  <div class="row" style="gap:8px;margin:4px 0 10px"><button id="mchkall">Check them all</button><button id="msheet">Copy the steps for the customer's admin</button><button id="msheetdl">Download them</button></div><div id="mmsg"></div>`+
+  steps.map(s=>{const h=s.phase!=last?`<div class="hint" style="margin:12px 0 4px;font-weight:600">${PHASE_H[s.phase]}</div>`:"";last=s.phase;n++;
+    const ok=s.status=="done", res=s.result===false?note(esc(s.detail),"bad"):s.result===null&&s.detail?note(esc(s.detail)):"";
+    return h+`<details class="card" style="margin:6px 0" ${s===steps.find(x=>x.status!="done")?"open":""}>
+      <summary style="cursor:pointer"><b>${ok?"✓":"○"} ${n}. ${esc(s.title)}</b> <span class="muted">· ${esc(s.who||"")}${s.when?" · "+esc(s.when):""}</span>
+        ${ok?`<span class="muted"> · done${s.by?" by "+esc(s.by):""}${s.at?" "+esc(s.at.slice(0,10)):""}</span>`:""}</summary>
+      ${s.item&&s.item!=s.title?`<p style="margin:8px 0 4px">${esc(s.item)}</p>`:""}
+      ${s.why?`<p class="muted" style="margin:4px 0">${esc(s.why)}</p>`:""}
+      ${s.path?`<p style="margin:8px 0 4px"><b>Where:</b> ${esc(s.path)}${s.verified?"":" <span class=\"muted\">(not checked in a live console yet)</span>"}</p>`:""}
+      ${s.search?`<p style="margin:4px 0"><b>Console search:</b> <code>${esc(s.search)}</code> <span class="muted">(the console's Search menu finds the page if a menu has moved)</span></p>`:""}
+      <ol style="margin:6px 0 6px 0;padding-left:20px">${(s.steps||[]).map(x=>`<li style="margin:3px 0">${esc(x.replaceAll("<pov-id>",S.current.id))}</li>`).join("")}</ol>
+      ${s.names?`<p style="margin:4px 0"><b>Exact names:</b> ${s.names.map(x=>`<code>${esc(x)}</code>`).join(" ; ")}</p>`:""}
+      ${s.done?`<p class="muted" style="margin:4px 0"><b>Done when:</b> ${esc(s.done)}</p>`:""}
+      ${res}${s.checked_at?`<div class="hint">Last checked ${esc(s.checked_at.replace("T"," ").slice(0,16))} UTC${s.detail&&s.result?": "+esc(s.detail):""}</div>`:""}
+      <div class="row" style="gap:8px;margin-top:8px">
+        <a href="${esc(s.url||"https://console.zscaler.com")}" target="_blank" rel="noopener"><button>Open the Zscaler console ↗</button></a>
+        ${s.check?`<button class="mchk" data-k="${esc(s.key)}">Check now</button>`:""}
+        ${ok?`<button class="mundo" data-k="${esc(s.key)}">Reopen</button>`:`<input type="text" class="mby" data-k="${esc(s.key)}" placeholder="Who did it" style="width:160px"><button class="mmark" data-k="${esc(s.key)}">Mark done</button>`}
+      </div></details>`}).join("");
+}
+function bindManual(redraw){
+  const msg=(t,k)=>$("#mmsg")&&($("#mmsg").innerHTML=note(t,k));
+  $$(".mchk").forEach(b=>b.onclick=async()=>{b.disabled=true;b.textContent="Checking…";
+    try{await api("/api/manual/check",{key:b.dataset.k});redraw()}catch(e){msg(e.message,"bad");b.disabled=false;b.textContent="Check now"}});
+  $$(".mmark").forEach(b=>b.onclick=async()=>{const by=$$(".mby").find(i=>i.dataset.k==b.dataset.k).value;
+    try{await api("/api/manual/mark",{key:b.dataset.k,by});redraw()}catch(e){msg(e.message,"bad")}});
+  $$(".mundo").forEach(b=>b.onclick=async()=>{try{await api("/api/manual/mark",{key:b.dataset.k,undo:true});redraw()}catch(e){msg(e.message,"bad")}});
+  $("#mchkall")&&($("#mchkall").onclick=async()=>{const b=$("#mchkall");b.disabled=true;b.textContent="Checking…";
+    try{await runJob((await api("/api/manual/check",{})).job,document.createElement("div"));redraw()}catch(e){msg(e.message,"bad");b.disabled=false;b.textContent="Check them all"}});
+  const sheet=async()=>(await api("/api/manual/sheet")).text;
+  $("#msheet")&&($("#msheet").onclick=async()=>{const t=await sheet();try{await navigator.clipboard.writeText(t);msg("Copied as Markdown: paste it into an email or the shared POV doc. No secrets in it.","good")}catch(e){download(`pov-${S.current.id}-admin-steps.md`,t,"text/markdown")}});
+  $("#msheetdl")&&($("#msheetdl").onclick=async()=>download(`pov-${S.current.id}-admin-steps.md`,await sheet(),"text/markdown"));
 }
 
 /* ---------------- use cases ---------------- */

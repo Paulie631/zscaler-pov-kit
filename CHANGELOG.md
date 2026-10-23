@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.9
+
+- **Detailed instructions for every step the API can't do.** Next steps → **Steps for people** lists them in order
+  (before the POV, during it, at the end), each with who and when, the console path or the term to type in the
+  console's Search menu, numbered steps, the exact names to use, and what done looks like.
+- **Checks where the API can see the result**, all read-only: the API client signs in, ZDX and ZPA are readable,
+  pilot users have the Internet & SaaS entitlement, Malware Protection blocks viruses, pilot devices are registered,
+  App Connectors are up, a SaaS tenant is connected, Client Connector profiles are adopted. A pass ticks the step; the
+  rest are marked done with a name.
+- **A sheet for the customer's admin**: the same steps as Markdown to paste into an email (no secrets).
+- `pov-kit steps` (`--check`, `--done KEY --by NAME`, `--sheet`).
+- Console paths seen in a live console are recorded; the others give a menu search term.
+
 ## 0.9.8
 
 - **ZIA's success criteria get an automated proof.** For each criterion, the POV rules behind it are checked in the

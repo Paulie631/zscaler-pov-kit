@@ -590,6 +590,36 @@ def c_mcp(a):
         print(f"Customer agreement: {mcp.consent(p)['by'] if mcp.consent(p) else 'not yet'}")
 
 
+def c_steps(a):
+    from . import manual
+    p = _pov(a)
+    if a.sheet:
+        print(manual.sheet_md(p))
+        return 0
+    if a.check:
+        manual.check_all(p, tenant_for, say)
+        print()
+    if a.done:
+        manual.mark(p, a.done, a.by)
+        print(f"Recorded {a.done} done by {a.by}.")
+        return 0
+    for n, s in enumerate(manual.guide(p), 1):
+        mark = "x" if s["status"] == "done" else " "
+        print(f"[{mark}] {n:2}. {s['title']}  ({s['key']}; {s.get('who')})")
+        if s["status"] != "done":
+            if s.get("path"):
+                print(f"        Where: {s['path']}")
+            if s.get("search"):
+                print(f"        Console search: {s['search']}")
+            for i, x in enumerate(s.get("steps") or [], 1):
+                print(f"        {i}. {x.replace('<pov-id>', p.id)}")
+            if s.get("detail") and s.get("result") is not True:
+                print(f"        Last check: {s['detail']}")
+    print("\n`pov-kit steps --check` checks what the API can see; `--done KEY --by NAME` records the rest; "
+          "`--sheet` prints them for the customer's admin.")
+    return 0
+
+
 def c_version(a):
     print(VERSION)
 
@@ -675,6 +705,11 @@ def parser():
     s = cmd("delete", c_delete, "delete a POV from this computer, after checking nothing it made is left in the tenant")
     s.add_argument("id", nargs="?", help="the POV's ID (default: the current POV)")
     s.add_argument("--confirm", help="the POV's ID again, to skip the prompt")
+    s = cmd("steps", c_steps, "the steps people do (the API can't), with instructions; --check, --done KEY --by NAME, --sheet")
+    s.add_argument("--check", action="store_true")
+    s.add_argument("--done")
+    s.add_argument("--by")
+    s.add_argument("--sheet", action="store_true")
     s = cmd("diagnostics", c_diagnostics, "a zip for the kit owner (no secrets, no customer data)")
     s.add_argument("--out")
     s = cmd("update", c_update, "install the latest release from GitHub (--check: only check, --rollback: go back one)")

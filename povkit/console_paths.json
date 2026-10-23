@@ -21,73 +21,98 @@
     },
     "zia.groups": {
       "page": "Groups (Internet & SaaS users)",
-      "path": null,
-      "verified": null
+      "path": "Administration > Internet & SaaS Authentication > Internet & SaaS Users > Groups tab",
+      "verified": "2026-10",
+      "source": "live console, pyite lab"
     },
     "zia.activation": {
       "page": "Activation (pending changes)",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "Activation"
     },
     "zia.malware_protection": {
       "page": "Malware Protection policy",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "Malware Protection policy"
     },
     "zid.entitlements": {
       "page": "ZIdentity user entitlements (Internet & SaaS service)",
-      "path": null,
+      "path": "Administration > Subscription > End User Entitlements (per Zscaler Help; search the menu for 'Entitlement' if it isn't there)",
       "verified": null
     },
     "zcc.app_profiles": {
       "page": "Client Connector app profiles (Windows)",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "Client Connector app profiles"
     },
     "zcc.forwarding_profiles": {
       "page": "Client Connector forwarding profiles",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "Client Connector forwarding profiles"
     },
     "zcc.enrolled_devices": {
       "page": "Client Connector enrolled devices",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "Client Connector enrolled devices"
     },
     "zpa.app_connectors": {
       "page": "ZPA App Connectors",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "ZPA App Connectors"
     },
     "zia.saas_tenants": {
       "page": "SaaS application tenants (SaaS security)",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "SaaS application tenants"
     },
     "zpa.access_policy": {
       "page": "ZPA access policy",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "ZPA access policy"
     },
     "aiguard.policies": {
       "page": "AI Guard policies",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "AI Guard policies"
     },
     "zid.users": {
       "page": "ZIdentity users (set or reset a user's password)",
-      "path": null,
-      "verified": null
+      "path": "Administration > Authentication > Directory > Users",
+      "verified": "2026-10",
+      "source": "live console, pyite lab"
     },
     "zid.groups": {
       "page": "ZIdentity user groups",
-      "path": null,
-      "verified": null
+      "path": "Administration > Authentication > Directory > User Groups",
+      "verified": "2026-10",
+      "source": "live console, pyite lab"
     },
     "zpa.public_api": {
       "page": "ZPA Public API (shows the customer ID)",
       "path": null,
-      "verified": null
+      "verified": null,
+      "search": "ZPA Public API"
+    },
+    "zcc.entitlement": {
+      "page": "Client Connector Entitlement (Internet & SaaS)",
+      "path": "Administration > Client Connector Entitlement > Internet & SaaS",
+      "verified": "2026-10",
+      "source": "live console, pyite lab"
+    },
+    "admin.roles": {
+      "page": "Role Management (Internet & SaaS)",
+      "path": "Administration > Role Management > Internet & SaaS",
+      "verified": "2026-10",
+      "source": "live console, pyite lab"
     }
   }
 }

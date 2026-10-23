@@ -19,6 +19,8 @@ RULE_RES = {"url_filtering": "url_filtering", "ssl_inspection_rules": "ssl", "dl
 
 class FakeTenant:
     def __init__(self):
+        self.malware = {"virusBlocked": True, "unwantedApplicationsBlocked": True, "trojanBlocked": True,
+                        "wormBlocked": True}
         self.calls, self.writes = [], []
         self.next_id = 1000
         self.activation = "ACTIVE"
@@ -211,6 +213,8 @@ class FakeTenant:
             if method == "get_device_apps":
                 return [{"id": "app7", "score": 87}]
             return copy.deepcopy(self.zdx_devices)
+        if resource == "malware_protection_policy":
+            return dict(self.malware)
         if resource == "zcc.devices":
             return [{"userName": "jane@acme.com", "registrationState": "Registered"}]
         if resource == "saas_security_api":

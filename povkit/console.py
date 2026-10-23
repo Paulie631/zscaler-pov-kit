@@ -19,4 +19,4 @@ def path_for(key):
         return ""
     if p.get("path"):
         return f"Console: {p['path']} ({p['page']})"
-    return f"Console: the {p['page']} page"
+    return f"Console: the {p['page']} page (search the console menu for \"{p.get('search') or p['page']}\")"

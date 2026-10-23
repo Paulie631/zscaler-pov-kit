@@ -143,8 +143,26 @@ checking its SHA-256, and **Roll back** goes back one version.
 6. **Apply**: live progress, then a status check. Client Connector profiles are created for the pilot group; if the
    tenant's Client Connector API refuses them, the console prints the exact spec to build by hand, and **Fix drift**
    adopts them.
-7. **Next steps**: customer actions, the probe pack, the ZPA connector template (AWS or Azure) and its key, the AI Guard
-   policy switch.
+7. **Next steps**: the steps for people, the probe pack, the ZPA connector template (AWS or Azure) and its key, the AI
+   Guard policy switch.
+
+### Steps the API can't do
+
+Some steps need a person in the Zscaler console: creating the API client, giving it a ZDX role, granting an
+entitlement, Malware Protection (tenant-wide, so the kit only reads it), connecting a SaaS tenant (an OAuth consent),
+deploying App Connectors, building Client Connector profiles by hand when the API refuses, and deleting the API
+clients at the end. **Next steps → Steps for people** lists the ones this POV needs, in order, each with:
+
+- who does it and when, the console path (where it's been checked in a live console) and the term to type in the
+  console's **Search menu** (it finds any page if a menu has moved);
+- numbered steps, the exact names to use, and what done looks like;
+- **Check now**, where the API can see the result (read-only): the API client signs in, ZDX and ZPA are readable,
+  pilot users are entitled, Malware Protection blocks viruses, devices are registered, connectors are up, a SaaS
+  tenant is connected, profiles are adopted. A passing check ticks the step; **Check them all** runs every one;
+- **Mark done** with a name, for the rest.
+
+**Copy the steps for the customer's admin** gives the same list as Markdown to paste into an email or the shared POV
+doc (no secrets in it). From the command line: `pov-kit steps` (`--check`, `--done KEY --by NAME`, `--sheet`).
 
 ## Part 6: During the POV
 
