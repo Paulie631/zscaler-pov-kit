@@ -66,7 +66,7 @@ def write(pov, note=""):
     out = dict(clean, at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                results={c["id"]: c["result"] for c in f["criteria"]}, model=(pov.cfg.get("ai") or {}).get("model") or ai.DEFAULT_MODEL)
     pov.write_json("summary.json", out)
-    pov.log("report", "executive summary written by Claude through AI Guard")
+    pov.log("report", f"executive summary written by Claude {ai.ROUTES[ai.route_name()]}")
     return out
 
 

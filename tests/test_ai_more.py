@@ -98,3 +98,46 @@ def test_library_strips_the_customer_and_reuses_without_ai(pov, snaps, claude, t
     assert len(sent) == n                                                     # no AI call
     assert uc2["from_library"] == e["id"] and uc2["spec"]["changes"][0]["applications"] == ["DROPBOX"]
     assert [x["id"] for x in library.entries()] == [e["id"]]
+
+
+def test_direct_route_without_ai_guard(pov, monkeypatch):
+    """No AI Guard proxy key: the SE's own Anthropic key, straight to api.anthropic.com, with its own agreement."""
+    sent = []
+
+    def transport(url, json=None, headers=None, timeout=None):
+        sent.append((url, headers))
+        return Reply({"content": [{"type": "text", "text": "hi"}]})
+    monkeypatch.setattr(ai, "TRANSPORT", transport)
+    monkeypatch.setattr(ai, "proxy_key", lambda: (None, "none"))
+    assert ai.route()[0] is None and not ai.available()
+    secrets.put(*ai.DIRECT_KEY, "sk-ant-test-0123456789abcdefghij")
+    assert ai.route()[0] == "direct"
+    with pytest.raises(KitError, match="directly to Anthropic"):
+        ai.ask(pov, "s", "u")
+    ai.record_consent(pov, "Jane Doe, CISO")
+    assert pov.cfg["ai"]["consent"]["route"] == "direct"
+    assert ai.ask(pov, "s", "u") == "hi"
+    url, headers = sent[-1]
+    assert url == "https://api.anthropic.com/v1/messages" and headers["x-api-key"].startswith("sk-ant-")
+    assert "X-ApiKey" not in headers
+    # an agreement for one route doesn't cover the other
+    monkeypatch.setattr(ai, "proxy_key", lambda: ("proxy-key-123", "test"))
+    assert ai.route()[0] == "aiguard" and ai.consent(pov) is None
+
+
+def test_old_agreements_were_for_ai_guard(pov, monkeypatch):
+    monkeypatch.setattr(ai, "proxy_key", lambda: ("proxy-key-123", "test"))
+    pov.cfg["ai"] = {"consent": {"by": "Jane", "share": "names_only", "at": "2026-01-01T00:00:00Z"}}
+    assert ai.consent(pov)
+
+
+def test_console_saves_a_direct_key(pov, monkeypatch):
+    from povkit import gui
+    monkeypatch.setattr(ai, "proxy_key", lambda: (None, "none"))
+    with pytest.raises(KitError, match="sk-ant-"):
+        gui.api("POST", "/api/ai/key", {"key": "nope", "direct": True}, {})
+    gui.api("POST", "/api/ai/key", {"key": "sk-ant-test-0123456789abcdefghij", "direct": True}, {})
+    r = gui.api("GET", "/api/usecases", {}, {})[1]
+    assert r["route"] == "direct" and r["direct"] and not r["proxy"]
+    gui.api("POST", "/api/ai/key", {"direct": True, "remove": True}, {})
+    assert not ai.direct_key()

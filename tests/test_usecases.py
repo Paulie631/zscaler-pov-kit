@@ -62,7 +62,7 @@ def test_nothing_goes_to_claude_without_consent_and_a_key(pov, tenant_for, claud
     with pytest.raises(KitError, match="hasn't agreed"):
         usecases.propose(pov, snaps, "block test sites")
     ai.record_consent(pov, "Jane Doe, CISO")
-    with pytest.raises(KitError, match="AI Guard proxy key"):
+    with pytest.raises(KitError, match="AI Guard app proxy key"):
         usecases.propose(pov, snaps, "block test sites")
     assert claude == []
 

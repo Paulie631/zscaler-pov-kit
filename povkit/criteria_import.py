@@ -3,7 +3,7 @@ into criteria, map each to the kit's catalog, and turn the rest into use cases w
 
   read(name, data)       a file's text, on this laptop (docx, xlsx, csv, txt, md; pdf with pypdf)
   split(text)            one criterion per line, bullet or row, without Claude
-  map_all(pov, items)    Claude (through AI Guard, like the use-case assistant) maps each criterion to catalog IDs or
+  map_all(pov, items)    Claude (like the use-case assistant: through AI Guard, or directly) maps each criterion to catalog IDs or
                          writes a use case for it; without Claude, a keyword match to the catalog suggests IDs
   build(pov, snaps, rows, log)
                          the POV's criteria become the mapped catalog IDs; each use-case row is proposed (config and
@@ -182,8 +182,7 @@ def map_all(pov, items, use_ai=True):
             for i, t in enumerate(items, 1)]
     got = None
     if use_ai:
-        key, _ = ai.proxy_key()
-        if key and ai.consent(pov):
+        if ai.available() and ai.consent(pov):
             used, text = ai.ask(pov, SYSTEM, message(pov, items), max_tokens=6000, tool=TOOL)
             got = (used or {}).get("rows") if used else None
             if got is None:
@@ -229,7 +228,7 @@ def build(pov, snaps, rows, log=lambda *a: None, by="SE"):
     data = load(pov)
     keep = {r["n"]: r for r in data.get("rows") or []}
     made, directions, skipped = [], [], []
-    can_ai = bool(ai.proxy_key()[0]) and bool(ai.consent(pov))
+    can_ai = ai.available() and bool(ai.consent(pov))
     for r in rows:
         if r.get("catalog") or not r.get("usecase"):
             continue

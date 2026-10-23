@@ -404,7 +404,14 @@ def c_gui(a):
 def c_ai(a):
     from . import ai
     p = _pov(a)
-    if a.what == "connect":
+    if a.what == "connect" and a.direct:
+        k = getpass.getpass("Your Anthropic API key, sk-ant-... (hidden): ").strip()
+        if not k.startswith("sk-ant-") or len(k) < 30:
+            raise KitError("Paste your Anthropic API key (it starts with sk-ant-), from the Anthropic Console.")
+        secrets.put(*ai.DIRECT_KEY, k)
+        print("Saved to the keychain. With no AI Guard proxy key, requests now go directly to Anthropic (no AI Guard "
+              "scanning). Record the customer's agreement for this route: `pov-kit ai consent --by \"Name, title\"`.")
+    elif a.what == "connect":
         k = getpass.getpass("AI Guard app proxy key (hidden): ").strip()
         if len(k) < 16:
             raise KitError("Paste the AI Guard app's proxy key (PROXY mode, with an Anthropic provider key behind it).")
@@ -415,12 +422,12 @@ def c_ai(a):
             raise KitError("Say who agreed: `pov-kit ai consent --by \"Name, title\"`.")
         ai.record_consent(p, a.by)
         how = "the full" if ai.share(p) == "full" else "the names-replaced"
-        print(f"Recorded: {a.by} agreed to share {how} discovery snapshot of {p.cfg['customer']} with Claude through "
-              "AI Guard.")
+        print(f"Recorded: {a.by} agreed to share {how} discovery snapshot of {p.cfg['customer']} with Claude "
+              f"{ai.ROUTES[ai.route_name()]}.")
     else:
-        key, where = ai.proxy_key()
+        via, key, where = ai.route()
         c = ai.consent(p)
-        print(f"AI Guard proxy key: {where if key else 'none. ' + where}")
+        print(f"Claude: {ai.ROUTES[via] + ', using ' + where if key else where}")
         print(f"Sharing: {ai.share(p)} (`pov-kit set ai.share names_only|full`)")
         print(f"Customer agreement: {c['by'] + ' on ' + c['at'][:10] if c else 'not yet (for this way of sharing)'}")
 
@@ -775,9 +782,10 @@ def parser():
     cmd("install", c_install, "install this copy on this computer, with a desktop shortcut (the installers run it)")
     s = cmd("uninstall", c_uninstall, "remove the installed kit and its shortcuts (keeps POVs and tenant objects)")
     s.add_argument("--yes", action="store_true")
-    s = cmd("ai", c_ai, "ai connect|consent|status: Claude through AI Guard for use cases")
+    s = cmd("ai", c_ai, "ai connect [--direct]|consent|status: Claude for use cases (through AI Guard, or directly)")
     s.add_argument("what", choices=["connect", "consent", "status"])
     s.add_argument("--by")
+    s.add_argument("--direct", action="store_true", help="with connect: your Anthropic API key instead (no AI Guard)")
     s = cmd("usecase", c_usecase, "usecase ask \"...\" | list | show ID | refine ID \"...\" | accept ID | directions ID | "
             "discard ID | save ID | library | use NAME")
     s.add_argument("action", choices=["ask", "list", "show", "refine", "accept", "directions", "discard", "proposed",

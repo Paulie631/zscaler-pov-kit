@@ -170,8 +170,12 @@ checks it against the new tenant and makes no AI call. Point the library at a sh
 structured data rather than text to parse.
 
 Before the first use, record the customer's agreement: Claude reads the discovery snapshot (names replaced, unless
-you choose otherwise), which travels through your AI Guard tenant to Anthropic. The proxy key is your AI Guard demo kit's Anthropic app key if it's on this
-computer, or one you save with `pov-kit ai connect`; your Anthropic key stays in your own AI Guard tenant.
+you choose otherwise), which travels through your AI Guard tenant to Anthropic. The proxy key is your AI Guard demo
+kit's Anthropic app key if it's on this computer, or one you save with `pov-kit ai connect`; your Anthropic key stays
+in your own AI Guard tenant. No AI Guard tenant (some partners)? Save your own Anthropic API key instead
+(`pov-kit ai connect --direct`, or the Use cases tab): requests then go directly to Anthropic, with the same agreement
+and name replacement but no AI Guard scanning. The agreement names the route, so switching routes asks for it again.
+Without either key, criteria are mapped by keywords and use cases are written by hand.
 
 ## Ask Claude about the tenant (read-only)
 

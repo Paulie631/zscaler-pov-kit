@@ -56,6 +56,9 @@ POV, a 60-minute kickoff with the customer's admin, then a few minutes before ea
 
 - [ ] For AI use cases and the executive summary: an AI Guard app in **PROXY** mode in your own AI Guard tenant, with
   an Anthropic provider key behind it. If you set up the AI Guard SE Demo Kit's Anthropic app, the kit uses it.
+  Without an AI Guard tenant (partners, say): your own Anthropic API key from the Anthropic Console instead; requests
+  then go directly to Anthropic, not scanned by AI Guard. Without either, everything else works and use cases are
+  written by hand.
 - [ ] For ZPA without the customer's cloud account: access to CloudShare (see [CLOUDSHARE.md](CLOUDSHARE.md)).
 
 **From the customer, before the kickoff**
@@ -107,7 +110,7 @@ The **Updates** button at the top of the console tells you when a new version is
 
 1. Agree the success criteria with the customer. Once the POV exists, **Success criteria → The customer's success
    criteria** takes their list: paste it, upload their document (Word, PDF, Excel or CSV), or pick from the catalog.
-   **Map them** matches each one to the catalog (with Claude through AI Guard once the customer's agreement is
+   **Map them** matches each one to the catalog (with Claude once the customer's agreement is
    recorded in Use cases; otherwise by keywords), and you can change any mapping. **Build the POV from these** chooses
    the catalog criteria and, for the rest, has Claude write the configuration and tests as use cases. Everything
    joins the change list for the customer to approve, and the report shows each of their criteria in their own words
@@ -315,7 +318,9 @@ Any step can be revisited after Quick start.
   (**Success criteria → Import probe results**). **Run API proofs** checks what the API can see: the ZIA rules behind
   each criterion and its test sites' categories, connectors, AI Guard scans, ZDX scores and SaaS scans. Record what
   people see as attestations (a screenshot can be attached with `pov-kit attest <criterion> --note ... --file`).
-- **New use cases:** check the library first (no AI call). Otherwise, in the **Use cases** tab, record the customer's
+- **New use cases:** check the library first (no AI call). Otherwise, in the **Use cases** tab, give the kit a way to
+  Claude (your AI Guard proxy key, found automatically if the AI Guard demo kit is on your laptop; or, without an AI
+  Guard tenant, your own Anthropic API key, sent directly and not scanned), record the customer's
   agreement once (names are replaced before anything leaves your laptop, unless they agree to share them), describe
   the use case, refine it in words, and **Add to the change list**. The customer approves the new change list before
   Apply builds it. **Save to library** keeps what worked.

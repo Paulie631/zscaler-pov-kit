@@ -254,10 +254,11 @@ def api(method, path, body, q):
         if path == "/api/usecases":
             from . import ai, usecases
             p = current()
-            key, where = ai.proxy_key()
+            via, key, where = ai.route()
             from . import library
             return 200, {"usecases": [{k: v for k, v in u.items() if k != "raw"} for u in usecases.load(p)][::-1],
                          "consent": ai.consent(p), "key": bool(key), "key_source": where, "share": ai.share(p),
+                         "route": via, "proxy": bool(ai.proxy_key()[0]), "direct": bool(ai.direct_key()),
                          "model": (p.cfg.get("ai") or {}).get("model") or ai.DEFAULT_MODEL,
                          "library": [{k: e.get(k) for k in ("id", "title", "summary", "products", "proved", "saved")}
                                      for e in library.entries()], "library_folder": str(library.folder())}
@@ -413,7 +414,7 @@ def api(method, path, body, q):
         p = current()
 
         def work(log):
-            log("info", "Asking Claude through AI Guard for the executive summary (results only, names removed)")
+            log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]} for the executive summary (results only, names removed)")
             s = summary.write(p, body.get("note") or "")
             log("ok", s["headline"])
             return s
@@ -503,8 +504,8 @@ def api(method, path, body, q):
         items = [str(x).strip()[:600] for x in body.get("items") or [] if str(x).strip()][:criteria_import.MAX_ROWS]
 
         def work(log):
-            claude = bool(ai.proxy_key()[0]) and bool(ai.consent(p)) and body.get("ai", True)
-            log("info", f"Mapping {len(items)} criteria " + ("with Claude, through AI Guard" if claude else
+            claude = ai.available() and bool(ai.consent(p)) and body.get("ai", True)
+            log("info", f"Mapping {len(items)} criteria " + (f"with Claude, {ai.ROUTES[ai.route_name()]}" if claude else
                         "by keywords (Claude isn't set up for this POV: record the customer's agreement in Use cases)"))
             rows = criteria_import.map_all(p, items, use_ai=claude)
             criteria_import.save(p, rows, body.get("source") or "pasted text")
@@ -653,6 +654,14 @@ def api(method, path, body, q):
     if path == "/api/ai/key":
         from . import ai
         k = (body.get("key") or "").strip()
+        if body.get("direct"):
+            if body.get("remove"):
+                secrets.delete(*ai.DIRECT_KEY)
+                return 200, {"ok": True}
+            if not k.startswith("sk-ant-") or len(k) < 30:
+                raise KitError("Paste your Anthropic API key (it starts with sk-ant-), from the Anthropic Console.")
+            secrets.put(*ai.DIRECT_KEY, k)
+            return 200, {"ok": True}
         if len(k) < 16:
             raise KitError("Paste the AI Guard app's proxy key.")
         secrets.put(*ai.OWN_KEY, k)
@@ -667,7 +676,7 @@ def api(method, path, body, q):
         def work(log):
             log("info", "Reading the tenant (read-only) for a fresh snapshot")
             snaps, _ = lifecycle.discover(p, tf)
-            log("info", "Asking Claude through AI Guard")
+            log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]}")
             uc = usecases.propose(p, snaps, text, by=body.get("by") or "SE")
             log("ok", f"{uc['id']}: {len(uc['spec']['changes'])} changes the kit can build, "
                       f"{len(uc['spec']['directions'])} directions")
@@ -686,7 +695,7 @@ def api(method, path, body, q):
         def work(log):
             log("info", "Reading the tenant (read-only) for a fresh snapshot")
             snaps, _ = lifecycle.discover(p, tf)
-            log("info", f"Asking Claude through AI Guard to rework {uid}")
+            log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]} to rework {uid}")
             uc = usecases.refine(p, snaps, uid, text, by=body.get("by") or "SE")
             log("ok", f"{uid}: {len(uc['spec']['changes'])} changes the kit can build, "
                       f"{len(uc['spec']['directions'])} directions")

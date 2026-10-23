@@ -401,7 +401,7 @@ TOOL = {"name": "propose_use_case",
 
 
 def _ask(pov, snaps, message):
-    """Mask (names only), ask through AI Guard, unmask. -> (proposal dict, raw reply for the record)"""
+    """Mask (names only), ask Claude (ai.route), unmask. -> (proposal dict, raw reply for the record)"""
     from . import pseudo
     m = pseudo.for_pov(pov, snaps, message) if ai.share(pov) == "names_only" else None
     sent = m.mask(message) if m else message

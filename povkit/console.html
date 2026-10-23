@@ -743,7 +743,7 @@ function ccDraw(){const el=$("#ccbody");
       <td>${esc(r.text)}${r.note?`<div class="muted" style="font-size:12px">${esc(r.note)}</div>`:""}</td>
       <td style="min-width:300px">${r.usecase_id?`<span class="chip">${esc(r.usecase_id)}</span> `:""}<select class="ccsel" data-i="${i}"><option value="">a use case (the kit writes it)</option><option value="-" ${r.out_of_scope?"selected":""}>out of scope</option>${ids.map(id=>`<option ${r.catalog&&r.catalog[0]==id?"selected":""}>${esc(id)}</option>`).join("")}</select>${(r.catalog||[]).slice(1).map(x=>` <span class="chip">${esc(x)}</span>`).join("")}
         <textarea class="ccuc" data-i="${i}" style="margin-top:6px;min-height:44px;${r.catalog&&r.catalog.length||r.out_of_scope?"display:none":""}" placeholder="What to set up and how to show it">${esc(r.usecase||r.text)}</textarea></td></tr>`).join("")}</tbody></table></div>
-      <div class="row" style="margin-top:10px;gap:10px"><button class="primary" id="ccbuild">Build the POV from these ›</button><button id="ccremap">Map again</button><span class="hint">Catalog criteria are chosen for the POV; each use case gets its configuration and tests from Claude (through AI Guard), then joins the change list for the customer to approve.</span></div>`;
+      <div class="row" style="margin-top:10px;gap:10px"><button class="primary" id="ccbuild">Build the POV from these ›</button><button id="ccremap">Map again</button><span class="hint">Catalog criteria are chosen for the POV; each use case gets its configuration and tests from Claude, then joins the change list for the customer to approve.</span></div>`;
     $$(".ccinc").forEach(x=>x.onchange=()=>{CC.rows[+x.dataset.i].include=x.checked});
     $$(".ccsel").forEach(x=>x.onchange=()=>{const r=CC.rows[+x.dataset.i];r.out_of_scope=x.value=="-";r.catalog=x.value&&x.value!="-"?[x.value]:[];if(!r.catalog.length&&!r.out_of_scope)r.usecase=r.usecase||r.text;else r.usecase="";ccDraw()});
     $$(".ccuc").forEach(x=>x.oninput=()=>{CC.rows[+x.dataset.i].usecase=x.value});
@@ -754,7 +754,7 @@ function ccDraw(){const el=$("#ccbody");
       catch(e){$("#cclog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
   } else if(CC.items.length){
     el.innerHTML=`<div class="group-h">${CC.items.length} criteria found${CC.source?" in "+esc(CC.source):""}</div><ol style="margin:4px 0 8px 18px">${CC.items.map(t=>`<li>${esc(t)}</li>`).join("")}</ol>
-      <div class="row" style="gap:10px"><button class="primary" id="ccmap">Map them ›</button><span class="hint">With the customer's agreement recorded (Use cases tab), Claude maps them through AI Guard; otherwise the kit matches keywords.</span></div>`;
+      <div class="row" style="gap:10px"><button class="primary" id="ccmap">Map them ›</button><span class="hint">With the customer's agreement recorded (Use cases tab), Claude maps them; otherwise the kit matches keywords.</span></div>`;
   } else el.innerHTML="";
   $("#ccmap")&&($("#ccmap").onclick=async()=>{const b=$("#ccmap");b.disabled=true;$("#cclog").style.display="block";
     try{const r=await runJob((await api("/api/criteria/map",{items:CC.items,source:CC.source})).job,$("#cclog"));CC.rows=r.rows;ccDraw()}
@@ -925,17 +925,21 @@ const PSHORT={zid:"ZIdentity",zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard
 let UC=null;
 async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a POV in Setup first.","bad");return}
   UC=await api("/api/usecases");const c=S.current;
-  $("#ucsetup").innerHTML=`<h2>Claude through AI Guard</h2>
+  const RT={aiguard:"through your AI Guard tenant to Anthropic",direct:"directly to Anthropic with your API key (no AI Guard scanning)"};
+  $("#ucsetup").innerHTML=`<h2>Claude ${UC.route=="direct"?"(directly, no AI Guard)":"through AI Guard"}</h2>
     <div class="row" style="gap:20px;align-items:flex-start">
       <div style="flex:1;min-width:280px"><b>What Claude sees</b>
         <div class="seg" id="ucshare" style="margin:6px 0"><button data-s="names_only" class="${UC.share=="names_only"?"on":""}">Names replaced</button><button data-s="full" class="${UC.share=="full"?"on":""}">Full snapshot</button></div>
         <div class="hint" style="margin:0 0 8px">${UC.share=="names_only"?"The customer's names, emails and domains become placeholders on this computer; Claude sees the policy's shape. Replies are swapped back here.":"The snapshot as discovery read it, names included."}</div>
         <b>Customer agreement</b>
-        ${UC.consent?note(`${UC.consent.by} agreed on ${UC.consent.at.slice(0,10)}${UC.consent.share=="full"?" (full snapshot)":" (names replaced)"}.`,"good"):`<p class="muted" style="margin:6px 0">Claude reads ${UC.share=="full"?"the full discovery snapshot":"the discovery snapshot, with names replaced,"} of ${esc(c.customer)}'s tenant. It travels through your AI Guard tenant to Anthropic. Ask the customer before the first use.</p>
+        ${UC.consent?note(`${UC.consent.by} agreed on ${UC.consent.at.slice(0,10)}${UC.consent.share=="full"?" (full snapshot":" (names replaced"}, ${(UC.consent.route||"aiguard")=="direct"?"directly to Anthropic":"through AI Guard"}).`,"good"):`<p class="muted" style="margin:6px 0">Claude reads ${UC.share=="full"?"the full discovery snapshot":"the discovery snapshot, with names replaced,"} of ${esc(c.customer)}'s tenant. It travels ${RT[UC.route||"aiguard"]}. Ask the customer before the first use.</p>
         <div class="row" style="gap:8px"><input type="text" id="ucby" placeholder="Name, title" style="flex:1"><button id="ucagree">Record agreement</button></div>`}</div>
-      <div style="flex:1;min-width:280px"><b>AI Guard proxy key</b>
-        ${UC.key?note("Using "+UC.key_source+". Model: "+UC.model+".","good"):`<p class="muted" style="margin:6px 0">${esc(UC.key_source)}</p>
-        <div class="row" style="gap:8px"><input type="password" id="uckey" placeholder="AI Guard app proxy key" style="flex:1" autocomplete="new-password"><button id="ucsavekey">Save to the keychain</button></div>`}</div>
+      <div style="flex:1;min-width:280px"><b>How the kit reaches Claude</b>
+        ${UC.key?note("Using "+esc(UC.key_source)+". Model: "+esc(UC.model)+".","good"):`<p class="muted" style="margin:6px 0">${esc(UC.key_source)}</p>`}
+        ${UC.proxy?"":`<div class="hint" style="margin:6px 0 2px">AI Guard app proxy key (preferred: AI Guard scans every request and reply)</div>
+        <div class="row" style="gap:8px"><input type="password" id="uckey" placeholder="AI Guard app proxy key" style="flex:1" autocomplete="new-password"><button id="ucsavekey">Save</button></div>
+        ${UC.direct?`<div class="row" style="gap:8px;margin-top:8px"><span class="hint">Your Anthropic API key is saved (used while there's no AI Guard key).</span><button id="ucrmdirect">Remove it</button></div>`:`<div class="hint" style="margin:10px 0 2px">No AI Guard tenant? Your own Anthropic API key instead (sent directly to Anthropic, not scanned)</div>
+        <div class="row" style="gap:8px"><input type="password" id="ucdirect" placeholder="sk-ant-..." style="flex:1" autocomplete="new-password"><button id="ucsavedirect">Save</button></div>`}`}</div>
     </div><div id="ucsetmsg"></div>`;
   $$("#ucshare button").forEach(b=>b.onclick=async()=>{await api("/api/ai/share",{share:b.dataset.s});usecases()});
   $("#uclib").innerHTML=UC.library.length?`<h2>From the library</h2><p class="muted" style="margin-top:0">Use cases that worked before, with the customer's names taken out. Using one checks it against this tenant; no AI call. Folder: <code>${esc(UC.library_folder)}</code></p>`+
@@ -943,8 +947,10 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $("#uclib").style.display=UC.library.length?"":"none";
   $$(".ucuse").forEach(b=>b.onclick=async()=>{b.disabled=true;$("#uclog").style.display="block";try{await runJob((await api("/api/library/use",{name:b.dataset.n})).job,$("#uclog"));usecases()}catch(e){$("#ucmsg").innerHTML=note(e.message,"bad")}finally{b.disabled=false}});
   $("#ucagree")&&($("#ucagree").onclick=async()=>{try{await api("/api/ai/consent",{by:$("#ucby").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
+  $("#ucsavedirect")&&($("#ucsavedirect").onclick=async()=>{try{await api("/api/ai/key",{key:$("#ucdirect").value,direct:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
+  $("#ucrmdirect")&&($("#ucrmdirect").onclick=async()=>{try{await api("/api/ai/key",{direct:true,remove:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
   $("#ucsavekey")&&($("#ucsavekey").onclick=async()=>{try{await api("/api/ai/key",{key:$("#uckey").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
-  const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").textContent=ready?"Takes about a minute: the kit reads the tenant first.":"Record the customer's agreement and a proxy key first.";
+  const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").textContent=ready?"Takes about a minute: the kit reads the tenant first.":"Record the customer's agreement and a key first.";
   $("#ucex").innerHTML=UC_EX.map(x=>`<button class="ucx" style="font-size:12.5px">${esc(x)}</button>`).join("");
   $$(".ucx").forEach(b=>b.onclick=()=>{$("#ucprompt").value=b.textContent});
   $("#uclist").innerHTML=UC.usecases.length?UC.usecases.map(ucCard).join(""):'<div class="panel empty">No use cases yet.</div>';

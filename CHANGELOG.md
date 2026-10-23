@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.24
+
+- **Claude without an AI Guard tenant.** SEs and partners with no AI Guard proxy key can save their own Anthropic API
+  key (Use cases tab, or `pov-kit ai connect --direct`). Use cases, criteria mapping and the report summary then go
+  directly to Anthropic, with the same customer agreement and name replacement but no AI Guard scanning. An AI Guard
+  proxy key, when there is one, is still used first. The customer's agreement now records the route, so switching
+  routes asks for it again.
+
 ## 0.9.23
 
 - **The SE demo kit's ZIA traffic generator**, for the customer's dashboards: `pov-kit traffic check | run | schedule`
