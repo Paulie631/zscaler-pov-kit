@@ -249,6 +249,8 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
 const TOKEN="__POV_TOKEN__";
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+// release notes: a little Markdown (bold, code, bullets, wrapped lines), escaped first
+function mdLite(t){return esc(t).replace(/\n {2,}/g," ").replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/`([^`]+)`/g,"<code>$1</code>").replace(/^- /gm,"• ")}
 async function api(path,body){
   const r=await fetch(path,{method:body===undefined?"GET":"POST",headers:{"X-POV-Token":TOKEN,"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   const j=await r.json().catch(()=>({error:"No answer from the kit. Is the console still running?"}));
@@ -295,7 +297,7 @@ function showUpd(){const u=UPD||{},b=$("#upd");
   $("#updrel").href=u.releases||"#";
   $("#updroll").style.display=u.can_rollback&&u.installed?"":"none";
   $("#updgo").style.display=u.available&&!u.git?"":"none";
-  $("#updnotes").style.display=u.available&&u.notes?"block":"none";$("#updnotes").textContent=u.notes||"";
+  $("#updnotes").style.display=u.available&&u.notes?"block":"none";$("#updnotes").innerHTML=mdLite(u.notes||"");
   let t=`You have <b>${esc(u.current||S&&S.version||"?")}</b>. `;
   if(u.error)t+=`Couldn't check for updates: ${esc(u.error)}`;
   else if(u.available)t+=`Version <b>${esc(u.latest)}</b> is available.`+(u.git?` This copy is a git checkout: update it with <code>git pull</code>.`:u.installed?"":" Installing it also installs the kit on this computer, with a desktop shortcut.");

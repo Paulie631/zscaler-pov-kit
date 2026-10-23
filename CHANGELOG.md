@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.9.7
+
+Follow-ups from the live lab test:
+- **Status is much faster.** One status check signs in once and reads each list once: discovery and the drift
+  check share a read cache, and ZIA drift uses those lists instead of fetching every POV object one by one.
+- **A recording survives the handover.** Before the POV's customer data is removed, its API recording is exported
+  as a replay fixture with customer names replaced (`~/.zscaler-pov-kit/fixtures/`), so a live run can become a test.
+- **The Updates dialog shows release notes formatted** (bold, code, bullets) instead of raw Markdown.
+- **Client Connector's build-by-hand spec** says "a new profile" when the tenant has no default to copy, instead of
+  naming a default that doesn't exist.
+
 ## 0.9.6
 
 From the live lab test:

@@ -181,9 +181,15 @@ class ZCC(Product):
         grp = (zia_snap or {}).get("pilot_group") or {}
         fwd_name, app_name = names(pov.prefix, pov.id)
         src_app, src_fwd = snap.get("source_app") or {}, snap.get("source_fwd") or {}
-        spec = BY_HAND.format(fwd=fwd_name, app=app_name, src_fwd=src_fwd.get("name", "the default forwarding profile"),
-                              src_app=src_app.get("name", "the default Windows app profile"),
-                              group=grp.get("name", "the pilot group"))
+        spec = BY_HAND.format(fwd=fwd_name, app=app_name, group=grp.get("name", "the pilot group"),
+                              src_fwd=src_fwd.get("name") or "your usual forwarding profile (or a new one)",
+                              src_app=src_app.get("name") or "your usual Windows app profile (or a new one)")
+        if not src_fwd:
+            spec = spec.replace("a copy of 'your usual forwarding profile (or a new one)'",
+                                "a new profile (this tenant has no default to copy)")
+        if not src_app:
+            spec = spec.replace("a copy of 'your usual Windows app profile (or a new one)'",
+                                "a new profile (this tenant has no default to copy)")
         affects = f"devices of members of '{grp.get('name', '?')}' only"
         return [
             item("zcc", "forwarding_profile", "zcc.fwd", fwd_name, action="create_or_adopt", affects=affects,

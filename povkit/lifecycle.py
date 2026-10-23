@@ -105,7 +105,17 @@ def apply(pov, tenant_for, log):
 
 
 def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
-    snaps, checks = discover(pov, tenant_for)
+    from .core.guard import CachedReads
+    shared = {}
+    raw_tenant_for = tenant_for
+
+    def reads(p, which):   # one signed-in client and one read cache for this check (the fix below writes afresh)
+        if which != "discovery":
+            return raw_tenant_for(p, which)
+        if "d" not in shared:
+            shared["d"] = CachedReads(raw_tenant_for(p, which))
+        return shared["d"]
+    snaps, checks = discover(pov, reads)
     items, _ = make_plan(pov, snaps)
     cl = ChangeList(pov.dir)
     a = cl.approval()
@@ -118,7 +128,7 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
     else:
         checks.append(check("plan-approved", "Change list approved", WARN, "not yet", "Run `pov-kit approve`."))
     led = ledger(pov)
-    ro = ReadOnlyTenant(tenant_for(pov, "discovery"))
+    ro = ReadOnlyTenant(reads(pov, "discovery"))
     for p in in_play(pov, led):
         if p.ready:
             checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}") for x in p.drift(ro, pov, led, items)]

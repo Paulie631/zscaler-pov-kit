@@ -289,3 +289,32 @@ def test_obfuscated_user_names_dont_block_teardown(tpov, tenant, tenant_for):
     assert "zia-foreign" not in checks
     lifecycle.teardown(tpov, tenant_for, log)
     assert not [u for u in tenant.users if u["name"].startswith("ZPOV")] and not lifecycle.ledger(tpov).active()
+
+
+def test_status_reads_lists_once_and_no_get_per_rule(tpov, tenant, tenant_for):
+    approve(tpov, tenant_for)
+    lifecycle.apply(tpov, tenant_for, log)
+    tenant.calls.clear()
+    lifecycle.status(tpov, tenant_for)
+    gets = [c for c in tenant.calls if c[1] in ("get_rule", "get_label", "get_category")]
+    assert not gets, gets
+    lists = [c for c in tenant.calls if c == ("url_filtering", "list_rules")]
+    assert len(lists) == 1
+
+
+def test_release_notes_and_handover_export(tpov, tenant, tenant_for, home):
+    from povkit import handover
+    from povkit.core.pov import BASE
+    tpov.cfg["record"] = True
+    tpov.save()
+    approve(tpov, tenant_for)
+    lifecycle.apply(tpov, tenant_for, log)
+    lifecycle.teardown(tpov, tenant_for, log)
+    rec = tpov.path("recordings")                  # the fake tenant skips the recorder: write what it would
+    rec.mkdir()
+    (rec / "2026-10-23.jsonl").write_text('{"resource": "user_management", "method": "list_groups", "args": [], '
+                                          '"kwargs": {}, "response": [{"id": 1, "name": "Acme Sales"}]}\n')
+    handover.finish(tpov)
+    out = list((BASE / "fixtures").glob(f"{tpov.id}-*.jsonl"))
+    assert out and "Acme Sales" not in out[0].read_text()
+    assert not tpov.path("recordings").exists()

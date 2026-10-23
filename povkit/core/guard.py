@@ -29,6 +29,28 @@ def native(v, product="zia"):
     return int(s) if product in INT_IDS and s.isdigit() else s
 
 
+class CachedReads:
+    """One status check reads the same lists more than once (discovery, then drift): answer repeats from memory.
+    Any write clears it. Used only for the length of one status run."""
+
+    def __init__(self, tenant):
+        self._t, self._memo = tenant, {}
+
+    def __getattr__(self, name):
+        return getattr(self._t, name)
+
+    def call(self, resource, method, *a, **kw):
+        import copy
+        import json
+        if not is_read(method):
+            self._memo.clear()
+            return self._t.call(resource, method, *a, **kw)
+        key = (resource, method, json.dumps([a, kw], sort_keys=True, default=str))
+        if key not in self._memo:
+            self._memo[key] = self._t.call(resource, method, *a, **kw)
+        return copy.deepcopy(self._memo[key])
+
+
 class ReadOnlyTenant:
     mode = "read-only"
 

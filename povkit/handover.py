@@ -9,6 +9,7 @@ terraform  write a Terraform folder that adopts the POV objects in place: one `i
 from __future__ import annotations
 
 import re
+import time
 import textwrap
 
 from . import products
@@ -88,6 +89,14 @@ def finish(pov):
     except Exception as e:   # never let a config file stop the handover
         pov.log("handover", f"couldn't remove the Claude Desktop entry: {str(e)[:120]}", "warn")
     gone = secrets.delete_all(pov.id, usecases.secret_names(pov))
+    if (pov.path("recordings")).exists():   # keep the run as a replay fixture first: shapes only, no customer names
+        try:
+            from . import recorder
+            from .core.pov import BASE
+            out, n = recorder.export(pov, f"{pov.id}-{time.strftime('%Y%m%d-%H%M')}", out_dir=BASE / "fixtures")
+            pov.log("handover", f"recording exported ({n} distinct calls, customer names replaced) to {out}")
+        except Exception as e:   # never let it stop the handover
+            pov.log("handover", f"couldn't export the recording: {str(e)[:120]}", "warn")
     purged = pov.purge_customer_data()
     pov.cfg["state"] = "handed_over"
     from . import backup

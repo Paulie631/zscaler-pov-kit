@@ -650,12 +650,19 @@ class ZIA(Product):
     def drift(self, t, pov, ledger, items_):
         out, missing, gone, foreign, disabled, unscoped = [], [], [], [], [], []
         mine = [i for i in items_ if i["product"] == "zia" and i["action"] == "create"]
+        listed = {}   # kind -> {id: row}, from the same lists discovery read (one call per kind, not per object)
         for it in mine:
             e = ledger.find(it["key"])
             if not e:
                 missing.append(it["name"])
                 continue
-            live = self.live_object(t, e)
+            key = (e["kind"], e.get("rule_type"))
+            if key not in listed:
+                try:
+                    listed[key] = {str(g(r, "id")): r for r in list_kind(t, e["kind"], e.get("rule_type"), pov.prefix)}
+                except KitError:
+                    listed[key] = {}
+            live = listed[key].get(str(e["id"])) or self.live_object(t, e)
             if live is None:
                 gone.append(it["name"])
                 continue
