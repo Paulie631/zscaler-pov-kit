@@ -327,7 +327,7 @@ def wait_for_zscaler(minutes, say=print, session=None, sleep=time.sleep, every=1
         sleep(every)
 
 
-def run(criteria, session=None, pack=None):
+def run(criteria, session=None, pack=None, on_result=None, stop=None):
     """Run the criteria's probe tests. With the pack they came from, the results say which POV and which version of
     each criterion's tests they ran, so the SE's kit can tell results for an older pack from current ones."""
     import requests
@@ -341,7 +341,13 @@ def run(criteria, session=None, pack=None):
                    tests={c["id"]: c.get("hash") for c in criteria if c.get("hash")})
     for c in criteria:
         for spec in c.get("probe") or []:
-            out["results"].append(dict(run_spec(spec, run_id, s), criterion=c["id"]))
+            if stop and stop():
+                out["stopped"] = True
+                return out
+            r = dict(run_spec(spec, run_id, s), criterion=c["id"])
+            out["results"].append(r)
+            if on_result:
+                on_result(r)
     return out
 
 

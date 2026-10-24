@@ -55,6 +55,13 @@ letting Claude Desktop make changes.
    Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
    forgets it on your laptop, once it has checked nothing is left in the tenant.
 
+## Live demos
+
+- **AI Guard tab › Guided demos** and **Device tests tab › Guided demos**: short stories with what to say and a Run
+  button. Device tests run on the computer running the console, which must be a pilot device signed in as the pilot
+  user.
+- **Device tests › Demo helpers**: ZPA, ZDX and CASB talk tracks, and **Warm up the dashboards** the day before.
+
 ## Every customer session
 
 - **Status → Check now.** Fix drift repairs only the POV's own objects.

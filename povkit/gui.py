@@ -765,6 +765,23 @@ def api(method, path, body, q):
                 raise KitError("ZIdentity didn't say which cloud: type it (the Zscaler console's address or Client "
                                "Connector's About page shows it, such as zscalertwo).")
         return 200, {"cloud": settings.set_value(p, "zcc.cloud", c)}
+    if path == "/api/devtests":   # the Device tests tab: the tests and the guided demos
+        from . import devtests
+        p = current()
+        if body.get("helpers"):
+            return 200, devtests.helpers(p)
+        if body.get("warmup"):
+            rounds = int(body.get("rounds") or 3)
+            return 200, {"job": start_job("traffic", lambda log, job: devtests.warm_up(
+                p, rounds, log, stop=lambda: job["stop"]), streams=True)}
+        if not body.get("run"):
+            return 200, devtests.library(p)
+
+        def work(log, job):
+            ids = body.get("ids") or None
+            job["total"] = len(ids) if ids else sum(len(c["tests"]) for c in devtests.library(p)["criteria"])
+            return devtests.run(p, ids, log, on_result=job["items"].append, stop=lambda: job["stop"])
+        return 200, {"job": start_job("devtests", work, streams=True)}
     if path == "/api/device/run-here":   # this computer is the pilot device: run the tests, import the results
         from . import device
         p = current()

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.56
+
+- **Device tests tab** (POVs with Internet Access, Client Connector, ZPA, ZDX or CASB): the AI Guard test runner's
+  counterpart, for live demos on a pilot device running the console.
+  - **Test runner:** the POV's device tests by criterion; run all or some, results stream in as cards (expected vs
+    got, the detail), **Open in a browser** repeats a test for the room, Stop ends after the test in flight. A
+    criterion counts as evidence once all of its tests ran. The probe's tenant check comes first, as always.
+  - **Guided demos:** ten short stories (policy follows the user, a gambling site, coaching, malware in HTTPS,
+    phishing, card numbers leaving, safe GenAI, risky downloads, isolation, not just the web), each with what to say
+    first, what to point at and what to say after, and a **Run it** button.
+  - **Demo helpers:** for ZPA, ZDX and CASB, what to say, the steps to show in the console and each criterion's
+    state; and **Warm up the dashboards**: rounds of the POV's test traffic from this computer, so Insights isn't
+    empty.
+
 ## 0.9.55
 
 From the first real pilot-device run (12 of 21 passed), fixes for the 9 that didn't:
