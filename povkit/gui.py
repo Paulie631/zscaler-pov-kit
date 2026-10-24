@@ -770,6 +770,8 @@ def api(method, path, body, q):
         p = current()
         if body.get("helpers"):
             return 200, devtests.helpers(p)
+        if body.get("open"):   # the test's page in this computer's default browser
+            return 200, {"url": devtests.open_here(p, body["open"])}
         if body.get("warmup"):
             rounds = int(body.get("rounds") or 3)
             return 200, {"job": start_job("traffic", lambda log, job: devtests.warm_up(

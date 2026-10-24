@@ -60,6 +60,9 @@ letting Claude Desktop make changes.
 - **AI Guard tab › Guided demos** and **Device tests tab › Guided demos**: short stories with what to say and a Run
   button. Device tests run on the computer running the console, which must be a pilot device signed in as the pilot
   user.
+- **Device tests › Guided demos › Show it**: the user's view. Step by step, each test's page opens in the pilot
+  device's default browser (Safari or Chrome, not an in-app browser) for the room, then the test runs and is recorded.
+  Put the console and the browser side by side. Firewall and DNS steps give a Terminal command to copy instead.
 - **Device tests › Demo helpers**: ZPA, ZDX and CASB talk tracks, and **Warm up the dashboards** the day before.
 
 ## Every customer session

@@ -52,3 +52,20 @@ def test_helpers_and_warm_up(pov_all, monkeypatch):
     fake(monkeypatch)
     monkeypatch.setattr(traffic, "run", lambda **k: {"total": 10, "errors": 0, "summary": "ok"})
     assert devtests.warm_up(pov_all, rounds=2) == {"total": 20, "errors": 0}
+
+
+def test_show_and_open_here(pov, monkeypatch):
+    import webbrowser
+    lib = devtests.library(pov)
+    tests = [t for c in lib["criteria"] for t in c["tests"]]
+    assert all(t["show"]["look"] for t in tests)
+    tcp = next((t for t in tests if t["type"] == "tcp"), None)
+    if tcp:
+        assert tcp["show"]["terminal"].startswith("nc -vz") and not tcp["show"]["open"]
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda u: opened.append(u) or True)
+    web = next(t for t in tests if t["open"])
+    assert devtests.open_here(pov, web["id"]) == web["open"] == opened[0]
+    with pytest.raises(KitError):
+        devtests.open_here(pov, "not-a-test")
+    assert devtests.show({"type": "dlp_post", "expect": "block"})["copy"].count("Card number") == 6

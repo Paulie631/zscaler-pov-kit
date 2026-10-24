@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.59
+- Device tests › Guided demos › **Show it**: shows the end user's experience. Step by step, each test's page opens in this computer's default browser (the block, caution, isolation or DLP page the user would see), with what to point at; the test runs alongside, and at the end the demo's tests are recorded together for the scorecard. Firewall and DNS steps give a Terminal command to copy; the DLP step copies test card numbers to paste.
+- Test runner results: "Show it in this computer's browser" opens the page in the default browser instead of the browser the console is in.
+
 ## 0.9.58
 - Device tests: ZIA's caution page ("cautioned for category") is read as a caution, and its Browser Isolation page as isolation, even though both pages carry the block template's text.
 - Device tests: when ZIA answers the HTTPS request on port 443 in plain HTTP (blocked at connection), the probe reads that answer directly and records a block.

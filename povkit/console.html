@@ -1424,9 +1424,9 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
         <div class="hint">Each result: <b>Open</b> repeats it in a browser for the room; the events are in ${esc(DT.logs)}. A criterion counts as evidence once all of its tests ran.</div></div>
       <div class="panel"><h2>Results</h2><div id="dtresults"><div class="empty">Nothing run yet.</div></div></div>
     </div></div>
-  <div class="dtview" data-v="demos"><div class="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px">${DT.stories.map(st=>`<div class="card" data-story="${esc(st.id)}"><h4>${esc(st.title)} <span class="muted" style="font-weight:400;font-size:12px">· for ${esc(st.for)}</span></h4>
+  <div class="dtview" data-v="demos"><div class="hint" style="margin:0 0 10px"><b>Show it</b> opens each test’s page in this computer’s default browser (Safari or Chrome) so the room sees what the user sees, then runs the test and records it. Put the console and the browser side by side. Firewall and DNS tests have no page: copy the Terminal command.</div><div class="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px">${DT.stories.map(st=>`<div class="card" data-story="${esc(st.id)}"><h4>${esc(st.title)} <span class="muted" style="font-weight:400;font-size:12px">· for ${esc(st.for)}</span></h4>
       <p style="margin:6px 0"><b>Say first:</b> ${esc(st.say)}</p><p style="margin:6px 0"><b>Point at:</b> ${esc(st.point)}</p><p style="margin:6px 0"><b>Then:</b> ${esc(st.after)}</p>
-      <div class="row" style="gap:8px;margin-top:8px"><button class="primary dtstory" data-id="${esc(st.id)}">Run it (${st.tests.length} test${st.tests.length==1?"":"s"})</button></div><div class="dtsout" data-id="${esc(st.id)}"></div></div>`).join("")||'<div class="empty">No device tests in this POV’s criteria.</div>'}</div></div>`;
+      <div class="row" style="gap:8px;margin-top:8px"><button class="primary dtshow" data-id="${esc(st.id)}" title="Step by step: each test’s page opens in this computer’s browser for the room, then the test runs">Show it (${st.tests.length} step${st.tests.length==1?"":"s"})</button><button class="dtstory" data-id="${esc(st.id)}">Just run the tests</button></div><div class="dtsout" data-id="${esc(st.id)}"></div></div>`).join("")||'<div class="empty">No device tests in this POV’s criteria.</div>'}</div></div>`;
   const show=()=>{$$(".dtview").forEach(v=>v.style.display=v.dataset.v==DTTAB?(v.dataset.v=="runner"?"grid":""):"none");$$("#dtsub button").forEach(b=>b.classList.toggle("on",b.dataset.s==DTTAB))};
   $$("#dtsub button").forEach(b=>b.onclick=()=>{DTTAB=b.dataset.s;show();if(DTTAB=="helpers")drawHelpers()});show();if(DTTAB=="helpers")drawHelpers();
   const count=()=>{const n=[...DTsel].filter(id=>all.some(t=>t.id==id)).length;$("#dtrun").textContent=`Run ${n} test${n==1?"":"s"}`};
@@ -1440,7 +1440,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       <div class="row" style="justify-content:space-between;gap:8px;flex-wrap:wrap"><div><code>${esc(r.criterion)}</code> ${esc(r.text||"")}</div>
       <span class="badge b-${r.pass?"ok":String(r.outcome).startsWith("error")?"fail":"warn"}">${r.pass?"as expected":"got "+esc(r.outcome)}</span></div>
       ${r.detail?`<div class="hint" style="margin:4px 0 0">${esc(r.detail)}</div>`:""}
-      ${r.open?`<div class="row" style="gap:8px;margin-top:6px"><a class="btn" href="${esc(r.open)}" target="_blank" rel="noopener">Open in a browser ↗</a></div>`:""}</div>`;
+      ${r.open&&r.id?`<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen" data-t="${esc(r.id)}">Show it in this computer’s browser ↗</button>${r.show&&r.show.look?`<span class="hint" style="margin:0">${esc(r.show.look)}</span>`:""}</div>`:""}</div>`;
   const draw=()=>{$("#dtresults").innerHTML=DTres.length?DTres.map(card).join(""):'<div class="empty">Nothing run yet.</div>';
     $("#dts-run").textContent=DTres.length;$("#dts-ok").textContent=DTres.filter(r=>r.pass).length;
     $("#dts-bad").textContent=DTres.filter(r=>!r.pass&&!String(r.outcome).startsWith("error")).length;$("#dts-err").textContent=DTres.filter(r=>String(r.outcome).startsWith("error")).length};
@@ -1458,6 +1458,39 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       $("#dtmsg").innerHTML=note(`${r.stopped?"Stopped":"Done"}: ${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:" No criterion ran in full, so no evidence changed."}`,r.ok==r.total?"good":"warn");load()}
     catch(e){$("#dtmsg").innerHTML=note(e.message,"bad")}finally{DTjob=null;$("#dtrun").disabled=false;$("#dtstop").disabled=true;$("#dtstop").textContent="Stop"}};
   $("#dtstop").onclick=()=>{if(DTjob){api("/api/job/stop",{id:DTjob});$("#dtstop").disabled=true;$("#dtstop").textContent="Stopping…"}};
+  w.onclick=async e=>{const b=e.target.closest(".dtopen");if(!b)return;e.preventDefault();b.disabled=true;
+    try{await api("/api/devtests",{open:b.dataset.t})}catch(x){b.insertAdjacentHTML("afterend",note(x.message,"bad"))}finally{setTimeout(()=>b.disabled=false,1500)}};
+  const flat=DT.criteria.flatMap(c=>c.tests.map(t=>Object.assign({criterion:c.criterion},t)));
+  const copy=async(txt,b)=>{try{await navigator.clipboard.writeText(txt);b.textContent="Copied"}catch(_){b.textContent="Copy failed: select it by hand"}};
+  $$(".dtshow").forEach(b=>b.onclick=()=>{const st=DT.stories.find(x=>x.id==b.dataset.id),out=$(`.dtsout[data-id="${st.id}"]`);
+    const tests=st.tests.map(id=>flat.find(t=>t.id==id)).filter(Boolean);let i=0,ended=false;
+    $$(".dtshow,.dtstory").forEach(x=>x.disabled=true);
+    const end=()=>{ended=true;$$(".dtshow,.dtstory").forEach(x=>x.disabled=false)};
+    const step=async()=>{if(ended)return;const t=tests[i],sh=t.show||{};
+      out.innerHTML=`<div class="card" style="margin-top:8px;border-left:4px solid var(--accent)">
+        <div class="muted" style="font-size:12px">Step ${i+1} of ${tests.length} · <code>${esc(t.criterion)}</code></div>
+        <div style="margin:4px 0"><b>${esc(t.text)}</b></div>
+        <div style="margin:4px 0"><b>Point at:</b> ${esc(sh.look||"")}</div>
+        ${sh.terminal?`<div class="row" style="gap:8px;margin:6px 0;align-items:center"><code style="flex:1">${esc(sh.terminal)}</code><button class="dtcpt">Copy</button></div><div class="hint" style="margin:0">Paste it in Terminal on this computer.</div>`:""}
+        ${sh.copy?`<div class="row" style="gap:8px;margin:6px 0"><button class="dtcpc">Copy the test card numbers</button></div>`:""}
+        <div class="dtsres" style="margin-top:6px"><div class="notice">${sh.open?"Opening the page in this computer’s browser, then checking…":"Checking…"}</div></div>
+        <div class="row" style="gap:8px;margin-top:8px">${sh.open?'<button class="dtagain">Open again</button>':""}<button class="primary dtnext" disabled>${i+1<tests.length?"Next ▸":"Finish and record ▸"}</button><button class="dtend">End</button></div></div>`;
+      const q=k=>out.querySelector(k),res=q(".dtsres");
+      q(".dtend").onclick=()=>{end();out.innerHTML=note("Ended. Nothing more was run.")};
+      q(".dtcpt")&&(q(".dtcpt").onclick=e=>copy(sh.terminal,e.target));q(".dtcpc")&&(q(".dtcpc").onclick=e=>copy(sh.copy,e.target));
+      q(".dtagain")&&(q(".dtagain").onclick=()=>api("/api/devtests",{open:t.id}).catch(x=>res.insertAdjacentHTML("beforeend",note(x.message,"bad"))));
+      q(".dtnext").onclick=()=>{i++;i<tests.length?step():finish()};
+      if(sh.open){try{await api("/api/devtests",{open:t.id})}catch(x){res.innerHTML=note(x.message+" Use “Open again”, or open "+sh.open+" by hand.","warn")}
+        await new Promise(r=>setTimeout(r,1500))}
+      if(ended)return;
+      try{const rs=[];await follow((await api("/api/devtests",{run:true,ids:[t.id]})).job,x=>rs.push(x));if(!ended)res.innerHTML=rs.map(card).join("").replace(/<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen"[^]*?<\/div>/,"")}
+      catch(x){if(!ended)res.innerHTML=note(x.message,"bad")}
+      q(".dtnext").disabled=false};
+    const finish=async()=>{out.innerHTML='<div class="notice" style="margin-top:8px">Recording all of this demo’s tests together for the scorecard…</div>';const rs=[];
+      try{const r=await follow((await api("/api/devtests",{run:true,ids:st.tests})).job,x=>rs.push(x));
+        out.innerHTML=rs.map(card).join("")+note(`${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:""}`,r.ok==r.total?"good":"warn");load()}
+      catch(x){out.innerHTML=note(x.message,"bad")}finally{end()}};
+    step()});
   $$(".dtstory").forEach(b=>b.onclick=async()=>{const st=DT.stories.find(x=>x.id==b.dataset.id),out=$(`.dtsout[data-id="${st.id}"]`);b.disabled=true;out.innerHTML='<div class="notice">Running…</div>';const rs=[];
     try{const jid=(await api("/api/devtests",{run:true,ids:st.tests})).job;const r=await follow(jid,x=>{rs.push(x);out.innerHTML=rs.map(card).join("")});
       out.insertAdjacentHTML("beforeend",note(`${r.ok} of ${r.total} as expected.`,r.ok==r.total?"good":"warn"))}

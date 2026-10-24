@@ -87,8 +87,72 @@ def open_url(sp):
     if sp.get("type") == "dlp_post":
         return "https://dlptest.com/http-post/"
     if sp.get("type") == "eicar":
-        return "https://www.eicar.org/download-anti-malware-testfile/"
+        return "https://secure.eicar.org/eicar.com.txt"
+    if sp.get("type") == "via_zscaler":
+        return "https://ip.zscaler.com/"
     return None
+
+
+SAMPLE_CARDS = "\n".join(f"Card number: {c}  Exp: 12/29  CVV: 123" for c in (
+    "4111 1111 1111 1111", "5555-5555-5555-4444", "378282246310005", "4012888888881881",
+    "6011 1111 1111 1117", "5105-1051-0510-5100"))
+
+
+def show(sp):
+    """What the user sees for a test, for showing it to the room: {open, terminal, look, copy}"""
+    t, e = sp.get("type"), sp.get("expect")
+    out = {"open": open_url(sp), "terminal": None, "copy": None}
+    if t == "http":
+        out["look"] = {"block": "Zscaler’s block page: it names the category, the rule and the user.",
+                       "caution": "Zscaler’s caution page. Click Continue: the user can still go ahead, and it’s "
+                                  "logged.",
+                       "isolate": "The site opens in Browser Isolation: it runs in Zscaler’s cloud, not on this "
+                                  "computer.",
+                       "allow": "The page opens normally: approved sites aren’t in the way."}.get(e, "The page.")
+    elif t == "tls_issuer":
+        out["look"] = ("Click the padlock › certificate: issued by Zscaler, so the traffic is inspected."
+                       if e == "Zscaler" else
+                       "Click the padlock › certificate: issued by the site’s own authority, so it isn’t inspected "
+                       "(privacy bypass).")
+    elif t == "eicar":
+        out["look"] = "The EICAR test file over HTTPS: Zscaler stops it with its virus page."
+    elif t == "dlp_post":
+        out["look"] = "Paste the test card numbers (copied for you) into the form and submit: Zscaler’s DLP block."
+        out["copy"] = SAMPLE_CARDS
+    elif t == "tcp":
+        out["terminal"] = f"nc -vz -w 5 {sp.get('host')} {sp.get('port')}"
+        out["look"] = ("In Terminal: the connection times out or is refused (cloud firewall)." if e == "block" else
+                       "In Terminal: the connection succeeds (allowed port).")
+    elif t == "dns":
+        out["terminal"] = f"dig @{sp.get('server')} {sp.get('name')} +short"
+        out["look"] = ("In Terminal: no address comes back (DNS control)." if e == "block" else
+                       "In Terminal: the name resolves.")
+    elif t == "zcc_running":
+        out["look"] = "The Client Connector icon in the menu bar: open it, Internet Security is ON."
+    elif t == "via_zscaler":
+        out["look"] = "ip.zscaler.com says this computer is going through Zscaler, and which data centre."
+    else:
+        out["look"] = describe(sp)
+    return out
+
+
+def describe(sp):
+    return evidence.describe_spec(sp)
+
+
+def open_here(pov, test_id):
+    """Opens a test's page in this computer's default browser (the room sees the user's view). Only the POV's own
+    test pages. -> the URL"""
+    import webbrowser
+    sp = next((sp for _, _, sid, sp in _specs(pov) if sid == test_id), None)
+    if not sp:
+        raise KitError("That test isn't in this POV.")
+    url = open_url(sp)
+    if not url:
+        raise KitError("That test has no page to open.")
+    if not webbrowser.open(url):
+        raise KitError("No browser could be opened on this computer.")
+    return url
 
 
 def library(pov):
@@ -98,7 +162,7 @@ def library(pov):
             by[cid] = {"criterion": cid, "title": title, "tests": []}
             rows.append(by[cid])
         by[cid]["tests"].append({"id": sid, "text": evidence.describe_spec(sp), "type": sp.get("type"),
-                                 "open": open_url(sp)})
+                                 "open": open_url(sp), "show": show(sp)})
     have = set(by)
     stories = [dict(s, tests=[t["id"] for c in s["criteria"] if c in by for t in by[c]["tests"]])
                for s in STORIES if have & set(s["criteria"])]
@@ -130,6 +194,7 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
         r["id"] = sid_of.get((r["criterion"], json.dumps(r["spec"], sort_keys=True)))
         r["text"] = evidence.describe_spec(r["spec"])
         r["open"] = open_url(r["spec"])
+        r["show"] = show(r["spec"])
         log("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['text']}: got {r['outcome']}")
         if on_result:
             on_result(r)
