@@ -405,7 +405,7 @@ class AIGuard(Product):
             raise KitError("The POV has no AI Guard policy yet. Run `pov-kit apply` first.")
         live = self.live_object(t, e)
         if not live:
-            raise KitError("The POV's AI Guard policy is gone. Run `pov-kit status --fix`.")
+            raise KitError("The POV's AI Guard policy is gone. Status > Fix drift (or `pov-kit status --fix`).")
         body = apply_profile(copy.deepcopy(live), profile)
         body = {k: v for k, v in body.items() if k not in ("id", "createdAt", "updatedAt", "lastModifiedBy")}
         t.update(e, live, KINDS["policy"]["res"], "update_policy", int(e["id"]), **body)
@@ -420,12 +420,12 @@ class AIGuard(Product):
         out = [check("aiguard-present", "POV AI Guard objects present", WARN if (missing or gone) else OK,
                      "; ".join(filter(None, [f"not created yet: {', '.join(missing)}" if missing else "",
                                              f"deleted in the console: {', '.join(gone)}" if gone else ""]))
-                     or f"all {len(mine)}", "Run `pov-kit status --fix`." if (missing or gone) else "",
+                     or f"all {len(mine)}", "Status > Fix drift (or `pov-kit status --fix`)." if (missing or gone) else "",
                      fixable=bool(missing or gone))]
         if ledger.find("aiguard.key") and not secrets.get(pov.id, KEY_SECRET):
             out.append(check("aiguard-key", "POV detection key in the keychain", WARN, "missing",
                              "The key's secret is shown only when it's created. Delete the key in AI Guard, then run "
-                             "`pov-kit status --fix` to make a new one."))
+                             "Status > Fix drift to make a new one."))
         return out
 
     def fix_drift(self, t, pov, ledger, items_, log):

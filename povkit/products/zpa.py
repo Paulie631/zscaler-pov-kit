@@ -343,7 +343,7 @@ class ZPA(Product):
         out.append(check("zpa-present", "POV ZPA objects present", WARN if (missing or gone) else OK,
                          "; ".join(filter(None, [f"not created yet: {', '.join(missing)}" if missing else "",
                                                  f"deleted in the console: {', '.join(gone)}" if gone else ""]))
-                         or f"all {len(mine)}", "Run `pov-kit status --fix`." if (missing or gone) else "",
+                         or f"all {len(mine)}", "Status > Fix drift (or `pov-kit status --fix`)." if (missing or gone) else "",
                          fixable=bool(missing or gone)))
         if foreign:
             out.append(check("zpa-foreign", "POV ZPA objects still the POV's", WARN, "; ".join(foreign),

@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.31
+
+- **Details and how to fix, for status checks too.** Every check that isn't passing (after Apply, on Status, in
+  Preflight) has a **Details and how to fix** panel: what it checks, why it matters, how to verify by hand, numbered
+  fix steps, and how to re-test. It's open by default when a check fails. New: the ledger backup, Claude Desktop
+  access, the approval, the end date, pilot users' sign-in, rule scope, missing or disabled POV objects, ZDX, AI
+  Guard's key, connectors and customer actions.
+- **Fix it from the panel:** turn on encrypted backups (folder and passphrase) or back up now, Fix drift, open the
+  change list, or open Ask Claude about this tenant.
+- Status fixes now name the console's buttons instead of command-line commands.
+- An AI Guard-only POV no longer shows pilot-user checks ("How pilot users sign in: ZIA: unknown"): it has no pilot
+  users.
+
 ## 0.9.30
 
 - **The setup stops for the steps for people, like the SE demo kit.**

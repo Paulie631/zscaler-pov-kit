@@ -80,7 +80,8 @@ def discover(t, pov, snaps):
     snap = {"mode": mode, "zidentity": zid, "idps": idps, "emails": emails, "users": []}
 
     how = {"hosted": "ZIA's own user list (Hosted DB)", "saml": "SAML from an outside IdP",
-           "directory": "a synced directory (AD/LDAP)", None: "unknown"}[mode]
+           "directory": "a synced directory (AD/LDAP)",
+           None: "couldn't tell (the sign-in settings weren't readable)" if "zia" in pov.products else "not in this POV"}[mode]
     parts = [f"ZIA: {how}"] + (["ZIdentity in front"] if zid else [])
     if zpa.get("pilot_group"):
         parts.append(f"ZPA: SCIM group from {zpa['pilot_group'].get('idp')}")

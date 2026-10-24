@@ -681,14 +681,14 @@ class ZIA(Product):
         out.append(check("zia-present", "POV objects present", WARN if (missing or gone) else OK,
                          "; ".join(filter(None, [f"not created yet: {', '.join(missing)}" if missing else "",
                                                  f"deleted in the console: {', '.join(gone)}" if gone else ""]))
-                         or f"all {len(mine)}", "Run `pov-kit status --fix`." if (missing or gone) else "",
+                         or f"all {len(mine)}", "Status > Fix drift (or `pov-kit status --fix`)." if (missing or gone) else "",
                          fixable=bool(missing or gone)))
         if disabled:
-            out.append(check("zia-disabled", "POV rules enabled", WARN, ", ".join(disabled), "Run `pov-kit status --fix`.",
+            out.append(check("zia-disabled", "POV rules enabled", WARN, ", ".join(disabled), "Status > Fix drift (or `pov-kit status --fix`).",
                              fixable=True))
         if unscoped:
             out.append(check("zia-scope", "POV rules apply only to the pilot group", FAIL, ", ".join(unscoped),
-                             "Someone changed who these rules apply to. Run `pov-kit status --fix` to put them back.",
+                             "Someone changed who these rules apply to. Status > Fix drift puts them back (or `pov-kit status --fix`).",
                              fixable=True))
         if foreign:
             out.append(check("zia-foreign", "POV objects still the POV's", WARN, "; ".join(foreign),

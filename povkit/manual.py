@@ -131,10 +131,21 @@ def check_help(check_id):
     """The 'How to verify' panel for a preflight check, if there is one."""
     h = HELP.get(check_id)
     if h is None:
-        h = next((v for k, v in HELP.items() if k.endswith("-*") and check_id.startswith(k[:-1])), None)
+        h = next((v for k, v in HELP.items() if (k.endswith("-*") and check_id.startswith(k[:-1]))
+                  or (k.startswith("*-") and check_id.endswith(k[1:]))), None)
     if h and h.get("same"):
         h = HELP.get(h["same"])
     return h
+
+
+def with_help(checks):
+    """Adds each check's 'How to verify' panel, for the console."""
+    for c in checks or []:
+        if isinstance(c, dict) and c.get("id") and not c.get("help"):
+            h = check_help(c["id"])
+            if h:
+                c["help"] = h
+    return checks
 
 
 # ---------------------------------------------------------------- what each step holds up, and the values to paste

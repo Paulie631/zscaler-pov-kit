@@ -298,11 +298,28 @@ async function runJob(id,el){let since=0;el.innerHTML="";
     since+=j.lines.length;if(j.done){if(j.error)throw new Error(j.error);return j.result}
     await new Promise(r=>setTimeout(r,700))}}
 const STATUS_ORDER={fail:0,warn:1,ok:2,info:3},ICON={ok:"✓",warn:"!",fail:"✗",info:"i"};
-function howHTML(h,label){if(!h)return "";const li=a=>`<ul>${(a||[]).map(x=>`<li>${esc(String(x).replaceAll("<pov-id>",(S&&S.current&&S.current.id)||"<pov-id>"))}</li>`).join("")}</ul>`;
-  return `<details class="how"><summary>${esc(label||"How to verify")} ›</summary><div class="body">${h.what?`<b>What it checks</b>${esc(h.what)}`:""}${h.why?`<b>Why it matters</b>${esc(h.why)}`:""}${h.verify?`<b>Verify by hand</b>${li(h.verify)}`:""}${h.fix?`<b>Fix</b>${li(h.fix)}`:""}${h.retest?`<b>Re-test</b>${esc(h.retest)}`:""}</div></details>`}
+function howHTML(h,label,open){if(!h)return "";const li=a=>`<ul>${(a||[]).map(x=>`<li>${esc(String(x).replaceAll("<pov-id>",(S&&S.current&&S.current.id)||"<pov-id>"))}</li>`).join("")}</ul>`;
+  const ol=a=>`<ol style="margin:2px 0 0 18px;padding:0">${(a||[]).map(x=>`<li style="margin:2px 0">${esc(String(x).replaceAll("<pov-id>",(S&&S.current&&S.current.id)||"<pov-id>"))}</li>`).join("")}</ol>`;
+  return `<details class="how" ${open?"open":""}><summary>${esc(label||"Details and how to fix")} ›</summary><div class="body">${h.what?`<b>What it checks</b>${esc(h.what)}`:""}${h.why?`<b>Why it matters</b>${esc(h.why)}`:""}${h.verify?`<b>Verify by hand</b>${li(h.verify)}`:""}${h.fix?`<b>How to fix</b>${ol(h.fix)}`:""}${h.retest?`<b>Re-test</b>${esc(h.retest)}`:""}${h.action?actHTML(h.action):""}</div></details>`}
+// a fix the console can do right there, from a check's panel
+function actHTML(a){
+  if(a=="backup")return S&&S.backup_folder?`<div class="row" style="gap:8px;margin-top:10px"><button class="hact" data-a="backup-now">Back up this POV now</button><span class="hint">to ${esc(S.backup_folder)}</span></div><div class="hactmsg"></div>`:
+    `<div style="margin-top:10px"><b>Turn on backups</b><div class="row" style="gap:8px;margin-top:4px;flex-wrap:wrap"><input type="text" class="hdir" placeholder="Folder, e.g. ~/OneDrive/pov-backups" style="flex:1;min-width:220px"><input type="password" class="hpw" placeholder="Passphrase (12+ characters)" autocomplete="new-password" style="width:220px"><button class="hact" data-a="backup-setup">Turn on backups</button></div><div class="hactmsg"></div></div>`;
+  const go={mcp:["Open Ask Claude about this tenant",8],approve:["Open the change list",4],fixdrift:["Fix drift now",-1]}[a];
+  return go?`<div class="row" style="gap:8px;margin-top:10px"><button class="hact" data-a="${esc(a)}">${esc(go[0])}</button></div><div class="hactmsg"></div>`:""}
+document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest(".hact");if(!b)return;e.preventDefault();e.stopPropagation();
+  const box=b.closest(".body"),msg=t=>{const m=box&&box.querySelector(".hactmsg");if(m)m.innerHTML=t};
+  try{const a=b.dataset.a;
+    if(a=="backup-setup"){b.disabled=true;await api("/api/backup",{folder:box.querySelector(".hdir").value,passphrase:box.querySelector(".hpw").value});await load();msg(note("Backups are on: every POV on this laptop was backed up, and will be after every change. Save the passphrase in your password manager.","good"))}
+    else if(a=="backup-now"){b.disabled=true;const r=await api("/api/backup",{now:true});msg(note("Backed up to "+esc(r.file)+".","good"))}
+    else if(a=="mcp"){W.step=8;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
+    else if(a=="approve"){W.step=4;W.plan=null;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
+    else if(a=="fixdrift"){b.disabled=true;msg('<div class="notice">Fixing the POV\'s own objects…</div>');const checks=await runJob((await api("/api/status",{fix:true})).job,document.createElement("div"));
+      const bad=checks.filter(c=>c.status=="fail"||c.status=="warn").length;msg(note(bad?`Done; ${bad} still need attention: Status shows them.`:"Fixed.","good"));await load()}}
+  catch(err){b.disabled=false;msg(note(err.message,"bad"))}},true);
 function checksHTML(checks){if(!checks.length)return'<div class="empty">No checks.</div>';
   const groups={};for(const c of checks){const g=(c.label.match(/^([A-Za-z ]+?):\s/)||[,"General"])[1];(groups[g]=groups[g]||[]).push(c)}
-  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><ul class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<li><span class="ic ${esc(c.status)}">${ICON[c.status]||"·"}</span><div>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix&&c.status!="ok"?`<div class="fx">${c.status=="info"?"":"Fix: "}${esc(c.fix)}</div>`:""}${c.status!="ok"?howHTML(c.help):""}</div></li>`).join("")}</ul>`).join("")}
+  return Object.entries(groups).map(([g,cs])=>`<div class="group-h">${esc(g)}</div><ul class="checks">${cs.sort((a,b)=>STATUS_ORDER[a.status]-STATUS_ORDER[b.status]).map(c=>`<li><span class="ic ${esc(c.status)}">${ICON[c.status]||"·"}</span><div>${esc(c.label.replace(/^[A-Za-z ]+?:\s/,""))}${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix&&c.status!="ok"?`<div class="fx">${c.status=="info"?"":"Fix: "}${esc(c.fix)}</div>`:""}${c.status!="ok"?howHTML(c.help,null,c.status=="fail"):""}</div></li>`).join("")}</ul>`).join("")}
 function preflightHTML(checks){
   const need=checks.filter(c=>c.status=="fail"), later=checks.filter(c=>c.waiting&&/-waiting$/.test(c.id));
   const laterOf=n=>checks.filter(c=>c.waiting&&c.product==n&&!/-waiting$/.test(c.id));

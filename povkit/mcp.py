@@ -246,7 +246,8 @@ def status(pov):
     inst = (pov.cfg.get("mcp") or {}).get("installed")
     if not inst:
         return mk("mcp", "Claude Desktop read-only access", INFO, "not set up",
-                  "Optional: `pov-kit mcp consent --by ...`, then `pov-kit mcp install`.")
+                  "Optional: Next steps > Ask Claude about this tenant (record the customer's agreement, then Add to "
+                  "Claude Desktop).")
     s, why = slot(pov)
     return mk("mcp", "Claude Desktop read-only access", OK if s != "main" else WARN, f"{entry_name(pov)}, using {why}",
               "" if s != "main" else "Ask the customer for a view-only client for it: `pov-kit connect --mcp`.")

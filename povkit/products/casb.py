@@ -122,7 +122,7 @@ class CASB(Product):
         if not want:
             return []
         return [check("casb-present", "POV CASB DLP rule present", WARN if (missing or gone) else OK,
-                      ", ".join(missing + gone) or "present", "Run `pov-kit status --fix`." if (missing or gone) else "",
+                      ", ".join(missing + gone) or "present", "Status > Fix drift (or `pov-kit status --fix`)." if (missing or gone) else "",
                       fixable=bool(missing or gone))]
 
     def fix_drift(self, t, pov, ledger, items_, log):

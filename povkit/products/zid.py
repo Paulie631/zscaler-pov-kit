@@ -287,7 +287,7 @@ class ZID(Product):
         live = self.live_object(t, e)
         if live is None:
             return [check("zid-present", "Pilot group in ZIdentity", FAIL, "deleted in the console",
-                          "Run `pov-kit status --fix` to recreate it, then grant its entitlements again.", fixable=True)]
+                          "Status > Fix drift recreates it, then grant its entitlements again.", fixable=True)]
         m = next((i for i in items_ if i["key"] == "zid.group.members"), None)
         if m:
             have = {str(g(u, "id")) for u in items(t.call("zid.groups", "list_group_users_details", e["id"]))}
@@ -296,7 +296,7 @@ class ZID(Product):
             gone = sorted(want - have)
             out.append(check("zid-members", "Pilot users in the POV's group", WARN if gone else OK,
                              f"{len(gone)} removed in the console" if gone else f"all {len(want)}",
-                             "Run `pov-kit status --fix` to add them back." if gone else "", fixable=bool(gone)))
+                             "Status > Fix drift adds them back." if gone else "", fixable=bool(gone)))
         linked = ledger.linked(ZIA_GROUP_KEY)
         if {"zia", "zcc", "casb"} & set(pov.products):
             out.append(check("zid-zia", "ZIA has the pilot group", OK if linked else WARN,

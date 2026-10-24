@@ -54,6 +54,9 @@ def wait_for(pov, checks, ran=None):
     return waiting
 
 
+PILOT_PRODUCTS = {"zia", "zcc", "zpa", "zdx", "casb", "zid"}
+
+
 def discover(pov, tenant_for):
     t = ReadOnlyTenant(tenant_for(pov, "discovery"))
     snaps, checks = {}, []
@@ -70,10 +73,13 @@ def discover(pov, tenant_for):
         checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}", product=p.name) for x in c]
     # the identity step: who the pilot users are and how they sign in, across products (read-only too)
     from . import identity
-    try:
-        ident, ic = identity.discover(t, pov, snaps)
-    except KitError as e:
-        ident, ic = {}, [check("id-read", "Pilot users readable", FAIL, str(e)[:200])]
+    if not set(pov.products) & PILOT_PRODUCTS:   # AI Guard alone has no pilot users (its app is the scope)
+        ident, ic = {}, []
+    else:
+        try:
+            ident, ic = identity.discover(t, pov, snaps)
+        except KitError as e:
+            ident, ic = {}, [check("id-read", "Pilot users readable", FAIL, str(e)[:200])]
     snaps["identity"] = ident
     checks += [dict(x, label=f"Identity: {x['label']}") for x in ic]
     name_clash(pov, checks)
@@ -191,9 +197,10 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
         checks.append(check("plan-approved", "Tenant still matches the approved change list", OK if same else WARN,
                             f"approved by {a['by']} on {a['at'][:10]}",
                             "" if same else "Something the plan depends on changed (a group, a category, an engine). "
-                            "Run `pov-kit plan` and get it approved again."))
+                            "Open Setup > Change list to see it, and get it approved again."))
     else:
-        checks.append(check("plan-approved", "Change list approved", WARN, "not yet", "Run `pov-kit approve`."))
+        checks.append(check("plan-approved", "Change list approved", WARN, "not yet", "Setup > Change list, then Approval: "
+                            "record the customer's approval."))
     led = ledger(pov)
     ro = ReadOnlyTenant(reads(pov, "discovery"))
     for p in in_play(pov, led):
@@ -207,7 +214,8 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
     open_actions = [i for i in items if i["action"] == "customer_action"]
     if open_actions:
         checks.append(check("customer-actions", "Customer actions to confirm", INFO,
-                            "; ".join(i["name"] for i in open_actions), "Confirm each with `pov-kit attest`."))
+                            "; ".join(i["name"] for i in open_actions), "Setup > Finish setup (all of them: Next steps > Steps for "
+                            "people): check or mark each one."))
     if fix:
         if not a or digest(items) != a["hash"]:
             raise KitError("Fix drift needs the approved change list to still match the tenant. Run `pov-kit plan` "

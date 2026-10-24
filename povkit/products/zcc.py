@@ -87,7 +87,7 @@ def fwd_tries(fwd, src_fwd, name):
     return tries + [("without the Unified Tunnel settings", no_ut),
                     ("without the Unified Tunnel and ZPA tunnel settings", no_zpa),
                     ("as a minimal Z-Tunnel 2.0 profile", minimal_fwd(name, plain.get("forwardingProfileActions") or []))]
-BY_HAND = ("Build it by hand in the Client Connector portal, then run `pov-kit status --fix`, which finds it by exact "
+BY_HAND = ("Build it by hand in the Client Connector portal, then Status > Fix drift, which finds it by exact "
            "name and adopts it: 1) Forwarding profile named exactly '{fwd}': a copy of '{src_fwd}' with ZIA action "
            "Tunnel and Z-Tunnel 2.0 on every network type. 2) Windows app profile named exactly '{app}': a copy of "
            "'{src_app}' for group '{group}' only, Install Zscaler SSL Certificate on, forwarding profile '{fwd}', and "
@@ -269,7 +269,7 @@ class ZCC(Product):
             return
         if any(g(a, "name") == app_it["name"] for a in apps):
             log("warn", f"An app profile named '{app_it['name']}' already exists and isn't in this POV's ledger, so "
-                        "the kit won't create another. If it was built for this POV, `pov-kit status --fix` adopts it.")
+                        "the kit won't create another. If it was built for this POV, Status > Fix drift adopts it.")
             return
         app = strip_ids({k: v for k, v in src.items() if k not in DROP | {"forwardingProfileId"}})
         win = dict(app.get("windowsPolicy") or {})
@@ -341,7 +341,7 @@ class ZCC(Product):
         return [check("zcc-present", "POV Client Connector profiles", WARN if (missing or gone) else OK,
                       "; ".join(filter(None, [f"not created or adopted: {', '.join(missing)}" if missing else "",
                                               f"deleted in the portal: {', '.join(gone)}" if gone else ""]))
-                      or f"all {len(want)}", "Build them from the change list's spec, then `pov-kit status --fix`."
+                      or f"all {len(want)}", "Build them by hand (Finish setup has the steps and exact names), then Status > Fix drift adopts them."
                       if (missing or gone) else "", fixable=bool(missing))]
 
     def teardown(self, t, pov, ledger, log):

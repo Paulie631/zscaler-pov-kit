@@ -155,7 +155,8 @@ def check(pov):
     at = (pov.cfg.get("backup") or {}).get("at")
     if not folder():
         return mk("backup", "Ledger backed up off this laptop", WARN if active else INFO, "not set up",
-                  "`pov-kit backup setup FOLDER` (a folder synced to OneDrive, Google Drive or iCloud). Without it, a "
-                  "lost laptop leaves `pov-kit recover` as the only way to find the POV's objects.")
+                  "Turn on encrypted backups to a folder synced off this laptop (Status > Safety net, or `pov-kit "
+                  "backup setup FOLDER`). Without it, a lost laptop leaves `pov-kit recover` as the only way to find "
+                  "the POV's objects.")
     return mk("backup", "Ledger backed up off this laptop", OK if at else WARN, f"last backup {at or 'never'}",
-              "" if at else "Run `pov-kit backup now`.")
+              "" if at else "Back it up now (Status > Safety net, or `pov-kit backup now`).")

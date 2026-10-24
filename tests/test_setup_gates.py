@@ -57,3 +57,29 @@ def test_console_api(pov_all, tenant_for, monkeypatch):
         settings.set_value(pov_all, "manual.mode", "sometimes")
     r = gui.api("POST", "/api/preflight", {}, {})[1]
     assert any(c.get("help") for c in r["checks"]) or all(c["status"] == "ok" for c in r["checks"])
+
+
+def test_status_checks_get_details_and_actions():
+    b = manual.check_help("backup")
+    assert b["action"] == "backup" and len(b["fix"]) >= 3
+    assert manual.check_help("zia-present")["action"] == "fixdrift"       # *-present matches the end
+    assert manual.check_help("zpa-connectors-left")["fix"]
+    assert manual.check_help("zia-auth") == manual.check_help("id-signin")
+    out = manual.with_help([{"id": "mcp", "status": "info"}, {"id": "nothing-here", "status": "ok"}])
+    assert out[0]["help"]["action"] == "mcp" and "help" not in out[1]
+
+
+def test_ai_guard_only_pov_has_no_pilot_user_checks(home, tenant_for):
+    from povkit.core import pov as povs
+    p = povs.new("Phish", ["aiguard"])
+    _, checks = lifecycle.discover(p, tenant_for)
+    assert not [c for c in checks if c["id"].startswith("id-")]
+
+
+def test_backup_now_from_the_console(pov, monkeypatch, tmp_path):
+    from povkit import backup
+    with pytest.raises(KitError, match="aren't set up"):
+        gui.api("POST", "/api/backup", {"now": True}, {})
+    backup.setup(str(tmp_path / "bk"), "correct horse battery")
+    r = gui.api("POST", "/api/backup", {"now": True}, {})[1]
+    assert r["file"].endswith(f"{pov.id}.zpovbak")

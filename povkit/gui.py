@@ -456,7 +456,9 @@ def api(method, path, body, q):
         return 200, {"job": start_job("apply", lambda log: len(lifecycle.apply(p, tf, log).active()))}
     if path == "/api/status":
         p = current()
-        return 200, {"job": start_job("status", lambda log: lifecycle.status(p, tf, fix=bool(body.get("fix")), log=log))}
+        from . import manual
+        return 200, {"job": start_job("status", lambda log: manual.with_help(
+            lifecycle.status(p, tf, fix=bool(body.get("fix")), log=log)))}
     if path == "/api/mcp":
         p, what = current(), body.get("what")
         if what == "consent":
@@ -633,6 +635,11 @@ def api(method, path, body, q):
         return 200, evidence.probe_pack(current())
     if path == "/api/backup":
         from . import backup
+        if body.get("now"):
+            out = backup.save(current(), quiet=False)
+            if not out:
+                raise KitError("Backups aren't set up yet: choose a folder and a passphrase first.")
+            return 200, {"file": str(out)}
         d = backup.setup(body.get("folder") or "", body.get("passphrase") or "")
         return 200, {"folder": str(d)}
     if path == "/api/report":
