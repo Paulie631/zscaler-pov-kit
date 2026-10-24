@@ -202,3 +202,20 @@ def test_gate_stops_a_device_outside_the_tenant():
     with pytest.raises(device.DeviceError, match="isn't in the POV's tenant"):
         device.gate(crit, run_spec=lambda sp, rid, s: {"outcome": "allow", "expect": "block"})
     device.gate([{"id": "AI-AIG-01", "probe": []}], run_spec=None)   # no ZIA tenant check in the pack: no gate
+
+
+class _Resp:
+    def __init__(self, status, text, ctype="text/html"):
+        self.status_code, self.text, self.headers, self.history, self.url = status, text, {"Content-Type": ctype}, [], "https://x/"
+
+
+def test_classify_caution_block_and_page_note():
+    caution = _Resp(403, "<title>Internet Security by Zscaler</title><p>Caution: this site is social networking. "
+                         "<input type=submit value='Continue'></p>")
+    block = _Resp(403, "<title>Internet Security by Zscaler</title><p>Website blocked. Sorry, you don't have "
+                       "permission to visit this site. Continue to learn more.</p>")
+    assert probe.classify(caution) == "caution" and probe.classify(block) == "block"
+    assert probe.classify(_Resp(200, "<p>hello</p>")) == "allow"
+    note = probe.page_note(block)
+    assert "Internet Security by Zscaler" in note and "Website blocked" in note
+    assert probe.page_note(_Resp(200, "<p>hello</p>")) == ""

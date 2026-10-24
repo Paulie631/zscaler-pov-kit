@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.57
+
+- **Device test results say what Zscaler's page said:** each web test's detail carries the page title and its reason
+  line ("Website blocked …", "Caution …"), so a surprise outcome explains itself.
+- **The caution page is recognised more widely** (a "Continue" button, "acknowledge"), and a block page that mentions
+  continuing no longer reads as caution.
+- **HTTPS refused before TLS** (`WRONG_VERSION_NUMBER`: ZIA blocking at connection time, as for phishing pages) is
+  checked over plain HTTP, where Zscaler's block page shows.
+
 ## 0.9.56
 
 - **Device tests tab** (POVs with Internet Access, Client Connector, ZPA, ZDX or CASB): the AI Guard test runner's

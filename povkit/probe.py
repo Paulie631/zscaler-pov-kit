@@ -66,11 +66,47 @@ def classify(resp=None, error=None):
         except Exception:
             text = ""
     zs = ZS_PAGE.search(text) or "gateway.zscaler" in trail or "zscaler.net" in trail
-    if zs and re.search(r"caution|continue to|proceed", text, re.I) and not re.search(r"virus|malware|data loss", text, re.I):
+    if zs and re.search(r"caution|\bcontinue\b|proceed|acknowledge", text, re.I) and \
+            not re.search(r"virus|malware|data loss|website blocked|permission to visit", text, re.I):
         return "caution"
     if zs and (BLOCK_WORDS.search(text) or resp.status_code in (403, 451)):
         return "block"
     return "allow"
+
+
+def page_note(resp):
+    """What a Zscaler page says, in a line: its title and the reason it gives (blocked, caution...)."""
+    try:
+        text = resp.text[:40000] if "html" in resp.headers.get("Content-Type", "") else ""
+    except Exception:   # noqa: BLE001
+        return ""
+    if not ZS_PAGE.search(text):
+        return ""
+    title = re.search(r"<title[^>]*>(.*?)</title>", text, re.S | re.I)
+    plain = re.sub(r"\s+", " ", re.sub(r"<script.*?</script>|<style.*?</style>|<[^>]+>", " ", text, flags=re.S | re.I))
+    why = re.search(r"((?:Website blocked|Caution|Warning|Sorry)[^.]{0,140})", plain, re.I)
+    bits = [x.strip() for x in ((title.group(1) if title else ""), (why.group(1) if why else "")) if x and x.strip()]
+    return (": " + " · ".join(bits))[:220] if bits else ""
+
+
+def tls_refused(url, run_id, s, err):
+    """HTTPS failed. ZIA blocking a site it doesn't decrypt answers with a Zscaler-issued certificate (its block
+    notice), or with plain HTTP where TLS was expected (WRONG_VERSION_NUMBER): both are Zscaler acting, so the plain
+    HTTP page tells which. -> (outcome, detail)"""
+    host = re.sub(r"^https?://([^/:]+).*$", r"\1", url)
+    try:
+        if tls_issuer(host) == "Zscaler":
+            return "block", "TLS refused; the certificate was issued by Zscaler (blocked without decryption)"
+    except Exception:   # noqa: BLE001
+        pass
+    try:
+        r = s.get(tag(re.sub(r"^https://", "http://", url), run_id), timeout=TIMEOUT)
+        got = classify(r)
+        if got != "allow":
+            return got, f"HTTPS refused before TLS ({str(err)[:60]}); over HTTP, Zscaler answered" + page_note(r)
+    except Exception:   # noqa: BLE001
+        pass
+    return "error:" + type(err).__name__, str(err)[:120]
 
 
 def tls_issuer(host, port=443):
@@ -223,16 +259,11 @@ def run_spec(spec, run_id, s):
             try:
                 r = s.get(tag(spec["url"], run_id), timeout=TIMEOUT)
                 got = classify(r)
-                detail = f"HTTP {r.status_code}"
+                detail = f"HTTP {r.status_code}" + page_note(r)
             except Exception as e:   # noqa: BLE001
                 if "SSL" not in type(e).__name__ and "certificate" not in str(e).lower():
                     raise
-                # ZIA blocking an HTTPS site it doesn't decrypt answers with a Zscaler-issued certificate (its
-                # block notice): that's a block, as the traffic generator counts it
-                host = re.sub(r"^https?://([^/:]+).*$", r"\1", spec["url"])
-                got = "block" if tls_issuer(host) == "Zscaler" else "error:" + type(e).__name__
-                detail = "TLS refused; the certificate was issued by Zscaler (blocked without decryption)" \
-                    if got == "block" else str(e)[:120]
+                got, detail = tls_refused(spec["url"], run_id, s, e)
         elif kind == "eicar":
             b64 = base64.urlsafe_b64encode(eicar().encode()).decode()
             r = s.get(tag(spec["url"].format(b64=b64), run_id), timeout=TIMEOUT)
