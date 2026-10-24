@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.47
+
+- **Fixed: macOS setup could wrongly say the installer isn't signed by Zscaler.** The team-ID check piped
+  `codesign` into `grep -q`, which under `pipefail` fails when grep stops reading early; it now reads the signature
+  details first.
+
 ## 0.9.46
 
 - **Fixed: the macOS installer failed with 'Permission denied'.** The pinned zip carries no Unix permissions, so

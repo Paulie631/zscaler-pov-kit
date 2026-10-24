@@ -89,12 +89,13 @@ case "$PKG" in
 esac
 if [ -n "$APP" ]; then
   codesign --verify --deep --strict "$APP" 2>/dev/null || fail "The installer's signature doesn't check out, so it wasn't installed."
-  codesign -dv "$APP" 2>&1 | grep -q "TeamIdentifier=PCBCQZJ7S7" \
-    || fail "The installer isn't signed by Zscaler (Developer ID team PCBCQZJ7S7), so it wasn't installed."
+  CS="$(codesign -dv "$APP" 2>&1 || true)"   # captured first: grep -q in a pipe trips pipefail when it stops early
+  case "$CS" in *"TeamIdentifier=PCBCQZJ7S7"*) ;;
+    *) fail "The installer isn't signed by Zscaler (Developer ID team PCBCQZJ7S7), so it wasn't installed." ;; esac
   say "Signed by Zscaler (Developer ID, team PCBCQZJ7S7)"
 else
   SIG="$(pkgutil --check-signature "$PKG" 2>&1 || true)"
-  echo "$SIG" | grep -q "Developer ID Installer: Zscaler" || fail "The installer isn't signed by Zscaler, so it wasn't installed."
+  case "$SIG" in *"Developer ID Installer: Zscaler"*) ;; *) false ;; esac || fail "The installer isn't signed by Zscaler, so it wasn't installed."
   spctl -a -t install "$PKG" >/dev/null 2>&1 || fail "macOS doesn't accept the installer's signature, so it wasn't installed."
   say "Signed by Zscaler, and accepted by macOS"
 fi
