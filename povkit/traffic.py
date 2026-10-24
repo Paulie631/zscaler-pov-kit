@@ -494,8 +494,9 @@ def check(cloud=None, log=None, sess=None):
     except Exception as e:
         bad_ca = "CERTIFICATE_VERIFY_FAILED" in str(e) or "certificate verify failed" in str(e).lower()
         add("gen-ssl", "SSL inspection", "warn", str(e)[:160],
-            "This machine doesn't trust the Zscaler root CA. Client Connector normally installs it; reinstall it or "
-            "import the CA into the Windows certificate store." if bad_ca else "Couldn't open a TLS connection.")
+            "This machine doesn't trust the Zscaler root CA. Client Connector normally installs it; run "
+            "`pov-probe trust-ca` (as administrator) to add the kit's copy, or reinstall Client Connector."
+            if bad_ca else "Couldn't open a TLS connection.")
     tenant_url = next(w["url"] for w in cat["web"] if w["category"] == "POV tenant check")
     r = fetch(s, "GET", tenant_url)
     add("gen-tenant", "This device is in the POV's tenant, as a pilot user", "ok" if r["outcome"] == "block" else "fail",

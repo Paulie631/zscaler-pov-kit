@@ -204,7 +204,7 @@
       "search": "Platform Releases",
       "steps": [
         "In the POV console, Next steps > Set up a pilot device: pick the pilot user and the OS, then copy the one-line command or download the setup script (it has the POV's probe pack inside).",
-        "On the device: macOS, paste it into Terminal (approve the settings profile in System Settings when asked); Windows, paste it into PowerShell opened with Run as administrator.",
+        "On the device: macOS, paste it into Terminal (it asks for the Mac password once); Windows, paste it into PowerShell opened with Run as administrator.",
         "It installs Client Connector for this tenant (cloud, domain and user filled in) from the kit's pinned, signature-checked copy. To use the customer's own version instead, download it from Platform Releases and give it to the setup (--pkg FILE on macOS, -Msi FILE on Windows).",
         "Sign in to Client Connector as the pilot user, then check Internet Security shows On (More > Update Policy if not).",
         "With the setup script, the POV's tests run by themselves once traffic goes through Zscaler; send the results file from the Desktop to the SE."

@@ -8,5 +8,11 @@
     "sha256": "793fc24713c26e0d6ac5a9f0371d844d438972f5f68c4e05c531d02948eba2ef",
     "source": "https://github.com/Paulie631/aiguard-se-kit/releases/download/zcc-installer/Zscaler-windows-4.10.0.477-installer.msi"
   },
-  "macos": null
+  "macos": {
+    "version": "4.10.0.36",
+    "file": "Zscaler-osx-4_10_0_36-installer_app.zip",
+    "sha256": "5e696877f37db6926148c1e6f7250b516149035a6a8a77756ca503ec334ab270",
+    "source": "",
+    "signed_by": "Developer ID Application: Zscaler inc (PCBCQZJ7S7)"
+  }
 }

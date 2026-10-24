@@ -35,6 +35,7 @@ pov-probe test --wait 30                           # run them (waits up to 30 mi
 pov-probe traffic check                            # is this device in the POV's tenant, as a pilot user?
 pov-probe traffic schedule --every 30              # traffic for the dashboards every 30 minutes (--remove stops)
 pov-probe cleanup                                  # remove Endpoint AI test items, if the POV tested them
+pov-probe trust-ca                                 # trust the Zscaler root CA here (admin), if Client Connector didn't
 ```
 
 On Windows, the command is `pov-probe.cmd` in the app folder.

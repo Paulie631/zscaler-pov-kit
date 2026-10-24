@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.44
+
+- **macOS pilot devices: Client Connector 4.10.0.36 is pinned** (Zscaler's installer app, SHA-256 and Developer ID
+  team PCBCQZJ7S7 checked on the device). It installs unattended with the tenant's cloud and user domain, so there's
+  no settings profile to approve any more. `--pkg FILE` still takes the customer's own `.pkg`, or the installer `.app`
+  (zipped or not).
+- **`pov-probe trust-ca`** adds the Zscaler root CA to a pilot device's trusted roots, for devices where Client
+  Connector didn't (the kit's copy is checked against its pinned fingerprint). `traffic check` suggests it when HTTPS
+  inspection fails on an untrusted certificate.
+
 ## 0.9.43
 
 - **Fixed: Stop was greyed out during a run** after the AI Guard tab redrew (switching tabs, or the page reloading).

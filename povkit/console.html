@@ -896,7 +896,7 @@ function deviceHTML(d){
 }
 function bindDevice(d,redraw){
   const out=(h)=>$("#dout").innerHTML=h, email=()=>$("#duser").value.trim();
-  const how=DEV_OS=="macos"?"Paste it into Terminal on the Mac. It asks the user to approve a settings profile in System Settings, and for the Mac password once.":"Paste it into PowerShell opened with Run as administrator.";
+  const how=DEV_OS=="macos"?"Paste it into Terminal on the Mac. It asks for the Mac password once.":"Paste it into PowerShell opened with Run as administrator.";
   $$("#dos button").forEach(b=>b.onclick=()=>{DEV_OS=b.dataset.o;redraw()});
   const saveCloud=async body=>{try{const r=await api("/api/device/cloud",body);$("#dcloud").value=r.cloud||"";out(note(`Cloud: ${r.cloud}`,"good"))}catch(e){out(note(e.message,"bad"))}};
   $("#dcsave").onclick=()=>saveCloud({cloud:$("#dcloud").value.trim()});

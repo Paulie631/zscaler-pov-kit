@@ -9,12 +9,18 @@ traffic.py, so the probe package carries no console, no tenant API code and no s
   pov-probe test [--wait N]     run the pack's tests; writes a results file for the SE
   pov-probe traffic check|run|schedule   the ZIA traffic generator, shaped by the pack's traffic profile
   pov-probe cleanup             remove the Endpoint AI test items a test left
+  pov-probe trust-ca            trust the Zscaler root CA on this device (if Client Connector didn't), for SSL inspection
 """
 from __future__ import annotations
 
 import argparse
 import json
+import hashlib
+import platform
+import re
 import shutil
+import ssl
+import subprocess
 import sys
 from pathlib import Path
 
@@ -160,6 +166,50 @@ def c_traffic(a):
     return 0
 
 
+# ---------------------------------------------------------------- the Zscaler root CA
+CA_FILE = Path(__file__).with_name("zscaler_root_ca.crt")
+CA_SHA256 = "b5ca18b668d1d85b51e964ee06407b0d88e48df6daabd59e93f5b74c29229997"   # Zscaler Root CA, Feb 2025 to 2052
+
+
+def root_ca():
+    """-> (PEM text, DER bytes) of the kit's copy of the Zscaler root CA, after checking its pinned fingerprint."""
+    m = re.search(r"-----BEGIN CERTIFICATE-----.+?-----END CERTIFICATE-----", CA_FILE.read_text(encoding="ascii"), re.S)
+    if not m:
+        raise DeviceError("The kit's copy of the Zscaler root CA is missing or damaged.")
+    der = ssl.PEM_cert_to_DER_cert(m.group(0))
+    if hashlib.sha256(der).hexdigest() != CA_SHA256:
+        raise DeviceError("The kit's copy of the Zscaler root CA doesn't match its pinned fingerprint, so it wasn't used.")
+    return m.group(0) + "\n", der
+
+
+def trust_ca(run=subprocess.run, system=None):
+    """Adds the Zscaler root CA to this device's trusted roots (admin rights needed). -> what was done"""
+    pem, _ = root_ca()
+    tmp = HOME / "zscaler-root-ca.crt"
+    HOME.mkdir(parents=True, exist_ok=True)
+    tmp.write_text(pem, encoding="ascii")
+    osname = system or platform.system()
+    if osname == "Darwin":
+        cmd = ["sudo", "security", "add-trusted-cert", "-d", "-r", "trustRoot", "-k",
+               "/Library/Keychains/System.keychain", str(tmp)]
+    elif osname == "Windows":
+        cmd = ["certutil", "-addstore", "-f", "Root", str(tmp)]
+    else:
+        dest = "/usr/local/share/ca-certificates/zscaler-root-ca.crt"
+        cmd = ["sudo", "sh", "-c", f"cp '{tmp}' {dest} && update-ca-certificates"]
+    r = run(cmd)
+    if getattr(r, "returncode", 0):
+        raise DeviceError("Adding the certificate failed" + (": run PowerShell as administrator."
+                                                              if osname == "Windows" else "."))
+    return f"Zscaler Root CA (SHA-256 {CA_SHA256[:16]}...) is now a trusted root on this device."
+
+
+def c_trust_ca(a):
+    print(trust_ca())
+    print("Check it: pov-probe traffic check (SSL inspection should say: certificate issued by Zscaler).")
+    return 0
+
+
 def c_cleanup(a):
     print(f"Removed {probe.cleanup_ai()} Endpoint AI test item(s).")
     return 0
@@ -197,6 +247,8 @@ def parser():
     s.set_defaults(fn=c_traffic)
     s = sub.add_parser("cleanup", help="remove the Endpoint AI test items a test left")
     s.set_defaults(fn=c_cleanup)
+    s = sub.add_parser("trust-ca", help="trust the Zscaler root CA here (Client Connector normally does this)")
+    s.set_defaults(fn=c_trust_ca)
     s = sub.add_parser("version", help="print the version")
     s.set_defaults(fn=lambda a: print(VERSION) or 0)
     return ap

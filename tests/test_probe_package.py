@@ -165,3 +165,14 @@ def test_cloudshare_traffic_script(pov):
     import base64
     b64 = text.split('FromBase64String("')[1].split('"')[0]
     assert json.loads(base64.b64decode(b64))["pov"] == pov.id
+
+
+def test_root_ca_pinned_and_trust_commands(tmp_path, monkeypatch):
+    from povkit import device
+    pem, der = device.root_ca()
+    assert pem.startswith("-----BEGIN CERTIFICATE-----") and len(der) > 500
+    monkeypatch.setattr(device, "HOME", tmp_path)
+    for osname, word in (("Darwin", "add-trusted-cert"), ("Windows", "certutil"), ("Linux", "update-ca-certificates")):
+        seen = []
+        device.trust_ca(run=lambda cmd, seen=seen: seen.append(cmd) or type("R", (), {"returncode": 0})(), system=osname)
+        assert word in " ".join(seen[0])

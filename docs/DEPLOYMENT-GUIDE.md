@@ -210,12 +210,14 @@ console, no API keys and no tenant access, so it's an easy install for the custo
   results land on the Desktop for you to import.
 
 The cloud (**Detect** reads it from the tenant, or type it, such as `zscalertwo`), the user's domain and the user name
-are filled in: `CLOUDNAME`, `USERDOMAIN` and `UNAME` on Windows; on macOS, a settings profile with the same values
-(`com.zscaler.installparams`, what an MDM would push) that the user approves once in System Settings → General →
-Device Management. On Windows the installer is the kit's pinned copy, checked by SHA-256 and Zscaler's signature. The
-kit has no pinned macOS installer yet, so on a Mac download the `.pkg` from **Infrastructure → Common Resources →
-Deployment → Platform Releases → macOS** in the customer's console and add `--pkg FILE`; on Windows, `-Msi FILE` uses
-the customer's own version the same way. A file you give is checked for Zscaler's signature.
+are filled in: `CLOUDNAME`, `USERDOMAIN` and `UNAME` on Windows; on macOS, the installer app's `--cloudName` and
+`--userDomain` (unattended install, no profile to approve). Given a `.pkg` instead (`--pkg FILE`), the macOS setup
+opens a settings profile with the same values (`com.zscaler.installparams`, what an MDM would push) for the user to
+approve once in System Settings → General → Device Management. On both, the installer is the kit's pinned copy
+(Windows MSI 4.10.0.477, macOS installer app 4.10.0.36), checked by SHA-256 and Zscaler's signature (on macOS:
+Developer ID team PCBCQZJ7S7). To use the customer's own version, download it from **Infrastructure → Common
+Resources → Deployment → Platform Releases** and add `--pkg FILE` (macOS: the `.pkg`, or the installer `.app`,
+zipped or not) or `-Msi FILE` (Windows). A file you give is checked for Zscaler's signature.
 
 **The probe pack keeps the devices in step with the criteria.** It holds the tests for the criteria the customer
 chose (catalog criteria and use cases), each test's version, and what the traffic generator should send for them.
@@ -231,8 +233,8 @@ Send the new pack (**Download probe pack**), install it on the devices, and run 
 
 The setup stops, and changes nothing, on a device that already has Client Connector or another organization's
 Zscaler settings: never use your own work laptop as a pilot device. To set up a dedicated pilot device again (a lab
-VM, say), add `--replace` (macOS) or `-Replace` (Windows). Remove the settings profile from a Mac after the
-POV.
+VM, say), add `--replace` (macOS) or `-Replace` (Windows). After the POV, uninstall Client Connector from the
+pilot Mac (and remove the settings profile, if a `.pkg` was used).
 
 ### Traffic for the dashboards (ZIA)
 
