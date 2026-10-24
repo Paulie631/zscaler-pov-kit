@@ -149,20 +149,23 @@ def running(pov_id):
     return next((j["kind"] for j in JOBS.values() if j.get("pov") == pov_id and not j["done"]), None)
 
 
-def start_job(kind, work):
+def start_job(kind, work, streams=False):
+    """streams: work(log, job) can add results to job["items"] as they land (the console polls them) and should
+    check job["stop"] (set by /api/job/stop) to end early."""
     pid = povs.CURRENT.read_text(encoding="utf-8").strip() if povs.CURRENT.exists() else None
     busy = running(pid) if pid else None
     if busy:
         raise KitError(f"This POV's {busy} is still running. Wait for it to finish (the Logs tab shows it).")
     jid = uuid.uuid4().hex[:8]
-    job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None}
+    job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None,
+                       "items": [], "stop": False}
 
     def log(level, msg):
         job["lines"].append({"level": level, "msg": str(msg), "t": time.strftime("%H:%M:%S")})
 
     def run():
         try:
-            job["result"] = work(log)
+            job["result"] = work(log, job) if streams else work(log)
         except KitError as e:
             job["error"] = str(e)
             log("fail", str(e))
@@ -244,8 +247,9 @@ def api(method, path, body, q):
             j = JOBS.get(q.get("id"))
             if not j:
                 return 404, {"error": "no such job"}
-            since = int(q.get("since", 0))
-            return 200, {"done": j["done"], "lines": j["lines"][since:], "result": j["result"], "error": j["error"]}
+            since, isince = int(q.get("since", 0)), int(q.get("isince", 0))
+            return 200, {"done": j["done"], "lines": j["lines"][since:], "result": j["result"], "error": j["error"],
+                         "items": j["items"][isince:], "total": j.get("total"), "stopping": j["stop"]}
         if path == "/api/plan":
             p = current()
             cl = ChangeList(p.dir)
@@ -325,6 +329,11 @@ def api(method, path, body, q):
                                    "cred": (p.cfg.get("aiguard") or {}).get("provider_credential"),
                                    "se_key": bool(secrets.get(p.id, agm.PROVIDER_SECRET)), "has_provider": bool(px.get("provider"))},
                          "keys": {"detection": bool(dkey), "proxy": bool(pkey)}, "runs": rs[-100:][::-1],
+                         "pov_groups": [dict(g, tests=[dict(slim(t), criterion=t["criterion"], drafted=t.get("drafted"))
+                                                       for t in g["tests"]]) for g in aiguard_runner.pov_criteria(p)],
+                         "pov_users": aiguard_runner.pov_users(p),
+                         "evidence": {k: v for k, v in (p.read_json("api_proofs.json", {}) or {}).items()
+                                      if k.startswith(("AI-", "UC-"))},
                          "competitor": (p.cfg.get("aiguard") or {}).get("competitor") or "Competitor Inc"}
         if path == "/api/criteria/import":
             from . import criteria_import
@@ -493,11 +502,32 @@ def api(method, path, body, q):
         else:
             tests = aiguard_runner.find_tests(p, body.get("ids"), body.get("preset"), body.get("pack"))
         mode = "proxy" if body.get("mode") == "proxy" else "detect"
+        live = bool(body.get("text"))
 
-        def work(log):
-            return {"results": aiguard_runner.run(p, tests, mode, bool(body.get("tags")), body.get("users"),
-                                                  body.get("rounds") or 1, log)}
-        return 200, {"job": start_job("aiguard", work)}
+        def work(log, job):
+            n = len([t for t in tests if mode != "proxy" or t.get("direction", "IN") == "IN"])
+            job["total"] = n * max(1, min(10, int(body.get("rounds") or 1)))
+            res = aiguard_runner.run(p, tests, mode, bool(body.get("tags")), body.get("users"), body.get("rounds") or 1,
+                                     log, on_result=job["items"].append, stop=lambda: job["stop"])
+            stopped = job["stop"]
+            ev = {} if live else aiguard_runner.record_evidence(p, res, stopped)
+            return {"results": res, "stopped": stopped, "evidence": ev}
+        return 200, {"job": start_job("aiguard", work, streams=True)}
+    if path == "/api/job/stop":
+        j = JOBS.get(body.get("id"))
+        if not j:
+            raise KitError("No such job.")
+        j["stop"] = True
+        return 200, {"ok": True}
+    if path == "/api/aiguard/draft":
+        from . import aiguard_runner
+        p = current()
+        cid = body.get("criterion")
+        return 200, {"job": start_job("aiguard-draft", lambda log: {"drafts": aiguard_runner.draft(p, cid, body.get("n") or 5)})}
+    if path == "/api/aiguard/draft/review":
+        from . import aiguard_runner
+        return 200, {"test": aiguard_runner.review_draft(current(), body.get("criterion"), body.get("id"),
+                                                         bool(body.get("accept")), body.get("by") or "")}
     if path == "/api/aiguard/settings":
         p = current()
         vals = {k: body[k] for k in ("proxy", "provider", "provider_credential", "model", "competitor") if k in body}

@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.32
+
+- **The AI Guard tab, rebuilt like the SE demo kit's test runner,** with four parts: Test runner, Guided demos, Policy,
+  Setup.
+  - The test library on the left, with **This POV's criteria** first: a group per AI Guard criterion (catalog,
+    customer prompts, use cases), each test labelled with its criterion, and a preset that selects them all.
+  - **Detection API / LLM proxy** (with Detector tags), rounds, users, a progress bar and counters; results land as
+    they run, with dashboard coverage, CSV and the one-page report.
+  - **Stop** ends a run after the test in flight; what ran stays and counts.
+  - **Results count as evidence:** criterion-labelled results update Success criteria straight away (partial runs stay
+    incomplete).
+  - **Draft more tests with Claude** for any criterion; accepted drafts join its group and its proof.
+  - Tests run as the POV's pilot or test users (or names with the POV's ID), so Insights shows just the POV.
+
 ## 0.9.31
 
 - **Details and how to fix, for status checks too.** Every check that isn't passing (after Apply, on Status, in

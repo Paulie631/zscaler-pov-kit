@@ -306,13 +306,27 @@ The competitor named in the responsible-AI tests is `aiguard.competitor` (`pov-k
 Results show which tests behaved as expected, and the AI Guard policy switch (Monitor, Block attacks, + data leakage)
 shows detection turning into blocking.
 
-The **AI Guard tab** brings the SE demo kit's tools to the POV, always on the POV's own app, keys and policy:
+The **AI Guard tab** brings the SE demo kit's tools to the POV, always on the POV's own app, keys and policy. It has
+four parts: **Test runner**, **Guided demos**, **Policy** and **Setup**.
 
+- **Test runner** (laid out like the demo kit's): the test library on the left, Run and Live prompt beside it, then
+  the POV's criteria, dashboard coverage and the results as they land.
+  - **This POV's criteria** comes first in the library: a group per AI Guard criterion of the POV (the catalog's,
+    the customer's imported prompts, and use cases with AI Guard prompts), each test labelled with its criterion.
+    **▸ This POV's criteria** selects them all. The demo kit's library (presets, industry packs, groups) follows.
+  - **Detection API** or **LLM proxy** per run; in proxy mode, **Detector tags** also scans the prompt and the reply,
+    so the detectors show. **Rounds**, and the **users** the tests run as (rotated): the POV's pilot or test users by
+    default, or names carrying the POV's ID, so AI Guard Insights shows just the POV's scans.
+  - **Stop** ends the run after the test in flight. What ran stays in the results and counts.
+  - **Results count as evidence:** a criterion's results become its proof in Success criteria (no separate API
+    proofs needed). Detection API results count, and proxy results with Detector tags. A criterion whose tests didn't
+    all run stays incomplete, unless one already failed.
+  - **Draft more tests with Claude**, under any criterion: Claude writes up to six test prompts with the detectors
+    they should trigger (synthetic data only), for you to Accept or Discard. Accepted tests join that criterion's
+    group and its proof. For the customer's own criteria, the customer's agreement (Use cases) is needed first.
+  - Results: counters, a progress bar, Flag missed detectors (turn it off for a customer demo), CSV, One-page report.
 - **Policy:** Monitor, Block attacks, Block attacks + data leakage, Block everything risky, or **Custom** (Block or
   Detect per detector, for prompts and replies separately).
-- **Test runner:** the demo kit's 72 tests by preset, industry pack or one by one, as several users and rounds, with
-  the detectors that fired (and expected-but-missed ones, which you can hide for a customer demo). **Live prompt**
-  scans anything you type. **One-page report** summarizes the runs for the customer.
 - **The customer's own prompts:** import a CSV (a `prompt` column; optional `direction`, `name`, `expect`). It becomes
   a pack and a success criterion (AI-AIG-C1…) proved through the Detection API. It stays in the POV folder.
 - **Proxy mode:** real prompts to a model through AI Guard, with **the customer's model key** already in their AI

@@ -473,6 +473,8 @@ class AIGuard(Product):
             key = secrets.get(pov.id, aiguard_secret(own["key"] if own else "aiguard.key"))
         else:
             key = secrets.get(pov.id, KEY_SECRET)
+        from ..aiguard_runner import accepted_drafts
+        tests = list(tests or []) + accepted_drafts(pov, criterion["id"])   # tests Claude drafted, once accepted
         if not tests:
             return None
         if not key:
