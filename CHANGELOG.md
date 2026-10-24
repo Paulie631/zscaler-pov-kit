@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.43
+
+- **Fixed: Stop was greyed out during a run** after the AI Guard tab redrew (switching tabs, or the page reloading).
+  The tab now reattaches to the run still going: Stop works, and results keep coming in.
+- A model whose account behind the AI Guard proxy is out of credit (the provider answers 'insufficient balance') is
+  named plainly, and the rest of the run uses the other model(s) instead of failing every test it's given.
+
 ## 0.9.42
 
 - **POV checklist** under the tabs: what's done, what's next, and **Go ›** to get there (connect, pilot users, change

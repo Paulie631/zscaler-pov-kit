@@ -198,7 +198,13 @@ def run_one(pov, test, user, mode="detect", tags=False, scan=None, chat=None, pr
         res["status"] = "ok"
         res["pass"] = passed(res)
     except Exception as e:   # noqa: BLE001 - one failing test shouldn't stop a run
-        res.update(status="error", error=str(e)[:300], detectors=[], missed=expect, action="")
+        msg = str(e)
+        if mode == "proxy" and ("HTTP 402" in msg or "insufficient_balance" in msg or "insufficient_quota" in msg):
+            who = ag.LABEL.get(res.get("provider"), res.get("provider") or "The model provider")
+            msg = (f"{who}'s account behind the AI Guard proxy is out of credit (the provider refused with "
+                   "'insufficient balance'). Top it up, or use the other model. " + msg[:120])
+            res["out_of_credit"] = True
+        res.update(status="error", error=msg[:400], detectors=[], missed=expect, action="")
     return res
 
 
@@ -239,12 +245,22 @@ def run(pov, tests, mode="detect", tags=False, users=None, rounds=1, log=lambda 
     out = []
     f = pov.path(RUNS)
     n = 0
+    dead = set()   # providers whose account ran out of credit during this run
     for _ in range(rounds):
         for t in tests:
             if stop and stop():
                 break
+            if providers and dead:
+                providers = [x for x in providers if x not in dead] or None
+                dead.clear()
+                if not providers:
+                    log("fail", "Every model in the run is out of credit: stopping.")
+                    break
             prov = providers[n % len(providers)] if providers else None   # rotated, like the demo kit's apps
             res = run_one(pov, t, users[n % len(users)], mode, tags, scan, chat, provider=prov)
+            if res.get("out_of_credit") and prov:
+                dead.add(prov)
+                log("warn", f"{ag.LABEL.get(prov, prov)} is out of credit: the rest of the run uses the other model(s).")
             n += 1
             out.append(res)
             if on_result:

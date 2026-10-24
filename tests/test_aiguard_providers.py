@@ -96,3 +96,28 @@ def test_proxy_run_rotates_all_providers_when_none_picked(tmp_path, monkeypatch)
             pass
     r.run(P(), [{"id": str(i), "text": "hi"} for i in range(4)], mode="proxy", users=["u"], pause=0)
     assert seen == ["anthropic", "openai", "anthropic", "openai"]
+
+
+def test_out_of_credit_model_is_dropped_mid_run(tmp_path, monkeypatch):
+    from povkit import aiguard_runner as r
+    seen = []
+
+    def one(pov, t, u, *a, provider=None, **k):
+        seen.append(provider)
+        bad = provider == "openai"
+        return {"id": t["id"], "name": "t", "status": "error" if bad else "ok", "missed": [], "detectors": [],
+                "out_of_credit": bad, "error": "out of credit" if bad else None}
+    monkeypatch.setattr(r, "run_one", one)
+
+    class P:
+        id = "x"
+        cfg = {}
+
+        def path(self, n):
+            return tmp_path / n
+
+        def log(self, *a):
+            pass
+    r.run(P(), [{"id": str(i), "text": "hi"} for i in range(5)], mode="proxy", users=["u"], pause=0,
+          providers=["anthropic", "openai"])
+    assert seen == ["anthropic", "openai", "anthropic", "anthropic", "anthropic"]

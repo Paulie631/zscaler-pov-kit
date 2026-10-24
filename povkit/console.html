@@ -957,7 +957,7 @@ function ccDraw(){const el=$("#ccbody");
 
 /* ---------------- AI Guard tab (the demo kit's runner, profiles, proxy, customer prompts, report) ---------------- */
 let AG=null,AGsel=new Set(),AGhideMissed=false,AGTAB="runner",AGopen=new Set();
-const AGR={mode:"detect",tags:true,rounds:1,users:null,results:[],job:null};
+const AGR={mode:"detect",tags:true,rounds:1,users:null,results:[],job:null,polling:null};
 let AGCAL={tests:{},summary:{}};
 const CALCHIP={rewritten:["reworded","Reworded so it triggers in this tenant (internal note: the customer sees the test as it runs)"],swapped:["swapped","Replaced by another test for the same detectors"],missed:["won't trigger","No version triggered the expected detectors in this tenant"],ok:["✓ triggers","Checked: triggers its detectors in this tenant"]};
 async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
@@ -1079,8 +1079,12 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
     if(!users.length){$("#agrunmsg").innerHTML=note("Pick at least one user.");return}
     if(AGR.mode=="proxy"&&$$("#agprovs input").length&&!$$("#agprovs input").some(i=>i.checked)){$("#agrunmsg").innerHTML=note("Pick at least one model to run through the proxy.");return}
     $("#agrunmsg").innerHTML="";$("#agrun").disabled=true;$("#agstop").disabled=false;$("#agbar").style.width="0";
-    try{const jid=(await api("/api/aiguard/run",{ids,mode:AGR.mode,tags:AGR.mode=="proxy"&&AGR.tags,users,rounds:AGR.rounds,providers:$$("#agprovs input").length?$$("#agprovs input").filter(i=>i.checked).map(i=>i.value):null})).job;AGR.job=jid;
-      let got=0,first=true;
+    let jid;try{jid=(await api("/api/aiguard/run",{ids,mode:AGR.mode,tags:AGR.mode=="proxy"&&AGR.tags,users,rounds:AGR.rounds,providers:$$("#agprovs input").length?$$("#agprovs input").filter(i=>i.checked).map(i=>i.value):null})).job}
+    catch(e){$("#agrunmsg").innerHTML=note(e.message,"bad");$("#agrun").disabled=false;$("#agstop").disabled=true;return}
+    AGR.job=jid;attach(jid,0)};
+  // follows a run until it ends; a redrawn tab (or a reloaded page) attaches to the run that's still going
+  async function attach(jid,got){AGR.polling=jid;
+    try{      let first=!got;
       for(;;){const j=await api(`/api/job?id=${jid}&isince=${got}&since=99999`);got+=j.items.length;AGR.results.push(...j.items);
         if(j.total)$("#agbar").style.width=Math.round(100*got/j.total)+"%";if(j.items.length)drawRows();
         if(first&&j.items[0]&&j.items[0].status=="error"){$("#agrunmsg").innerHTML=note("First test failed: "+j.items[0].error,"bad")}if(j.items.length)first=false;
@@ -1092,7 +1096,10 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
           $("#agrunmsg").innerHTML=note(`${r.stopped?"Stopped":"Done"}: ${r.results.length} scan${r.results.length==1?"":"s"}${r.evidence&&Object.keys(r.evidence).length?`; evidence updated for ${Object.keys(r.evidence).join(", ")}`:""}. Insights shows them in 10 to 15 minutes, under the users above.`,"good");break}
         await new Promise(x=>setTimeout(x,700))}}
     catch(e){$("#agrunmsg").innerHTML=note(e.message,"bad")}
-    finally{$("#agrun").disabled=false;$("#agstop").disabled=true;$("#agstop").textContent="Stop"}};
+    finally{AGR.polling=null;if(AGR.job==jid)AGR.job=null;$("#agrun").disabled=false;$("#agstop").disabled=true;$("#agstop").textContent="Stop"}}
+  {const active=AGR.job||AG.active_job;if(active){AGR.job=active;$("#agrun").disabled=true;$("#agstop").disabled=false;
+    if(!$("#agrunmsg").innerHTML)$("#agrunmsg").innerHTML=note("A run is still going: Stop ends it after the test in flight.","warn");
+    if(AGR.polling!=active){AGR.results=[];attach(active,0)}}}
   $("#agstop").onclick=()=>{if(AGR.job){api("/api/job/stop",{id:AGR.job});$("#agstop").disabled=true;$("#agstop").textContent="Stopping…"}};
 
   // ---- results, coverage, evidence

@@ -350,7 +350,9 @@ def api(method, path, body, q):
                          "pov_users": aiguard_runner.pov_users(p),
                          "evidence": {k: v for k, v in (p.read_json("api_proofs.json", {}) or {}).items()
                                       if k.startswith(("AI-", "UC-"))},
-                         "competitor": (p.cfg.get("aiguard") or {}).get("competitor") or "Competitor Inc"}
+                         "competitor": (p.cfg.get("aiguard") or {}).get("competitor") or "Competitor Inc",
+                         "active_job": next((jid for jid, j in JOBS.items() if j.get("pov") == p.id and not j["done"]
+                                             and j["kind"] == "aiguard"), None)}
         if path == "/api/criteria/import":
             from . import criteria_import
             p = current()
