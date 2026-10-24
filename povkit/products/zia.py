@@ -91,7 +91,8 @@ def planned_action(it):
         return (a or {}).get("type")
     if it["kind"] == "cloud_app_control":
         acts = it["body"].get("actions") or []
-        return str(acts[0]).split("_", 1)[0] if acts else "BLOCK"
+        verb = str(acts[0]).split("_", 1)[0] if acts else "BLOCK"
+        return "BLOCK" if verb == "DENY" else verb   # tenants name it BLOCK_ or DENY_
     return a
 
 
@@ -799,6 +800,8 @@ class ZIA(Product):
                 continue
             if "IS-TEN-01" in it.get("criteria", []):   # the tenant check gates every device test: never switched
                 continue
+            if it["key"] == "zia.ssl.bypass-sign-in":   # inspecting the IdP and MFA sites could lock users out
+                continue
             if it["kind"] == "cloud_app_control" and it.get("rule_type") != "AI_ML":
                 continue
             if not led.find(it["key"]):
@@ -823,7 +826,7 @@ class ZIA(Product):
             raise KitError("That isn't one of the POV rules that can be switched.")
         planned = sw[key]["planned"]
         to = planned if to in (None, "", "planned") else to
-        if to not in [c["id"] for c in sw[key]["choices"]]:
+        if to != planned and to not in [c["id"] for c in sw[key]["choices"]]:
             raise KitError(f"'{it['name']}' can be: {', '.join(c['label'] for c in sw[key]['choices'])}.")
         self.guard_activation(t, "switched")
         e = ledger.find(key)

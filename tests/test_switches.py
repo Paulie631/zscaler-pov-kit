@@ -46,3 +46,8 @@ def test_switch_bodies(pov):
     assert b["action"] == "CAUTION" and "cbi_profile" not in b and b["request_methods"] == ["CONNECT", "GET", "HEAD"]
     b = zia.ZIA()._switched_body(None, {"kind": "ssl", "body": {}}, {}, "DO_NOT_DECRYPT")
     assert b["action"]["type"] == "DO_NOT_DECRYPT"
+
+
+def test_planned_action_names():
+    assert zia.planned_action({"kind": "cloud_app_control", "body": {"actions": ["DENY_AI_ML_WEB_USE"]}}) == "BLOCK"
+    assert zia.planned_action({"kind": "ssl", "body": {"action": {"type": "DECRYPT"}}}) == "DECRYPT"

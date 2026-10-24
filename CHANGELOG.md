@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.62
+- Policy switches: the sign-in bypass (the customer's IdP and MFA sites) is never offered, so a switch can't lock users out; GenAI rules whose tenant names the action DENY show as Block, and put back correctly.
+
 ## 0.9.61
 - Device tests › **Policy**: demo switches for the POV's own ZIA rules: web categories (Block, Caution, Isolate where the rule isolates, Allow), SSL inspection (Inspect, Don't inspect), DLP (Block, Allow and log) and GenAI apps (Block, Caution, Allow, as the tenant offers). Each switch changes only that rule's action, through the ledger guard, then activates. The tenant-check rule is never offered.
 - Show it steps carry the switches for their test, with **Check again** to reopen the page and rerun the test after a switch.
