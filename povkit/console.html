@@ -1040,7 +1040,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
       <div class="twocol">
         <div class="panel"><h2>Run</h2>
           <div class="row" style="gap:18px;align-items:flex-end;flex-wrap:wrap">
-            <div><div class="lbl">Mode</div><div class="seg" id="agmode"><button data-m="detect" class="${AGR.mode=="detect"?"on":""}" title="Scans with the Detection API: nothing goes to a model. Every result counts as evidence.">Detection API</button><button data-m="proxy" class="${AGR.mode=="proxy"?"on":""}" ${AG.keys.proxy?"":"disabled title='Set up proxy mode in AI Guard → Setup'"} title="Real prompts to the model through AI Guard's proxy: real replies, and AI Guard's block message.">LLM proxy</button></div></div>
+            <div><div class="lbl">Mode</div><div class="seg" id="agmode"><button data-m="detect" class="${AGR.mode=="detect"?"on":""}" title="Scans with the Detection API: nothing goes to a model. Every result counts as evidence.">Detection API</button><button data-m="proxy" class="${AGR.mode=="proxy"?"on":""}" ${AG.keys.proxy?"":"disabled title='Set up proxy mode in AI Guard → Setup'"} title="Real prompts to the model through AI Guard's proxy: real replies, and AI Guard's block message.">LLM proxy</button></div>${AG.keys.proxy?"":`<div class="hint" style="margin:4px 0 0">LLM proxy isn’t set up for this POV yet: <a href="#" id="agpxsetup">AI Guard › Setup › Proxy mode</a>, pick a provider and key, then approve and apply the change list.</div>`}</div>
             <div class="agpxopt" style="${AGR.mode=="proxy"?"":"display:none"}"><div class="lbl">Models (rotated)</div><div class="row" id="agprovs" style="gap:8px">${Object.entries(px.providers).filter(([,v])=>v.key).map(([pt,v])=>`<label class="chk"><input type="checkbox" value="${esc(pt)}" ${!AGR.provs||AGR.provs.has(pt)?"checked":""}> ${esc(v.label)} <span class="muted" style="font-size:12px">${esc(v.model)}</span></label>`).join("")||'<span class="muted" style="font-size:12px">none ready</span>'}</div></div>
             <div id="agtagsf" class="agpxopt adv" style="${AGR.mode=="proxy"?"":"display:none"}"><div class="lbl">Proxy options</div><label class="chk" title="Also scans each prompt and the model's reply with the Detection API, so detectors show and results count as evidence"><input type="checkbox" id="agtags" ${AGR.tags?"checked":""}> Detector tags</label></div>
             <div class="adv"><div class="lbl">Rounds</div><input type="number" id="agrounds" value="${AGR.rounds}" min="1" max="10" style="width:70px"></div>
@@ -1094,6 +1094,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
     ${Object.values(AG.packs).filter(p=>p.customer).map(p=>`<div class="hint">★ ${esc(p.name)}: ${p.tests.length} prompts · criterion ${esc(p.criterion)}</div>`).join("")}</div>
   </div>`;
   const show=()=>{$$(".agview").forEach(v=>v.style.display=v.dataset.v==AGTAB?"":"none");$$("#agsub button").forEach(b=>b.classList.toggle("on",b.dataset.s==AGTAB))};
+  $("#agpxsetup")&&($("#agpxsetup").onclick=e=>{e.preventDefault();AGTAB="setup";show();window.scrollTo(0,0)});
   $$("#agsub button").forEach(b=>b.onclick=()=>{AGTAB=b.dataset.s;show()});show();
 
   // ---- library
