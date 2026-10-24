@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.73
+- AI Guard proxy mode: a tenant with more than one provider of a type (a real OpenAI provider and an OpenAI-compatible DeepSeek one) now offers every key of that type, labelled with its provider, OpenAI's first, and the provider follows the key you pick. Before, the kit took the first provider of the type it found, so the OpenAI menu could show only the DeepSeek key.
+
 ## 0.9.72
 - AI Guard › Setup › Proxy mode: **Save applies it** on POVs with SE sign-off. The console makes the change list, signs it off in the SE's name (noted "when saving AI Guard proxy setup"), and applies only AI Guard's part: the provider keys, proxy keys and rules. Nothing outside AI Guard changes; other waiting items stay for the next Apply. POVs that need the customer's approval save the setting and say so.
 

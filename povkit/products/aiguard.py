@@ -297,11 +297,21 @@ class AIGuard(Product):
                 checks.append(check("aiguard-proxy", "Proxy mode", WARN, f"providers unreadable: {str(e)[:120]}"))
         snap["proxy"] = {"readable": readable, "providers": {}}
         for pt, v in setup.items():
-            prov = next((x for x in provs if x["type"] == pt), None)
-            pcreds = [{"id": o.get("id"), "name": o.get("name")} for o in rows["provider_credential"]
-                      if prov and o.get("providerId") == prov["id"] and not naming.has_prefix(o.get("name"), pov.prefix)]
+            # a tenant can have several providers of one type (an OpenAI one and an OpenAI-compatible DeepSeek one):
+            # every key of that type is offered, each with its provider, and the provider follows the chosen key
+            same = [x for x in provs if x["type"] == pt]
+            by_id = {str(x["id"]): x for x in same}
+            pcreds = [{"id": o.get("id"), "name": o.get("name"), "provider": by_id[str(o.get("providerId"))]["name"],
+                       "provider_id": o.get("providerId")}
+                      for o in rows["provider_credential"]
+                      if str(o.get("providerId")) in by_id and not naming.has_prefix(o.get("name"), pov.prefix)]
+            word = LABEL[pt].lower()
+            pcreds.sort(key=lambda c: (word not in str(c["provider"]).lower() + " " + str(c["name"]).lower(),
+                                       str(c["name"])))
             chosen = next((c for c in pcreds if str(c["id"]) == str(v["cred"])), None) or (
                 pcreds[0] if len(pcreds) == 1 and not v["cred"] and v["use"] == "customer" else None)
+            prov = (by_id.get(str(chosen["provider_id"])) if chosen else None) or next(
+                (x for x in same if word in str(x["name"]).lower()), None) or (same[0] if same else None)
             have = bool(secrets.get(pov.id, provider_secret(pt)))
             snap["proxy"]["providers"][pt] = {"provider": prov, "creds": pcreds, "use": v["use"], "model": v["model"],
                                               "cred": chosen if v["use"] == "customer" else None, "se_key": have}

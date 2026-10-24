@@ -1081,7 +1081,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
     <div class="cards">${Object.entries(px.providers).map(([pt,v])=>`<div class="card" data-pt="${esc(pt)}"><h4>${esc(v.label)}${v.provider_name?` <span class="muted" style="font-weight:400;font-size:12px">· ${esc(v.provider_name)}</span>`:""}${v.key?' <span class="badge b-ok">proxy key ready</span>':""}</h4>
       ${!v.available&&px.read?note(`No ${v.label} provider in this AI Guard tenant. The customer's admin adds one in AI Guard (LLM providers), then Read the tenant again. Until then ${v.label} runs Detection API only.`):""}
       <select class="agpu" style="width:100%;margin:6px 0">
-        ${v.creds.map(k=>`<option value="c:${esc(k.id)}" ${v.use=="customer"&&String(v.cred)==String(k.id)?"selected":""}>Reuse '${esc(k.name)}' (already in their AI Guard)</option>`).join("")}
+        ${v.creds.map(k=>`<option value="c:${esc(k.id)}" ${v.use=="customer"&&String(v.cred)==String(k.id)?"selected":""}>Reuse '${esc(k.name)}'${k.provider?` · ${esc(k.provider)}`:""} (already in their AI Guard)</option>`).join("")}
         <option value="se" ${v.use=="se"?"selected":""}>Use my own ${esc(v.label)} key</option>
         ${v.use=="customer"&&!v.creds.some(k=>String(k.id)==String(v.cred))?`<option value="c:" selected>The customer's key (Read the tenant again to list them)</option>`:""}
         <option value="off" ${v.use=="off"?"selected":""}>Off: Detection API only</option></select>

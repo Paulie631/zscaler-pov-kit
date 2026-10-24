@@ -58,7 +58,8 @@ def test_console_shows_both_from_the_tenant(pov_all, tenant, tenant_for, monkeyp
     gui.api("POST", "/api/preflight", {}, {})
     d = gui.api("GET", "/api/aiguard", {}, {})[1]["proxy"]["providers"]
     assert d["anthropic"]["available"] and d["openai"]["available"]
-    assert d["openai"]["creds"] == [{"id": 802, "name": "Acme OpenAI key"}] and d["openai"]["use"] == "off"
+    assert [(c["id"], c["name"], c["provider"]) for c in d["openai"]["creds"]] == [(802, "Acme OpenAI key", "OpenAI")]
+    assert d["openai"]["use"] == "off"
     gui.api("POST", "/api/aiguard/settings", {"providers": {"anthropic": {"use": "off"},
                                                             "openai": {"use": "customer", "cred": 802}}}, {})
     s = ag.proxy_setup(__import__("povkit.core.pov", fromlist=["Pov"]).Pov(pov_all.id))
@@ -144,3 +145,17 @@ def test_saving_proxy_setup_applies_only_ai_guard(pov_all, tenant, tenant_for):
     pov_all.save()
     with pytest.raises(KitError, match="customer's approval"):
         lifecycle.quick_apply(pov_all, tenant_for, ["aiguard"], "AI Guard proxy setup", "", lambda *a: None)
+
+
+def test_two_providers_of_one_type_both_offered(pov_all, tenant, tenant_for):
+    # a DeepSeek provider of type openai listed first, then the real OpenAI one: both keys are offered, OpenAI first,
+    # and the provider follows the key chosen
+    tenant.store["aiguard.llm_providers"].append({"id": 901, "name": "DeepSeek (OpenAI-compatible)", "type": "openai"})
+    tenant.store["aiguard.llm_provider_credentials"].append({"id": 902, "name": "DeepSeek API Key", "providerId": 901})
+    both(tenant)
+    pov_all.cfg["aiguard"] = {"providers": {"openai": {"use": "customer", "cred": 802}}}
+    pov_all.save()
+    snaps, _ = lifecycle.discover(pov_all, tenant_for)
+    px = snaps["aiguard"]["proxy"]["providers"]["openai"]
+    assert [c["name"] for c in px["creds"]] == ["Acme OpenAI key", "DeepSeek API Key"]
+    assert px["provider"]["id"] == 801 and px["cred"]["id"] == 802
