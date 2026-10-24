@@ -897,6 +897,8 @@ function deviceHTML(d){
       <span class="lbl">Pilot user</span><div><input type="text" id="duser" list="dusers" value="${esc(d.users[0]||"")}" placeholder="jane@acme.com" style="width:280px"><datalist id="dusers">${d.users.map(u=>`<option value="${esc(u)}">`).join("")}</datalist> <button id="dpw" style="display:none">Show password</button><div id="dpwv" class="hint"></div></div>
       <span class="lbl">Device</span><div class="seg" id="dos"><button data-o="macos" class="${DEV_OS=="macos"?"on":""}">macOS</button><button data-o="windows" class="${DEV_OS=="windows"?"on":""}">Windows</button></div></div>
     <p class="hint" style="margin:6px 0">${ins?`Installer: Client Connector ${esc(ins.version)} (the kit's pinned copy).`:`No ${DEV_OS=="macos"?"macOS":"Windows"} installer pinned in the kit yet: the setup asks for the file from ${esc(d.platform_releases)} in the customer's Zscaler console (${DEV_OS=="macos"?"--pkg FILE":"-Msi FILE"}).`}</p>
+    <div class="dstep"><b>The POV's tests</b> <span class="muted">· what the commands below carry to the device</span>
+      <div class="row" style="gap:8px;margin-top:6px"><button id="drev">Review and add tests</button><span class="hint" id="drevsum"></span></div><div id="dreview"></div></div>
     <div class="dstep"><b>1. Install</b> <span class="muted">· once per device: Client Connector, the POV probe and this POV's tests</span>
       <div class="row" style="gap:8px;margin-top:6px"><button class="primary" id="dline">Copy the install command</button><button id="dscript">Or download it as a script</button></div>
       <div class="hint">${DEV_OS=="macos"?"Paste it into Terminal on the Mac (it asks for the Mac password once).":"Paste it into PowerShell opened with Run as administrator."} Then <b>sign in to Client Connector as the pilot user</b> above: the tests start by themselves once traffic goes through Zscaler, and the results land on the device's Desktop.</div></div>
@@ -929,6 +931,32 @@ function bindDevice(d,redraw){
       await navigator.clipboard.writeText(r.line).catch(()=>{});
       out(`<pre class="log" style="white-space:pre-wrap;word-break:break-all;margin-top:8px;max-height:120px;overflow:auto">${esc(r.line)}</pre><div class="hint">Copied (it's long: it carries the POV's tests). ${how} Then sign in to Client Connector as <b>${esc(email())}</b>; the tests run by themselves.</div>`)}
     catch(e){out(note(e.message,"bad"))}};
+  // review the pack: every test in plain words; leave one out, bring it back, or add one
+  const TYPES={http:["Web page","url","https://www.example.com/"],tls_issuer:["HTTPS inspection","host","www.example.com"],tcp:["Port","host","ssh.example.com"],dns:["DNS name","name","www.example.com"]};
+  const EXPW={block:"blocked",allow:"allowed",caution:"caution page",isolate:"isolated",open:"open",resolved:"resolves",Zscaler:"inspected","not-Zscaler":"not inspected"};
+  const revDraw=r=>{$("#drevsum").textContent=`${r.tests} tests in ${r.rows.filter(x=>x.tests.some(t=>!t.skipped)).length} criteria · pack ${r.pack_id}`;
+    const opts=r.rows.map(x=>`<option value="${esc(x.criterion)}">${esc(x.criterion)} · ${esc(x.title)}</option>`).join("");
+    $("#dreview").innerHTML=`<div style="margin-top:8px">${r.rows.map(x=>`<div style="margin:8px 0"><b><code>${esc(x.criterion)}</code> ${esc(x.title)}</b>
+      ${x.tests.length?`<ul style="margin:4px 0 0 18px;padding:0">${x.tests.map(t=>`<li style="margin:3px 0;${t.skipped?"opacity:.55;text-decoration:line-through":""}">${esc(t.text)} <span class="muted" style="font-size:12px">· ${esc(t.source)}</span>
+        ${t.skipped?`<a href="#" class="drrest" data-id="${esc(t.id)}">put back</a>`:`<a href="#" class="drrm" data-c="${esc(x.criterion)}" data-id="${esc(t.id)}">${t.source.startsWith("added")?"delete":"leave out"}</a>`}</li>`).join("")}</ul>`:`<div class="hint">${x.criterion=="SE-EXTRA"?"Nothing added yet: tests here run on the device but don't count toward a criterion.":"No device tests: this one is proved another way (API, AI Guard or shown live)."}</div>`}
+      ${x.tests.length&&x.tests.every(t=>t.skipped)&&x.probe_proof?note("Every device test for this criterion is left out: it then needs another proof (Demonstrated, say).","warn"):""}</div>`).join("")}
+      <div class="dstep"><b>Add a test</b><div class="form" style="margin-top:6px">
+        <span class="lbl">For</span><select id="dacrit">${opts}</select>
+        <span class="lbl">Test</span><div class="seg" id="datype">${Object.entries(TYPES).map(([k,v],i)=>`<button data-t="${k}" class="${i?"":"on"}">${v[0]}</button>`).join("")}</div>
+        <span class="lbl" id="davlbl">Address</span><div class="row" style="gap:6px"><input type="text" id="daval" style="width:280px"><input type="number" id="daport" placeholder="port" min="1" max="65535" style="width:90px;display:none"></div>
+        <span class="lbl">Expect</span><select id="daexp"></select></div>
+        <div class="row" style="margin-top:8px"><button class="primary" id="dago">Add the test</button></div><div id="damsg"></div></div></div>`;
+    let ty="http";const setTy=t=>{ty=t;$$("#datype button").forEach(b=>b.classList.toggle("on",b.dataset.t==t));$("#daval").placeholder=TYPES[t][2];
+      $("#davlbl").textContent={http:"Address",tls_issuer:"Site",tcp:"Host and port",dns:"Name"}[t];$("#daport").style.display=t=="tcp"?"":"none";
+      $("#daexp").innerHTML=r.expects[t].map(e=>`<option value="${e}">${EXPW[e]||e}</option>`).join("")};setTy("http");
+    $$("#datype button").forEach(b=>b.onclick=e=>{e.preventDefault();setTy(b.dataset.t)});
+    $("#dago").onclick=async()=>{const add={criterion:$("#dacrit").value,type:ty,expect:$("#daexp").value,[TYPES[ty][1]]:$("#daval").value.trim()};
+      if(ty=="tcp")add.port=$("#daport").value;try{let by="SE";try{by=localStorage.getItem("pov.exby")||"SE"}catch(e){}add.by=by;
+        revDraw(await api("/api/probe-pack/review",{add}));$("#damsg").innerHTML=note("Added. Copy the commands again: they carry it now.","good")}catch(e){$("#damsg").innerHTML=note(e.message,"bad")}};
+    $$(".drrm").forEach(a=>a.onclick=async e=>{e.preventDefault();revDraw(await api("/api/probe-pack/review",{remove:a.dataset.id,criterion:a.dataset.c}))});
+    $$(".drrest").forEach(a=>a.onclick=async e=>{e.preventDefault();revDraw(await api("/api/probe-pack/review",{restore:a.dataset.id}))})};
+  api("/api/probe-pack/review",{}).then(r=>$("#drevsum").textContent=`${r.tests} tests in ${r.rows.filter(x=>x.tests.some(t=>!t.skipped)).length} criteria`).catch(()=>{});
+  $("#drev").onclick=async()=>{if($("#dreview").innerHTML){$("#dreview").innerHTML="";return}try{revDraw(await api("/api/probe-pack/review",{}))}catch(e){$("#dreview").innerHTML=note(e.message,"bad")}};
   $("#dtest").onclick=async()=>{try{const r=await api("/api/device/setup",{os:DEV_OS,email:email(),what:"test"});
       await navigator.clipboard.writeText(r.line).catch(()=>{});
       out(`<pre class="log" style="white-space:pre-wrap;word-break:break-all;margin-top:8px;max-height:120px;overflow:auto">${esc(r.line)}</pre><div class="hint">Copied. Paste it into ${DEV_OS=="macos"?"Terminal":"PowerShell"} on the device. It waits up to 20 minutes for Client Connector to be signed in, runs the tests, and says where the results file is. Then step 3.</div>`)}

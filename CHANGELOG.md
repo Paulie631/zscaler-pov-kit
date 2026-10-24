@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.52
+
+- **Review the POV's device tests before they go out** (Set up a pilot device > Review and add tests): every test the
+  commands carry, criterion by criterion, in plain words ("Open www.bet365.com → expect blocked"), with where it came
+  from. Leave a test out (and put it back), or **add your own**: a web page (blocked, allowed, caution, isolated),
+  HTTPS inspection on or off for a site, a port (blocked or open), or a DNS name (blocked or resolves). Added tests
+  count toward their criterion's evidence, or go in *Extra checks*. The commands and the setup script carry the
+  reviewed pack, and results from before a change show as out of date.
+
 ## 0.9.51
 
 - The *Run the tests* command refreshes the probe on the device first, so a device set up with an older kit runs

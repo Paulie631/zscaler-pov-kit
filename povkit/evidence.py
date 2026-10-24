@@ -87,7 +87,7 @@ def evaluate(pov, ids=None):
     rows = []
     for c in selected_criteria(pov, ids):
         proofs, overall = {}, PASS
-        if "probe" in c["proofs"]:
+        if "probe" in c["proofs"] or edits(pov)["added"].get(c["id"]):
             covering = [r for r in runs if any(x["criterion"] == c["id"] for x in r["results"])]
             now = test_hash(pov, c)
             current = [r for r in covering if not stale(r, c["id"], now)]
@@ -139,15 +139,116 @@ def _h(x):
     return hashlib.sha256(json.dumps(x, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:10]
 
 
-def _pack_specs(pov, c, values):
+# ---------------------------------------------------------------- the SE's review of the pack: tests added or left out
+EDITS = "probe_edits.json"   # {"added": {criterion: [spec + id, by, at]}, "skipped": [test ids]}
+EXTRA = {"id": "SE-EXTRA", "title": "Extra checks the SE added", "product": "zia"}
+EXPECTS = {"http": ("block", "allow", "caution", "isolate"), "tls_issuer": ("Zscaler", "not-Zscaler"),
+           "tcp": ("block", "open"), "dns": ("block", "resolved")}
+
+
+def edits(pov):
+    e = pov.read_json(EDITS, {}) or {}
+    return {"added": e.get("added") or {}, "skipped": list(e.get("skipped") or [])}
+
+
+def spec_id(cid, sp):
+    return _h([cid, {k: v for k, v in sp.items() if k not in ("id", "by", "at")}])
+
+
+def describe_spec(sp):
+    """A probe test in plain words."""
+    t, e = sp.get("type"), sp.get("expect")
+    word = {"block": "blocked", "allow": "allowed", "caution": "a caution page", "isolate": "isolated",
+            "open": "open", "resolved": "resolves", "Zscaler": "inspected by Zscaler",
+            "not-Zscaler": "not inspected"}.get(e, e or "")
+    return {"http": f"Open {sp.get('url')} → expect {word}",
+            "eicar": "Download the EICAR antivirus test file → expect blocked",
+            "dlp_post": "Post 6 fake card numbers → expect blocked",
+            "tls_issuer": f"HTTPS to {sp.get('host')} → expect {word}",
+            "tcp": f"Connect to {sp.get('host')} on TCP {sp.get('port')} → expect {word}",
+            "dns": f"Look up {sp.get('name')} (DNS) → expect {word}",
+            "zcc_running": "Client Connector is running",
+            "via_zscaler": "Traffic goes through Zscaler (ip.zscaler.com)",
+            "ai_artifacts": "Plant AI test items for the AI asset inventory",
+            "ai_risky_skill": "Plant an inert risky AI skill → expect removed or locked",
+            "ai_local_prompt": "Send a prompt to a local AI app"}.get(t, t)
+
+
+def add_test(pov, cid, kind, by="SE", **v):
+    """A test the SE adds to a criterion (or to the extra checks). -> the spec"""
+    import re as _re
+    if kind not in EXPECTS:
+        raise KitError("Test types: web page (http), HTTPS inspection (tls_issuer), port (tcp), DNS name (dns).")
+    exp = str(v.get("expect") or "")
+    if exp not in EXPECTS[kind]:
+        raise KitError(f"Expect one of: {', '.join(EXPECTS[kind])}.")
+    host_re = r"[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+    if kind == "http":
+        url = str(v.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+        if not _re.fullmatch(r"https?://" + host_re + r"(:\d+)?(/\S*)?", url):
+            raise KitError("Give a web address, like https://www.example.com/.")
+        sp = {"type": "http", "url": url, "expect": exp}
+    elif kind in ("tls_issuer", "tcp"):
+        host = str(v.get("host") or "").strip()
+        if not _re.fullmatch(host_re, host):
+            raise KitError("Give a host name, like www.example.com.")
+        sp = {"type": kind, "host": host, "expect": exp}
+        if kind == "tcp":
+            port = int(v.get("port") or 0)
+            if not 0 < port < 65536:
+                raise KitError("Give a port from 1 to 65535.")
+            sp["port"] = port
+    else:
+        name = str(v.get("name") or "").strip()
+        if not _re.fullmatch(host_re, name):
+            raise KitError("Give a name to look up, like www.example.com.")
+        sp = {"type": "dns", "server": "8.8.8.8", "name": name, "expect": exp}
+    ids = {c["id"] for c in selected_criteria(pov)}
+    if cid != EXTRA["id"] and cid not in ids:
+        raise KitError(f"{cid} isn't one of this POV's criteria.")
+    e = edits(pov)
+    rec = dict(sp, id=spec_id(cid, sp), by=str(by)[:80], at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    if any(x["id"] == rec["id"] for x in e["added"].get(cid, [])):
+        raise KitError("That test is already in the pack.")
+    e["added"].setdefault(cid, []).append(rec)
+    pov.write_json(EDITS, e)
+    pov.log("probe", f"test added to {cid}: {describe_spec(sp)}")
+    return rec
+
+
+def remove_test(pov, cid, sid):
+    """An added test is deleted; a catalog (or use case) test is left out of the pack, and can come back."""
+    e = edits(pov)
+    added = e["added"].get(cid, [])
+    if any(x["id"] == sid for x in added):
+        e["added"][cid] = [x for x in added if x["id"] != sid]
+    elif sid not in e["skipped"]:
+        e["skipped"].append(sid)
+    pov.write_json(EDITS, e)
+    pov.log("probe", f"test {sid} taken out of {cid}'s pack")
+
+
+def restore_test(pov, sid):
+    e = edits(pov)
+    e["skipped"] = [x for x in e["skipped"] if x != sid]
+    pov.write_json(EDITS, e)
+
+
+def _pack_specs(pov, c, values, with_skipped=False):
+    e = edits(pov)
     specs = []
-    for sp in c.get("probe") or []:
+    for sp in list(c.get("probe") or []) + [{k: v for k, v in x.items() if k not in ("id", "by", "at")}
+                                             for x in e["added"].get(c["id"], [])]:
         sp = {k: (values.get(v, v) if isinstance(v, str) else v) for k, v in sp.items()}
         if sp.get("port") is not None and str(sp["port"]).isdigit():
             sp["port"] = int(sp["port"])
         if any(isinstance(v, str) and v.startswith("{") and v.endswith("}") for v in sp.values()) or \
                 any(v == "" for v in sp.values()):
             continue   # a value this POV hasn't set
+        if not with_skipped and spec_id(c["id"], sp) in e["skipped"]:
+            continue
         specs.append(sp)
     return specs
 
@@ -215,10 +316,35 @@ def probe_pack(pov, ids=None):
         specs = _pack_specs(pov, c, values)
         if specs:
             crit.append({"id": c["id"], "title": c["title"], "probe": specs, "hash": _h(specs)})
+    extra = _pack_specs(pov, dict(EXTRA, probe=[]), values)
+    if extra:
+        crit.append({"id": EXTRA["id"], "title": EXTRA["title"], "probe": extra, "hash": _h(extra)})
     prof = traffic_profile(pov, chosen)
     return {"pov": pov.id, "customer": pov.cfg["customer"], "pack_id": _h([crit, prof]),
             "generated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kit_version": VERSION,
             "criteria": crit, "traffic": prof}
+
+
+def pack_review(pov):
+    """Every test the pack would carry, criterion by criterion, in plain words, with where it came from and whether
+    the SE left it out."""
+    values, e = _values(pov), edits(pov)
+    rows = []
+    for c in selected_criteria(pov) + [dict(EXTRA, probe=[])]:
+        added = {x["id"]: x for x in e["added"].get(c["id"], [])}
+        tests = []
+        for sp in _pack_specs(pov, c, values, with_skipped=True):
+            sid = spec_id(c["id"], sp)
+            tests.append({"id": sid, "text": describe_spec(sp), "type": sp.get("type"),
+                          "source": "added by " + added[sid]["by"] if sid in added else
+                          ("use case" if c.get("usecase") else "catalog"),
+                          "skipped": sid in e["skipped"]})
+        if tests or "probe" in (c.get("proofs") or []) or c["id"] == EXTRA["id"]:
+            rows.append({"criterion": c["id"], "title": c["title"], "tests": tests,
+                         "probe_proof": "probe" in (c.get("proofs") or []) or bool(added)})
+    p = probe_pack(pov)
+    return {"rows": rows, "pack_id": p["pack_id"], "tests": sum(len(c["probe"]) for c in p["criteria"]),
+            "traffic": p["traffic"]["types"], "expects": EXPECTS}
 
 
 def pack_status(pov):

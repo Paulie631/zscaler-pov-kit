@@ -765,6 +765,16 @@ def api(method, path, body, q):
                 raise KitError("ZIdentity didn't say which cloud: type it (the Zscaler console's address or Client "
                                "Connector's About page shows it, such as zscalertwo).")
         return 200, {"cloud": settings.set_value(p, "zcc.cloud", c)}
+    if path == "/api/probe-pack/review":   # the tests the device commands carry: review, add, leave out
+        p = current()
+        if body.get("add"):
+            a = dict(body["add"])
+            evidence.add_test(p, a.pop("criterion", ""), a.pop("type", ""), by=a.pop("by", "") or "SE", **a)
+        elif body.get("remove"):
+            evidence.remove_test(p, body.get("criterion") or "", body["remove"])
+        elif body.get("restore"):
+            evidence.restore_test(p, body["restore"])
+        return 200, evidence.pack_review(p)
     if path == "/api/device/setup":
         from . import device_setup
         p = current()
