@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.38
+
+- **Fixed: LLM proxy runs used only one model.** With both Anthropic and OpenAI ticked, the console sent no model
+  list until a box was clicked, so every test went through the first proxy key. The run now rotates through every
+  ticked model (and every model with a POV proxy key when none is named); with none ticked it says so.
+
 ## 0.9.37
 
 - An AI Guard criterion that doesn't pass explains each test that missed: what AI Guard found, and whether the

@@ -1026,8 +1026,9 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   $("#agrun").onclick=async()=>{const ids=[...AGsel].filter(id=>every().some(t=>t.id==id));const users=[...AGR.users];
     if(!ids.length){$("#agrunmsg").innerHTML=note("Pick tests: a preset, This POV's criteria, or one by one.");return}
     if(!users.length){$("#agrunmsg").innerHTML=note("Pick at least one user.");return}
+    if(AGR.mode=="proxy"&&$$("#agprovs input").length&&!$$("#agprovs input").some(i=>i.checked)){$("#agrunmsg").innerHTML=note("Pick at least one model to run through the proxy.");return}
     $("#agrunmsg").innerHTML="";$("#agrun").disabled=true;$("#agstop").disabled=false;$("#agbar").style.width="0";
-    try{const jid=(await api("/api/aiguard/run",{ids,mode:AGR.mode,tags:AGR.mode=="proxy"&&AGR.tags,users,rounds:AGR.rounds,providers:AGR.provs?[...AGR.provs]:null})).job;AGR.job=jid;
+    try{const jid=(await api("/api/aiguard/run",{ids,mode:AGR.mode,tags:AGR.mode=="proxy"&&AGR.tags,users,rounds:AGR.rounds,providers:$$("#agprovs input").length?$$("#agprovs input").filter(i=>i.checked).map(i=>i.value):null})).job;AGR.job=jid;
       let got=0,first=true;
       for(;;){const j=await api(`/api/job?id=${jid}&isince=${got}&since=99999`);got+=j.items.length;AGR.results.push(...j.items);
         if(j.total)$("#agbar").style.width=Math.round(100*got/j.total)+"%";if(j.items.length)drawRows();

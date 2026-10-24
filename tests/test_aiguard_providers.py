@@ -76,3 +76,23 @@ def test_an_approved_single_provider_plan_stays_approved(pov_all, tenant_for, mo
     assert px[1]["why"] == "Sends the POV's proxy traffic to the POV policy, after the customer's rules."
     assert json.loads(json.dumps(px))   # serializable
     assert digest(items)
+
+
+def test_proxy_run_rotates_all_providers_when_none_picked(tmp_path, monkeypatch):
+    from povkit import aiguard_runner as r
+    seen = []
+    monkeypatch.setattr(r, "proxy_keys", lambda pov: {"anthropic": "k1", "openai": "k2"})
+    ok = {"name": "t", "status": "ok", "missed": [], "detectors": []}
+    monkeypatch.setattr(r, "run_one", lambda pov, t, u, *a, provider=None, **k: seen.append(provider) or dict(ok))
+
+    class P:
+        id = "x"
+        cfg = {}
+
+        def path(self, n):
+            return tmp_path / n
+
+        def log(self, *a):
+            pass
+    r.run(P(), [{"id": str(i), "text": "hi"} for i in range(4)], mode="proxy", users=["u"], pause=0)
+    assert seen == ["anthropic", "openai", "anthropic", "openai"]

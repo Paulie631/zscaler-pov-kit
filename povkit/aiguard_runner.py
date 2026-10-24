@@ -224,6 +224,8 @@ def run(pov, tests, mode="detect", tags=False, users=None, rounds=1, log=lambda 
     rounds = max(1, min(10, int(rounds or 1)))
     if mode == "proxy":
         tests = [t for t in tests if t.get("direction", "IN") == "IN"]
+        if not providers:   # none picked: every provider with a POV proxy key, rotated (not just the first)
+            providers = list(proxy_keys(pov)) or None
     if not tests:
         raise KitError("No tests to run.")
     if len(tests) * rounds > 500:
