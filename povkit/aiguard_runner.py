@@ -127,12 +127,23 @@ def find_tests(pov, ids=None, preset=None, pack=None):
 
 
 # ---------------------------------------------------------------- running tests on the POV's app
-def keys(pov):
+def proxy_keys(pov):
+    """-> {provider: its POV proxy key} for each provider whose proxy key exists (made by Apply)."""
     from .usecases import aiguard_secret
-    return secrets.get(pov.id, ag.KEY_SECRET), secrets.get(pov.id, aiguard_secret("aiguard.proxy_key"))
+    out = {}
+    for pt, (kkey, _, _, _) in ag.PKEYS.items():
+        k = secrets.get(pov.id, aiguard_secret(kkey))
+        if k:
+            out[pt] = k
+    return out
 
 
-def run_one(pov, test, user, mode="detect", tags=False, scan=None, chat=None):
+def keys(pov):
+    pk = proxy_keys(pov)
+    return secrets.get(pov.id, ag.KEY_SECRET), next(iter(pk.values()), None)
+
+
+def run_one(pov, test, user, mode="detect", tags=False, scan=None, chat=None, provider=None):
     """One test as `user`. Never raises: errors are in the result."""
     scan, chat = scan or ag.das_scan, chat or ag.proxy_chat
     competitor = (pov.cfg.get("aiguard") or {}).get("competitor") or "Competitor Inc"
@@ -146,6 +157,9 @@ def run_one(pov, test, user, mode="detect", tags=False, scan=None, chat=None):
     if test.get("criterion"):
         res["criterion"] = test["criterion"]
     dkey, pkey = keys(pov)
+    pkeys = proxy_keys(pov)
+    if provider:
+        pkey = pkeys.get(provider)
     if test.get("key_secret"):   # a use case's own AI Guard app
         dkey = secrets.get(pov.id, test["key_secret"]) or dkey
     try:
@@ -155,7 +169,10 @@ def run_one(pov, test, user, mode="detect", tags=False, scan=None, chat=None):
                                "apply the change list.")
             if res["direction"] == "OUT":
                 raise KitError("Model-reply tests run through the Detection API only.")
-            _, ptype, model = ag.proxy_cfg(pov)
+            setup = ag.proxy_setup(pov)
+            ptype = provider or next((pt for pt in pkeys if pkeys[pt] == pkey), None) or ag.proxy_cfg(pov)[1]
+            model = setup[ptype]["model"]
+            res["provider"] = ptype
             reply, ms, blocked = chat(ptype, pkey, model, text, user=user)
             res.update(action="BLOCK" if blocked else "ALLOW", reply=reply[:800], latency_ms=ms, detectors=[])
             if tags and dkey:
@@ -200,7 +217,7 @@ def pov_users(pov):
 
 
 def run(pov, tests, mode="detect", tags=False, users=None, rounds=1, log=lambda *a: None, scan=None, chat=None,
-        pause=0.2, on_result=None, stop=None):
+        pause=0.2, on_result=None, stop=None, providers=None):
     """Runs the tests; each result goes to on_result as it lands. stop() is checked before each test, so Stop ends the
     run after the test in flight. -> results (a stopped run returns what ran)."""
     users = [u for u in (users or pov_users(pov)) if u] or ["pov-kit"]
@@ -218,7 +235,8 @@ def run(pov, tests, mode="detect", tags=False, users=None, rounds=1, log=lambda 
         for t in tests:
             if stop and stop():
                 break
-            res = run_one(pov, t, users[n % len(users)], mode, tags, scan, chat)
+            prov = providers[n % len(providers)] if providers else None   # rotated, like the demo kit's apps
+            res = run_one(pov, t, users[n % len(users)], mode, tags, scan, chat, provider=prov)
             n += 1
             out.append(res)
             if on_result:

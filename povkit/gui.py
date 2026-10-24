@@ -316,6 +316,7 @@ def api(method, path, body, q):
             mode, ptype, model = agm.proxy_cfg(p)
             disc = ((p.read_json("discovery.json", {}) or {}).get("products") or {}).get("aiguard") or {}
             px = disc.get("proxy") or {}
+            PP = px.get("providers") or {}   # noqa: N806
             rs = aiguard_runner.runs(p, 200)
             return 200, {"groups": lib["groups"], "presets": lib["presets"], "users": lib["users"],
                          "tests": [slim(t) for t in lib["tests"]], "panels": lib["panels"],
@@ -328,9 +329,16 @@ def api(method, path, body, q):
                          "profile": (p.cfg.get("aiguard") or {}).get("profile") or "monitor",
                          "custom": (p.cfg.get("aiguard") or {}).get("custom") or {},
                          "profiles": agm.PROFILES, "detectors": agm.template_detectors(), "never_block": sorted(agm.NEVER_BLOCK),
-                         "proxy": {"mode": mode, "provider": ptype, "model": model, "creds": px.get("creds") or [],
-                                   "cred": (p.cfg.get("aiguard") or {}).get("provider_credential"),
-                                   "se_key": bool(secrets.get(p.id, agm.PROVIDER_SECRET)), "has_provider": bool(px.get("provider"))},
+                         "proxy": {"mode": mode, "provider": ptype, "model": model, "read": bool(px),
+                                   "read_at": (p.read_json("discovery.json", {}) or {}).get("at"),
+                                   "providers": {pt: {"label": agm.LABEL[pt], "use": v["use"], "cred": v["cred"],
+                                                      "model": v["model"], "default_model": agm.PROVIDERS[pt][2],
+                                                      "available": bool(PP.get(pt, {}).get("provider")),
+                                                      "provider_name": (PP.get(pt, {}).get("provider") or {}).get("name"),
+                                                      "creds": PP.get(pt, {}).get("creds") or [],
+                                                      "se_key": bool(secrets.get(p.id, agm.provider_secret(pt))),
+                                                      "key": pt in aiguard_runner.proxy_keys(p)}
+                                                 for pt, v in agm.proxy_setup(p).items()}},
                          "keys": {"detection": bool(dkey), "proxy": bool(pkey)}, "runs": rs[-100:][::-1],
                          "pov_groups": [dict(g, tests=[dict(slim(t), criterion=t["criterion"], drafted=t.get("drafted"))
                                                        for t in g["tests"]]) for g in aiguard_runner.pov_criteria(p)],
@@ -504,6 +512,7 @@ def api(method, path, body, q):
         return 200, {"job": start_job("selftest", lambda log: selftest.run(p, tf, log, lab=True))}
     if path == "/api/aiguard/run":
         from . import aiguard_runner
+        from .products import aiguard as agm
         p = current()
         if body.get("text"):
             tests = [{"id": "live", "name": "Live prompt", "group": "Live", "category": "Live",
@@ -517,8 +526,9 @@ def api(method, path, body, q):
         def work(log, job):
             n = len([t for t in tests if mode != "proxy" or t.get("direction", "IN") == "IN"])
             job["total"] = n * max(1, min(10, int(body.get("rounds") or 1)))
+            provs = [x for x in (body.get("providers") or []) if x in agm.PROVIDERS] or None if mode == "proxy" else None
             res = aiguard_runner.run(p, tests, mode, bool(body.get("tags")), body.get("users"), body.get("rounds") or 1,
-                                     log, on_result=job["items"].append, stop=lambda: job["stop"])
+                                     log, on_result=job["items"].append, stop=lambda: job["stop"], providers=provs)
             stopped = job["stop"]
             ev = {} if live else aiguard_runner.record_evidence(p, res, stopped)
             return {"results": res, "stopped": stopped, "evidence": ev}
@@ -540,20 +550,36 @@ def api(method, path, body, q):
                                                          bool(body.get("accept")), body.get("by") or "")}
     if path == "/api/aiguard/settings":
         p = current()
+        from .products import aiguard as agm
+        if isinstance(body.get("providers"), dict):   # both providers, each: use customer|se|off, their key, model
+            ag_cfg = p.cfg.setdefault("aiguard", {})
+            prov = {}
+            for pt, v in body["providers"].items():
+                if pt not in agm.PROVIDERS or not isinstance(v, dict):
+                    continue
+                use = v.get("use") if v.get("use") in ("customer", "se", "off") else "off"
+                prov[pt] = {"use": use, "cred": v.get("cred") if use == "customer" else None,
+                            "model": str(v.get("model") or agm.PROVIDERS[pt][2]).strip()[:80]}
+            ag_cfg["providers"] = prov
+            for old in ("proxy", "provider", "provider_credential", "model"):
+                ag_cfg.pop(old, None)
+            p.log("aiguard", "proxy mode: " + ", ".join(f"{agm.LABEL[k]} {v['use']}" for k, v in prov.items()))
         vals = {k: body[k] for k in ("proxy", "provider", "provider_credential", "model", "competitor") if k in body}
         for k, v in vals.items():
             settings.set_value(p, f"aiguard.{k}", v, save=False)
         p.save()
-        return 200, {"ok": True, "note": "Run the checks again and approve the new change list to add the proxy key."
-                     if "proxy" in vals and vals["proxy"] != "none" else ""}
+        on = any(v["use"] != "off" for v in agm.proxy_setup(p).values())
+        return 200, {"ok": True, "note": "Run the checks again (Preflight) and approve the new change list: it adds a "
+                     "proxy key per provider." if on else ""}
     if path == "/api/aiguard/provider-key":
         from .products import aiguard as agm
         p = current()
         k = (body.get("key") or "").strip()
         if len(k) < 20:
             raise KitError("Paste the whole provider API key.")
-        secrets.put(p.id, agm.PROVIDER_SECRET, k)
-        p.log("aiguard", "SE's model key saved to the keychain (proxy mode)")
+        pt = body.get("provider") if body.get("provider") in agm.PROVIDERS else "anthropic"
+        secrets.put(p.id, agm.provider_secret(pt), k)
+        p.log("aiguard", f"SE's {agm.LABEL[pt]} key saved to the keychain (proxy mode)")
         return 200, {"ok": True}
     if path == "/api/aiguard/pack":
         from . import aiguard_runner

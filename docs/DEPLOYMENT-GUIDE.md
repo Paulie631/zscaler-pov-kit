@@ -329,10 +329,12 @@ four parts: **Test runner**, **Guided demos**, **Policy** and **Setup**.
   Detect per detector, for prompts and replies separately).
 - **The customer's own prompts:** import a CSV (a `prompt` column; optional `direction`, `name`, `expect`). It becomes
   a pack and a success criterion (AI-AIG-C1…) proved through the Detection API. It stays in the POV folder.
-- **Proxy mode:** real prompts to a model through AI Guard, with **the customer's model key** already in their AI
-  Guard, or **your own key** (it goes to your keychain; the change list adds it to their AI Guard as a POV object, and
-  teardown removes it). Save the choice, run the checks again and get the new change list approved; then **Send to
-  the model** works in the runner and the live prompt.
+- **Proxy mode** (AI Guard → Setup): real prompts to models through AI Guard, for **Anthropic, OpenAI or both**.
+  The kit reads which providers and keys the customer's AI Guard already has (**Read the tenant again** refreshes
+  it). For each provider: **reuse one of their keys**, **use your own key** (it goes to your keychain; the change list
+  adds it to their AI Guard as a POV object, and teardown removes it), or **off**, plus the model. Each provider in
+  use gets its own POV proxy key and rule. Save, run the checks again and get the new change list approved; then the
+  runner's **LLM proxy** mode rotates across the models you tick, and the live prompt's **Send to the model** works.
 - **Guided demos:** the demo kit's storylines (AI Guard in 8 steps, Data protection, Blocking step by step,
   Healthcare, Financial services, Legal) with a Say/Show talk track, presenter notes (so what, a discovery question,
   objections), OWASP Top 10 for LLM tags, real incidents, and a Monitor/Block switch per step that changes the POV

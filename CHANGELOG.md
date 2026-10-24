@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.34
+
+- **Proxy mode for Anthropic and OpenAI, side by side, from what the tenant has** (AI Guard → Setup), like the SE
+  demo kit. A card per provider shows whether the customer's AI Guard has that provider and which keys it holds.
+  Choose per provider: reuse one of their keys, use your own, or off, and the model. **Read the tenant again**
+  refreshes it. Each provider in use gets its own POV proxy key and rule.
+- The test runner's LLM proxy mode rotates across the providers you tick, and each result shows which one answered.
+- POVs set up with one provider before this keep their settings and their approved change list.
+
 ## 0.9.33
 
 - **Claude Desktop can make changes, through the change list.** A second Claude Desktop connector, run by the kit,
