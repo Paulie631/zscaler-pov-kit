@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.36
+
+- **The API proofs run on their own** (read-only): after Apply, after Finish setup's checks, with every Status check,
+  and when Success criteria opens if the last check is over three hours old. **Check again** runs them now; the
+  button is gone for AI Guard-only POVs, whose criteria the test runner proves.
+- **A criterion that doesn't pass says why:** what was found, why it happens, how to fix it, and a button where the
+  console can do the fix (Fix drift, Finish setup, Pilot users, the change list, the AI Guard test runner). The
+  first reason also shows under the criterion's result.
+
 ## 0.9.35
 
 - Fixed: **Ask Claude** (and criteria mapping, the report summary and drafted AI Guard tests) failed with "tool_choice:

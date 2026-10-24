@@ -102,12 +102,18 @@ def evaluate(pov, ids=None):
             auto = apis.get(c["id"])
             if auto and auto["status"] in (PASS, FAIL_):
                 proofs["api"] = dict(auto, automated=True)
+                if auto["status"] == FAIL_:
+                    from .proof_explain import explain
+                    proofs["api"]["explain"] = explain(auto.get("detail"), auto["status"])
             elif mine:
                 proofs["api"] = {"status": PASS, "detail": "attested (no automated API proof for this one)",
                                  "attestation": mine[-1]}
             else:
                 proofs["api"] = {"status": INCOMPLETE, "detail": (auto or {}).get("detail")
-                                 or "run `pov-kit test --api`, or attest it if there's no automated proof"}
+                                 or "not checked yet (the kit checks after Apply and with Status; or Check again)"}
+                if auto and auto.get("detail"):
+                    from .proof_explain import explain
+                    proofs["api"]["explain"] = explain(auto["detail"], "incomplete")
         if "attested" in c["proofs"] or c.get("attest"):
             proofs["attested"] = ({"status": PASS, "attestation": mine[-1]} if mine else
                                   {"status": INCOMPLETE, "detail": c.get("attest") or "needs an attestation"})

@@ -255,8 +255,13 @@ def teardown(pov, tenant_for, log, include_adopted=False):
     return out
 
 
-def api_proofs(pov, tenant_for, ids=None):
-    """Run each product's automated API proofs with the read-only discovery client; save them for the report."""
+RUNNER_OWNS = "aiguard"   # the AI Guard test runner's results are those criteria's proof
+
+
+def api_proofs(pov, tenant_for, ids=None, auto=False, log=lambda *a: None):
+    """Run each product's automated API proofs with the read-only discovery client; save them for the report.
+    auto: the kit's own runs (after Apply, with Status, when Success criteria opens), which leave the AI Guard
+    criteria to the test runner."""
     from . import evidence
     t = ReadOnlyTenant(tenant_for(pov, "discovery"))
     led = ledger(pov)
@@ -266,7 +271,7 @@ def api_proofs(pov, tenant_for, ids=None):
         if "api" not in c["proofs"]:
             continue
         p = products.get("aiguard" if c.get("aiguard") else c["product"])   # use cases' AI Guard test prompts
-        if not hasattr(p, "api_proof"):
+        if not hasattr(p, "api_proof") or (auto and p.name == RUNNER_OWNS):
             continue
         try:
             res = p.api_proof(t, pov, led, c)
@@ -276,5 +281,27 @@ def api_proofs(pov, tenant_for, ids=None):
             res["at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             saved[c["id"]] = ran[c["id"]] = res
     pov.write_json("api_proofs.json", saved)
-    pov.log("test", f"API proofs: {len(ran)} run")
+    pov.write_json("api_proofs_meta.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "auto": auto})
+    bad = [k for k, v in ran.items() if v["status"] != "pass"]
+    pov.log("test", f"API proofs{' (automatic)' if auto else ''}: {len(ran)} run" + (f"; not passing: {', '.join(bad)}" if bad else ""))
+    if ran:
+        log("ok" if not bad else "warn", f"Success criteria checked: {len(ran) - len(bad)} of {len(ran)} pass"
+            + (f" (not yet: {', '.join(bad[:8])})" if bad else ""))
     return ran
+
+
+def proofs_due(pov, hours=3):
+    """Whether the kit's automatic proofs are due: never run, or older than `hours`, for a POV with applied objects
+    and criteria the runner doesn't cover."""
+    import datetime as dt
+    from . import evidence
+    if not ledger(pov).active():
+        return False
+    if not any("api" in c["proofs"] and c["product"] != RUNNER_OWNS and not c.get("aiguard")
+               for c in evidence.selected_criteria(pov)):
+        return False
+    at = (pov.read_json("api_proofs_meta.json", {}) or {}).get("at")
+    if not at:
+        return True
+    then = dt.datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+    return (dt.datetime.now(dt.timezone.utc) - then).total_seconds() > hours * 3600

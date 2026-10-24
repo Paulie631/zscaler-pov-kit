@@ -296,7 +296,7 @@ doc (no secrets in it). From the command line: `pov-kit steps` (`--check`, `--do
 ### AI Guard and Endpoint AI
 
 **AI Guard** proves eight criteria automatically, by scanning test prompts and model replies through AI Guard's
-Detection API with the POV's own app key (**Run API proofs**). The tests are the SE demo kit's library (synthetic data
+Detection API with the POV's own app key (**AI Guard → Test runner**, whose results are those criteria's proof). The tests are the SE demo kit's library (synthetic data
 only): prompt injection (AI-AIG-01), secrets, PII and personal data (02), evasion with gibberish and invisible text
 (03), source code (04), responsible-AI topics such as toxicity, financial or legal advice, competitors and brand risk
 (05), model replies that leak data, are toxic, carry malicious links or refuse (06), topic and language tagging (07),
@@ -369,8 +369,12 @@ Any step can be revisited after Quick start.
 - **Dashboards:** keep the traffic generator running on a pilot device (`pov-probe traffic schedule`) or the AWS
   generator, so ZIA, Insights and Shadow IT have the pilot group's traffic to show.
 - **Evidence:** run the probe on each pilot device (the setup script runs it for you), and import the results
-  (**Success criteria → Import probe results**). **Run API proofs** checks what the API can see: the ZIA rules behind
-  each criterion and its test sites' categories, connectors, AI Guard scans, ZDX scores and SaaS scans. Record what
+  (**Success criteria → Import probe results**). The kit checks what the API can see on its own (read-only): after
+  Apply, after Finish setup's checks, with every Status check, and when Success criteria opens if the last check is
+  over three hours old (**Check again** runs it now). It covers the ZIA rules behind each criterion and its test
+  sites' categories, connectors, ZDX scores, devices and SaaS scans; AI Guard's criteria come from the test runner.
+  A criterion that doesn't pass says **why**, with the steps to fix it and, where the console can do it, a button
+  (Fix drift, Finish setup, the test runner). Record what
   people see as attestations (a screenshot can be attached with `pov-kit attest <criterion> --note ... --file`).
 - **New use cases:** check the library first (no AI call). Otherwise, in the **Use cases** tab, give the kit a way to
   Claude (your AI Guard proxy key, found automatically if the AI Guard demo kit is on your laptop; or, without an AI

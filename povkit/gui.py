@@ -270,7 +270,11 @@ def api(method, path, body, q):
             for r in rows:
                 if r["status"] != "pass" and wait.get(r["criterion"]["id"]):
                     r["waiting_on"] = wait[r["criterion"]["id"]]
-            return 200, {"rows": rows, "summary": summ, "summary_stale": stale}
+            meta = current().read_json("api_proofs_meta.json", {}) or {}
+            only_runner = not any("api" in r["criterion"]["proofs"] and r["criterion"]["product"] != "aiguard"
+                                  and not r["criterion"].get("aiguard") for r in rows)
+            return 200, {"rows": rows, "summary": summ, "summary_stale": stale, "proofs_at": meta.get("at"),
+                         "proofs_due": lifecycle.proofs_due(current()), "only_runner": only_runner}
         if path == "/api/logs":
             p = current()
             f = p.path("activity.jsonl")
@@ -473,12 +477,26 @@ def api(method, path, body, q):
         return 200, {"job": start_job("summary", work)}
     if path == "/api/apply":
         p = current()
-        return 200, {"job": start_job("apply", lambda log: len(lifecycle.apply(p, tf, log).active()))}
+        def work(log):
+            n = len(lifecycle.apply(p, tf, log).active())
+            try:   # then check the success criteria (read-only), so they show where the POV stands
+                lifecycle.api_proofs(p, tf, auto=True, log=log)
+            except KitError as e:
+                log("warn", f"Couldn't check the success criteria yet: {e}")
+            return n
+        return 200, {"job": start_job("apply", work)}
     if path == "/api/status":
         p = current()
         from . import manual
-        return 200, {"job": start_job("status", lambda log: manual.with_help(
-            lifecycle.status(p, tf, fix=bool(body.get("fix")), log=log)))}
+        def work(log):
+            checks = manual.with_help(lifecycle.status(p, tf, fix=bool(body.get("fix")), log=log))
+            if lifecycle.ledger(p).active():
+                try:
+                    lifecycle.api_proofs(p, tf, auto=True, log=log)
+                except KitError as e:
+                    log("warn", f"Couldn't check the success criteria: {e}")
+            return checks
+        return 200, {"job": start_job("status", work)}
     if path == "/api/mcp":
         p, what = current(), body.get("what")
         if what == "consent":
@@ -637,7 +655,15 @@ def api(method, path, body, q):
         p = current()
         if body.get("key"):
             return 200, manual.check(p, body["key"], tf)
-        return 200, {"job": start_job("manual", lambda log: manual.check_all(p, tf, log, body.get("stage")))}
+        def work(log):
+            out = manual.check_all(p, tf, log, body.get("stage"))
+            if body.get("stage") == "finish" and lifecycle.ledger(p).active():   # setup done: where do the criteria stand
+                try:
+                    lifecycle.api_proofs(p, tf, auto=True, log=log)
+                except KitError as e:
+                    log("warn", f"Couldn't check the success criteria: {e}")
+            return out
+        return 200, {"job": start_job("manual", work)}
     if path == "/api/manual/skip":
         from . import manual
         p = current()
@@ -646,7 +672,10 @@ def api(method, path, body, q):
         return 200, {"skipped": manual.skip(p, keys, body.get("by"), body.get("why") or "")}
     if path == "/api/test-api":
         p = current()
-        return 200, {"job": start_job("proofs", lambda log: lifecycle.api_proofs(p, tf))}
+        auto = bool(body.get("auto"))
+        if auto and not lifecycle.proofs_due(p):
+            return 200, {"job": None}
+        return 200, {"job": start_job("proofs", lambda log: lifecycle.api_proofs(p, tf, auto=auto, log=log))}
     if path == "/api/import-probe":
         p = current()
         data = body.get("data")
