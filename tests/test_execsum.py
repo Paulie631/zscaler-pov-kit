@@ -51,3 +51,15 @@ def test_render_needs_a_draft(pov):
         execsum.render(pov, "customer", "docx")
     with pytest.raises(KitError):
         execsum.render(pov, "board", "docx")
+
+
+def test_harmful_count_uses_latest_known_results(pov, monkeypatch):
+    from povkit import aiguard_runner
+    rows = [{"status": "ok", "id": "a", "provider": "anthropic", "expect": ["prompt_injection"], "pass": False},
+            {"status": "ok", "id": "a", "provider": "anthropic", "expect": ["prompt_injection"], "pass": True},
+            {"status": "ok", "id": "b", "provider": None, "expect": ["secrets"], "pass": None},      # unknown: skipped
+            {"status": "ok", "id": "c", "provider": None, "expect": ["language"], "pass": True},     # not harmful
+            {"status": "ok", "id": "d", "provider": "openai", "expect": ["pii"], "pass": False}]
+    monkeypatch.setattr(aiguard_runner, "runs", lambda p, limit=500: rows)
+    st = execsum.aiguard_stats(pov)
+    assert (st["harmful_caught"], st["harmful_tests"], st["scans"]) == (1, 2, 5)

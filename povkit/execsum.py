@@ -82,11 +82,17 @@ def aiguard_stats(pov):
     if not rs:
         return None
     det = Counter(d for r in rs for d in r.get("detectors") or [])
-    attacks = [r for r in rs if r.get("expect")]
+    from .products.aiguard import HARMFUL
+    latest = {}   # each harmful test's latest result where the detectors are known (one per test and model)
+    for r in rs:
+        if r.get("pass") is not None and set(r.get("expect") or []) & HARMFUL:
+            latest[(r.get("id"), r.get("provider"))] = r
+    attacks = list(latest.values())
     caught = [r for r in attacks if r.get("pass") is True]
     return {"scans": len(rs), "flagged": sum(1 for r in rs if r.get("detectors")),
             "blocked": sum(1 for r in rs if r.get("action") == "BLOCK"),
             "harmful_tests": len(attacks), "harmful_caught": len(caught),
+            "harmful_note": "latest result of each harmful test (per model) whose detectors are known",
             "detections": [{"type": PANELS.get(d, d), "count": n} for d, n in det.most_common(8)],
             "models": sorted({r["provider"] for r in rs if r.get("provider")}),
             "modes": sorted({r.get("mode") or "detect" for r in rs})}

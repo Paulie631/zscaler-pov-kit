@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.40
+
+- Executive summary: the AI Guard "risky prompts caught" figure now counts each harmful test once (its latest
+  result per model), and only where the detectors are known; it used to count every past run, including proxy runs
+  without detector tags and classification tests.
+
 ## 0.9.39
 
 - **Executive summary, two versions, as Word and PowerPoint** (Handover tab). Claude drafts a *customer* version
