@@ -1,2 +1,2 @@
 """Zscaler POV Kit."""
-VERSION = "0.9.73"
+VERSION = "0.9.74"

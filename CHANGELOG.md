@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.74
+- AI Guard proxy mode: the provider's own keys are listed first ("Default OpenAI Provider" before "DeepSeek (OpenAI-compatible)"); compatible providers come after.
+
 ## 0.9.73
 - AI Guard proxy mode: a tenant with more than one provider of a type (a real OpenAI provider and an OpenAI-compatible DeepSeek one) now offers every key of that type, labelled with its provider, OpenAI's first, and the provider follows the key you pick. Before, the kit took the first provider of the type it found, so the OpenAI menu could show only the DeepSeek key.
 

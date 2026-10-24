@@ -306,12 +306,14 @@ class AIGuard(Product):
                       for o in rows["provider_credential"]
                       if str(o.get("providerId")) in by_id and not naming.has_prefix(o.get("name"), pov.prefix)]
             word = LABEL[pt].lower()
-            pcreds.sort(key=lambda c: (word not in str(c["provider"]).lower() + " " + str(c["name"]).lower(),
-                                       str(c["name"])))
+            def native(name, word=word):   # 'Default OpenAI Provider' before 'DeepSeek (OpenAI-compatible)'
+                n = str(name).lower()
+                return word in n and not re.search(r"compatible|deepseek|azure|bedrock|vertex|groq|mistral", n)
+            pcreds.sort(key=lambda c: (not native(c["provider"]), str(c["name"])))
             chosen = next((c for c in pcreds if str(c["id"]) == str(v["cred"])), None) or (
                 pcreds[0] if len(pcreds) == 1 and not v["cred"] and v["use"] == "customer" else None)
             prov = (by_id.get(str(chosen["provider_id"])) if chosen else None) or next(
-                (x for x in same if word in str(x["name"]).lower()), None) or (same[0] if same else None)
+                (x for x in same if native(x["name"])), None) or (same[0] if same else None)
             have = bool(secrets.get(pov.id, provider_secret(pt)))
             snap["proxy"]["providers"][pt] = {"provider": prov, "creds": pcreds, "use": v["use"], "model": v["model"],
                                               "cred": chosen if v["use"] == "customer" else None, "se_key": have}

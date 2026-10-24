@@ -152,10 +152,11 @@ def test_two_providers_of_one_type_both_offered(pov_all, tenant, tenant_for):
     # and the provider follows the key chosen
     tenant.store["aiguard.llm_providers"].append({"id": 901, "name": "DeepSeek (OpenAI-compatible)", "type": "openai"})
     tenant.store["aiguard.llm_provider_credentials"].append({"id": 902, "name": "DeepSeek API Key", "providerId": 901})
-    both(tenant)
+    tenant.store["aiguard.llm_providers"].append({"id": 801, "name": "Default OpenAI Provider", "type": "openai"})
+    tenant.store["aiguard.llm_provider_credentials"].append({"id": 802, "name": "OpenAI API Key", "providerId": 801})
     pov_all.cfg["aiguard"] = {"providers": {"openai": {"use": "customer", "cred": 802}}}
     pov_all.save()
     snaps, _ = lifecycle.discover(pov_all, tenant_for)
     px = snaps["aiguard"]["proxy"]["providers"]["openai"]
-    assert [c["name"] for c in px["creds"]] == ["Acme OpenAI key", "DeepSeek API Key"]
+    assert [c["name"] for c in px["creds"]] == ["OpenAI API Key", "DeepSeek API Key"]
     assert px["provider"]["id"] == 801 and px["cred"]["id"] == 802
