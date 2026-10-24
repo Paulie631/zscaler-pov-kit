@@ -63,6 +63,7 @@ letting Claude Desktop make changes.
 - **Device tests › Guided demos › Show it**: the user's view. Step by step, each test's page opens in the pilot
   device's default browser (Safari or Chrome, not an in-app browser) for the room, then the test runs and is recorded.
   Put the console and the browser side by side. Firewall and DNS steps give a Terminal command to copy instead.
+  The Test runner has the same for any tests you pick: **Show them, step by step**.
 - **Device tests › Demo helpers**: ZPA, ZDX and CASB talk tracks, and **Warm up the dashboards** the day before.
 
 ## Every customer session

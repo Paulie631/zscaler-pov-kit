@@ -1417,10 +1417,10 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       <div id="dtlib" style="margin-top:10px"></div></div>
     <div class="stack" style="gap:16px">
       <div class="panel"><h2>Run</h2>
-        <div class="row" style="gap:8px"><button class="primary" id="dtrun">Run 0 tests</button><button id="dtstop" disabled>Stop</button></div>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="primary" id="dtrun">Run 0 tests</button><button id="dtshowall" title="Step by step: each test’s page opens in this computer’s browser for the room, then the test runs">Show it, step by step</button><button id="dtstop" disabled>Stop</button></div>
         <div class="progress" style="margin-top:12px"><i id="dtbar"></i></div>
         <div class="stats"><div><b id="dts-run">0</b>run</div><div><b id="dts-ok">0</b>as expected</div><div><b id="dts-bad">0</b>not as expected</div><div><b id="dts-err">0</b>errors</div></div>
-        <div id="dtmsg"></div>
+        <div id="dtmsg"></div><div id="dtwalk"></div>
         <div class="hint">Each result: <b>Open</b> repeats it in a browser for the room; the events are in ${esc(DT.logs)}. A criterion counts as evidence once all of its tests ran.</div></div>
       <div class="panel"><h2>Results</h2><div id="dtresults"><div class="empty">Nothing run yet.</div></div></div>
     </div></div>
@@ -1429,7 +1429,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       <div class="row" style="gap:8px;margin-top:8px"><button class="primary dtshow" data-id="${esc(st.id)}" title="Step by step: each test’s page opens in this computer’s browser for the room, then the test runs">Show it (${st.tests.length} step${st.tests.length==1?"":"s"})</button><button class="dtstory" data-id="${esc(st.id)}">Just run the tests</button></div><div class="dtsout" data-id="${esc(st.id)}"></div></div>`).join("")||'<div class="empty">No device tests in this POV’s criteria.</div>'}</div></div>`;
   const show=()=>{$$(".dtview").forEach(v=>v.style.display=v.dataset.v==DTTAB?(v.dataset.v=="runner"?"grid":""):"none");$$("#dtsub button").forEach(b=>b.classList.toggle("on",b.dataset.s==DTTAB))};
   $$("#dtsub button").forEach(b=>b.onclick=()=>{DTTAB=b.dataset.s;show();if(DTTAB=="helpers")drawHelpers()});show();if(DTTAB=="helpers")drawHelpers();
-  const count=()=>{const n=[...DTsel].filter(id=>all.some(t=>t.id==id)).length;$("#dtrun").textContent=`Run ${n} test${n==1?"":"s"}`};
+  const count=()=>{const n=[...DTsel].filter(id=>all.some(t=>t.id==id)).length;$("#dtrun").textContent=`Run ${n} test${n==1?"":"s"}`;$("#dtshowall").textContent=`Show ${n==1?"it":"them"}, step by step`};
   const drawLib=()=>{$("#dtlib").innerHTML=DT.criteria.map(g=>`<div style="margin:10px 0"><label class="chk" style="font-weight:600"><input type="checkbox" class="dtgrp" data-c="${esc(g.criterion)}" ${g.tests.every(t=>DTsel.has(t.id))?"checked":""}> <code>${esc(g.criterion)}</code> ${esc(g.title)}</label>
       ${g.tests.map(t=>`<label class="agtest" style="margin-left:22px"><input type="checkbox" class="dtt" data-t="${esc(t.id)}" ${DTsel.has(t.id)?"checked":""}><span>${esc(t.text)}</span></label>`).join("")}</div>`).join("");
     $$(".dtt").forEach(x=>x.onchange=()=>{x.checked?DTsel.add(x.dataset.t):DTsel.delete(x.dataset.t);drawLib()});
@@ -1462,10 +1462,13 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     try{await api("/api/devtests",{open:b.dataset.t})}catch(x){b.insertAdjacentHTML("afterend",note(x.message,"bad"))}finally{setTimeout(()=>b.disabled=false,1500)}};
   const flat=DT.criteria.flatMap(c=>c.tests.map(t=>Object.assign({criterion:c.criterion},t)));
   const copy=async(txt,b)=>{try{await navigator.clipboard.writeText(txt);b.textContent="Copied"}catch(_){b.textContent="Copy failed: select it by hand"}};
-  $$(".dtshow").forEach(b=>b.onclick=()=>{const st=DT.stories.find(x=>x.id==b.dataset.id),out=$(`.dtsout[data-id="${st.id}"]`);
-    const tests=st.tests.map(id=>flat.find(t=>t.id==id)).filter(Boolean);let i=0,ended=false;
-    $$(".dtshow,.dtstory").forEach(x=>x.disabled=true);
-    const end=()=>{ended=true;$$(".dtshow,.dtstory").forEach(x=>x.disabled=false)};
+  $$(".dtshow").forEach(b=>b.onclick=()=>{const st=DT.stories.find(x=>x.id==b.dataset.id);walk(st.tests,$(`.dtsout[data-id="${st.id}"]`))});
+  $("#dtshowall").onclick=()=>{const ids=all.map(t=>t.id).filter(id=>DTsel.has(id));if(!ids.length){$("#dtmsg").innerHTML=note("Pick some tests.");return}
+    $("#dtmsg").innerHTML="";walk(ids,$("#dtwalk"),r=>{DTres=r;draw()});$("#dtwalk").scrollIntoView({behavior:"smooth",block:"nearest"})};
+  function walk(ids,out,onDone){
+    const tests=ids.map(id=>flat.find(t=>t.id==id)).filter(Boolean);let i=0,ended=false;
+    const btns=".dtshow,.dtstory,#dtshowall,#dtrun";$$(btns).forEach(x=>x.disabled=true);
+    const end=()=>{ended=true;$$(btns).forEach(x=>x.disabled=false)};
     const step=async()=>{if(ended)return;const t=tests[i],sh=t.show||{};
       out.innerHTML=`<div class="card" style="margin-top:8px;border-left:4px solid var(--accent)">
         <div class="muted" style="font-size:12px">Step ${i+1} of ${tests.length} · <code>${esc(t.criterion)}</code></div>
@@ -1486,11 +1489,12 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       try{const rs=[];await follow((await api("/api/devtests",{run:true,ids:[t.id]})).job,x=>rs.push(x));if(!ended)res.innerHTML=rs.map(card).join("").replace(/<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen"[^]*?<\/div>/,"")}
       catch(x){if(!ended)res.innerHTML=note(x.message,"bad")}
       q(".dtnext").disabled=false};
-    const finish=async()=>{out.innerHTML='<div class="notice" style="margin-top:8px">Recording all of this demo’s tests together for the scorecard…</div>';const rs=[];
-      try{const r=await follow((await api("/api/devtests",{run:true,ids:st.tests})).job,x=>rs.push(x));
-        out.innerHTML=rs.map(card).join("")+note(`${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:""}`,r.ok==r.total?"good":"warn");load()}
+    const finish=async()=>{out.innerHTML=`<div class="notice" style="margin-top:8px">Recording all ${tests.length} tests together for the scorecard…</div>`;const rs=[];
+      try{const r=await follow((await api("/api/devtests",{run:true,ids})).job,x=>rs.push(x));
+        const sum=note(`${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:""}`,r.ok==r.total?"good":"warn");
+        if(onDone){onDone(rs);out.innerHTML=sum}else out.innerHTML=rs.map(card).join("")+sum;load()}
       catch(x){out.innerHTML=note(x.message,"bad")}finally{end()}};
-    step()});
+    step()}
   $$(".dtstory").forEach(b=>b.onclick=async()=>{const st=DT.stories.find(x=>x.id==b.dataset.id),out=$(`.dtsout[data-id="${st.id}"]`);b.disabled=true;out.innerHTML='<div class="notice">Running…</div>';const rs=[];
     try{const jid=(await api("/api/devtests",{run:true,ids:st.tests})).job;const r=await follow(jid,x=>{rs.push(x);out.innerHTML=rs.map(card).join("")});
       out.insertAdjacentHTML("beforeend",note(`${r.ok} of ${r.total} as expected.`,r.ok==r.total?"good":"warn"))}

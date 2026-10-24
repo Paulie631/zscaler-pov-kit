@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.60
+- Device tests › Test runner: **Show them, step by step** walks through the chosen POV tests the same way as a guided demo's Show it: each page opens in this computer's default browser with what to point at, the test runs alongside, and at the end all of them are recorded together and listed in Results.
+
 ## 0.9.59
 - Device tests › Guided demos › **Show it**: shows the end user's experience. Step by step, each test's page opens in this computer's default browser (the block, caution, isolation or DLP page the user would see), with what to point at; the test runs alongside, and at the end the demo's tests are recorded together for the scorecard. Firewall and DNS steps give a Terminal command to copy; the DLP step copies test card numbers to paste.
 - Test runner results: "Show it in this computer's browser" opens the page in the default browser instead of the browser the console is in.
