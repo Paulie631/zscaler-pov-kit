@@ -147,3 +147,31 @@ def test_console_jobs_can_reach_ai():
     """A job's closure inside gui.api must see the module's `ai` (a local import there broke Ask Claude)."""
     from povkit import gui
     assert "ai" not in gui.api.__code__.co_varnames and gui.ai is ai
+
+
+def test_a_model_that_refuses_forced_tools_is_asked_again(pov, monkeypatch):
+    """The AI Guard proxy said: tool_choice type "tool" and "any" are not supported for this model."""
+    calls = []
+
+    class R:
+        def __init__(self, code, body):
+            self.status_code, self._b, self.text = code, body, json.dumps(body)
+
+        def json(self):
+            return self._b
+
+    def transport(url, json=None, headers=None, timeout=None):
+        calls.append(json)
+        if json["tool_choice"]["type"] == "tool":
+            return R(400, {"type": "error", "error": {"type": "invalid_request_error", "message":
+                     'tool_choice: type "tool" and "any" are not supported for this model.'}})
+        return R(200, {"content": [{"type": "tool_use", "name": "t", "input": {"ok": 1}}]})
+    monkeypatch.setattr(ai, "TRANSPORT", transport)
+    monkeypatch.setattr(ai, "NO_FORCED_TOOL", set())
+    monkeypatch.setattr(ai, "proxy_key", lambda: ("proxy-key-123", "test"))
+    tool = {"name": "t", "input_schema": {"type": "object"}}
+    used, _ = ai.ask(pov, "s", "u", tool=tool, needs_consent=False)
+    assert used == {"ok": 1} and [c["tool_choice"]["type"] for c in calls] == ["tool", "auto"]
+    assert "calling the t tool" in calls[1]["system"]
+    ai.ask(pov, "s", "u", tool=tool, needs_consent=False)       # remembered: straight to auto
+    assert calls[-1]["tool_choice"]["type"] == "auto" and len(calls) == 3

@@ -318,6 +318,12 @@ def draft(pov, cid, n=5, ask=None):
     customer_words = bool(c.get("usecase") or c.get("customer_pack"))
     used, text = (ask or ai.ask)(pov, DRAFT_SYSTEM, msg, max_tokens=3000, tool=DRAFT_TOOL,
                                  needs_consent=customer_words)
+    if used is None and text:   # a model that answered in text rather than through the tool
+        try:
+            from .usecases import parse
+            used = parse(text)
+        except KitError:
+            used = None
     got = (used or {}).get("tests") or []
     allowed = set(dets)
     new = []

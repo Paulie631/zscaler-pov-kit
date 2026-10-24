@@ -119,6 +119,7 @@ def post(url, json, headers, timeout):
 
 
 TRANSPORT = post   # tests swap in a fake
+NO_FORCED_TOOL: set = set()   # models that refused tool_choice {"type": "tool"} this run
 
 
 def ask(pov, system, user, max_tokens=4000, timeout=180, tool=None, needs_consent=True):
@@ -134,22 +135,36 @@ def ask(pov, system, user, max_tokens=4000, timeout=180, tool=None, needs_consen
     label = "the AI Guard proxy" if via == "aiguard" else "Anthropic's API"
     model = (pov.cfg.get("ai") or {}).get("model") or DEFAULT_MODEL
     t0 = time.time()
-    try:
-        body = {"model": model, "max_tokens": max_tokens, "system": system,
-                "messages": [{"role": "user", "content": user}],
-                "metadata": {"user_id": "pov-kit-" + hashlib.sha256(pov.id.encode()).hexdigest()[:16]}}   # not the slug
-        if tool:
-            body.update(tools=[tool], tool_choice={"type": "tool", "name": tool["name"]})
-        if via == "aiguard":
-            url, headers = f"{PROXY_HOST}/v1/messages", {"X-ApiKey": key, "x-api-key": "unused"}
-        else:
-            url, headers = f"{ANTHROPIC_HOST}/v1/messages", {"x-api-key": key}
-        r = TRANSPORT(url, json=body, headers=dict(headers, **{"anthropic-version": "2023-06-01",
-                                                                "content-type": "application/json"}), timeout=timeout)
-    except Exception as e:
-        raise KitError(f"Couldn't reach {label}: {str(e).replace(key, '<key>')}") from e
-    ms = int((time.time() - t0) * 1000)
+    body = {"model": model, "max_tokens": max_tokens, "system": system,
+            "messages": [{"role": "user", "content": user}],
+            "metadata": {"user_id": "pov-kit-" + hashlib.sha256(pov.id.encode()).hexdigest()[:16]}}   # not the slug
+    if tool:
+        body["tools"] = [tool]
+        body["tool_choice"] = {"type": "auto"} if model in NO_FORCED_TOOL else {"type": "tool", "name": tool["name"]}
+        if model in NO_FORCED_TOOL:
+            body["system"] = system + f"\n\nAnswer only by calling the {tool['name']} tool."
+    if via == "aiguard":
+        url, headers = f"{PROXY_HOST}/v1/messages", {"X-ApiKey": key, "x-api-key": "unused"}
+    else:
+        url, headers = f"{ANTHROPIC_HOST}/v1/messages", {"x-api-key": key}
+    headers = dict(headers, **{"anthropic-version": "2023-06-01", "content-type": "application/json"})
+
+    def send(b):
+        try:
+            return TRANSPORT(url, json=b, headers=headers, timeout=timeout)
+        except Exception as e:
+            raise KitError(f"Couldn't reach {label}: {str(e).replace(key, '<key>')}") from e
+    r = send(body)
     text = getattr(r, "text", "") or ""
+    if tool and r.status_code == 400 and "tool_choice" in text and body["tool_choice"]["type"] != "auto":
+        # some models refuse a forced tool call: ask again, letting the model call the tool itself
+        NO_FORCED_TOOL.add(model)
+        body = dict(body, tool_choice={"type": "auto"},
+                    system=system + f"\n\nAnswer only by calling the {tool['name']} tool.")
+        pov.log("ai", f"{model} doesn't take a forced tool call: asking again with the tool offered", "info")
+        r = send(body)
+        text = getattr(r, "text", "") or ""
+    ms = int((time.time() - t0) * 1000)
     if r.status_code >= 400:
         blocked = via == "aiguard" and re.search(r"block|policy|guard|violat", text, re.I)
         pov.log("ai", f"{label}: HTTP {r.status_code}", "warn" if blocked else "error", ms=ms)

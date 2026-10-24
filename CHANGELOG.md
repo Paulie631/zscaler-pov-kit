@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.35
+
+- Fixed: **Ask Claude** (and criteria mapping, the report summary and drafted AI Guard tests) failed with "tool_choice:
+  type "tool" and "any" are not supported for this model" on models that don't take a forced tool call. The kit now
+  asks again with the tool offered rather than forced, and remembers that for the model.
+
 ## 0.9.34
 
 - **Proxy mode for Anthropic and OpenAI, side by side, from what the tenant has** (AI Guard → Setup), like the SE
