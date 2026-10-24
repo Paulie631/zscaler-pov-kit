@@ -18,7 +18,17 @@
 - Then **Status → Safety net:** turn on encrypted backups (a synced folder and a passphrase in your password manager)
   and daily reminders. (The panel appears once a POV exists.)
 
+## Rehearse first (recommended)
+
+Before your first customer POV, run one end to end in your own lab tenant: Start a POV → **More options** → tick
+**This is my own lab tenant**. The **POV checklist** under the tabs then becomes a rehearsal: it adds the checks that
+are easiest to get wrong in the field (self-test, backups, the Claude Desktop connectors, a pilot device, the traffic
+generator, teardown). Mark each step **Worked** or **Problem…** with a note, and send the **rehearsal report** to the
+kit's owner.
+
 ## Your first POV
+
+The **POV checklist** under the tabs shows what's done and what's next; **Go ›** takes you there.
 
 The console opens in **Simple view**: the main path only. **Advanced view** (top right) adds the rest: prefix and
 client options, CloudShare and AWS traffic generators, AI Guard test users and rounds, Claude-drafted tests, and

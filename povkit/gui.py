@@ -588,6 +588,14 @@ def api(method, path, body, q):
             ev = {} if live else aiguard_runner.record_evidence(p, res, stopped)
             return {"results": res, "stopped": stopped, "evidence": ev}
         return 200, {"job": start_job("aiguard", work, streams=True)}
+    if path == "/api/coach":
+        from . import coach
+        p = current()
+        if body.get("mark"):
+            coach.mark(p, body["mark"], body.get("ok"), body.get("note") or "")
+        if body.get("report"):
+            return 200, {"name": f"pov-kit-rehearsal-{p.id}.md", "text": coach.report_md(p)}
+        return 200, coach.summary(p)
     if path == "/api/aiguard/calibrate":
         from . import aiguard_calibrate as cal, aiguard_runner
         p = current()

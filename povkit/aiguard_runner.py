@@ -86,6 +86,8 @@ def criterion_tests(pov, c, led=None):
              "text": t["text"], "expect": _expect(t), "drafted": bool(t.get("status"))}
         if key_secret:
             x["key_secret"] = key_secret
+        if t.get("calibrate") is False:
+            x["calibrate"] = False
         if c.get("customer_pack"):
             x["customer"] = True   # the customer's own prompts: calibration never changes them
         if c.get("usecase"):

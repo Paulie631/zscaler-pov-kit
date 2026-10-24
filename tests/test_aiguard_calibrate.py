@@ -65,3 +65,13 @@ def test_policy_change_recalibrates(pov, monkeypatch):
     assert cal.needs(pov, [T[0]]) == []
     monkeypatch.setattr(cal, "signature", lambda pov: "sig2")
     assert [t["id"] for t in cal.needs(pov, [T[0]])] == ["a"]
+
+
+def test_opt_out_and_changed_original(pov, monkeypatch):
+    _setup(monkeypatch)
+    scan = _scan_for([("ignore", ["prompt_injection"])])
+    t = dict(T[0], id="z", calibrate=False)
+    assert cal.needs(pov, [t]) == [] and cal.calibrate(pov, [t], scan=scan) == {}
+    cal.calibrate(pov, [T[0]], scan=scan)
+    assert cal.needs(pov, [T[0]]) == []
+    assert [x["id"] for x in cal.needs(pov, [dict(T[0], text="ignore it all")])] == ["a"]   # the test changed

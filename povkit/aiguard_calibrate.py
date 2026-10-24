@@ -61,8 +61,20 @@ def save(pov, c):
 
 
 def is_customer(t):
-    """The customer's own prompts: never rewritten or swapped."""
-    return bool(t.get("customer"))
+    """The customer's own prompts (never rewritten or swapped), and tests marked not to calibrate (a prompt meant to
+    make the model refuse, a URL only Zscaler's live threat feed knows)."""
+    return bool(t.get("customer")) or t.get("calibrate") is False
+
+
+def _orig(t):
+    """A test's original, so a calibration is redone when the test itself changes (a new kit version)."""
+    return hashlib.sha256(json.dumps([t.get("text"), runner._expect(t), t.get("direction", "IN")]).encode()).hexdigest()[:12]
+
+
+def _rec(recs, t):
+    """The test's calibration, if it was made for the test as it is now."""
+    r = recs.get(t.get("id"))
+    return r if r and r.get("orig") == _orig(t) else None
 
 
 def apply(pov, tests):
@@ -71,8 +83,8 @@ def apply(pov, tests):
     recs = load(pov)["tests"]
     out = []
     for t in tests:
-        r = recs.get(t.get("id"))
-        if r and r["status"] in ("rewritten", "swapped") and not is_customer(t):
+        r = _rec(recs, t) if not is_customer(t) else None
+        if r and r["status"] in ("rewritten", "swapped"):
             t = dict(t, text=r["text"], expect=r.get("expect", t.get("expect")), calibrated=r["status"],
                      original_text=t.get("text"))
             if r["status"] == "swapped":
@@ -85,7 +97,7 @@ def apply(pov, tests):
 
 def needs(pov, tests):
     recs = load(pov)["tests"]
-    return [t for t in tests if t.get("id") not in recs and not is_customer(t)]
+    return [t for t in tests if not _rec(recs, t) and not is_customer(t)]
 
 
 # ---------------------------------------------------------------- calibrating
@@ -130,12 +142,12 @@ def calibrate(pov, tests, log=lambda *a: None, stop=None, scan=None, ask=None, o
     if not runner.keys(pov)[0]:
         raise KitError("The POV has no AI Guard detection key yet: apply the change list first.")
     user = f"zpov-{pov.id}-calibration@pov.test"
-    todo = [t for t in tests if not is_customer(t) and (force or t.get("id") not in c["tests"])]
+    todo = [t for t in tests if not is_customer(t) and (force or not _rec(c["tests"], t))]
     out = {}
     for t in todo:
         if stop and stop():
             break
-        rec = {"name": t.get("name"), "criterion": t.get("criterion"), "expect": runner._expect(t)}
+        rec = {"name": t.get("name"), "criterion": t.get("criterion"), "expect": runner._expect(t), "orig": _orig(t)}
         try:
             r = _scan(pov, t, user, scan)
             rec["detected"] = r["detectors"]

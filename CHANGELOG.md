@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.42
+
+- **POV checklist** under the tabs: what's done, what's next, and **Go ›** to get there (connect, pilot users, change
+  list, sign-off, Apply, Finish setup, pilot device, AI Guard tests, success criteria, executive summary, handover).
+- **Rehearsal in a lab tenant:** tick *This is my own lab tenant* (Start a POV → More options). The checklist adds the
+  field checks (self-test, backups, both Claude Desktop connectors, traffic generator), each step can be marked
+  **Worked** or **Problem…** with a note, and **Download rehearsal report** collects them (no customer data).
+- **The test library, checked against a live AI Guard tenant:** prompts that didn't trigger their detectors were
+  reworded (or replaced), so the shipped tests trigger as written. The encoded-blob evasion test now expects prompt
+  injection (that's how AI Guard flags it). The malicious-URL reply test is out of AI-AIG-06's automated proof: no
+  safe test URL is on Zscaler's live threat feed, so show it live with one the AI Guard team gives you.
+- Calibration skips tests meant to provoke something else (the refusal trigger), and redoes a test whenever the test
+  itself changes in a new kit version.
+
 ## 0.9.41
 
 - **Every AI Guard test triggers what it's meant to show.** Before a run, the kit scans each test once through the

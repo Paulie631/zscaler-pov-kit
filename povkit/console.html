@@ -49,6 +49,9 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 11px;cursor:pointer}
 button:hover{background:var(--soft)}
 body.simple .adv{display:none!important}
+#coachbar{padding:8px 24px;background:var(--soft);border-bottom:1px solid var(--line);font-size:13px}#coachbar:empty{display:none}
+#coachbar .cbtop{display:flex;gap:10px;align-items:center;flex-wrap:wrap}#coachbar .cbbar{flex:0 0 120px;height:6px;background:var(--line);border-radius:3px;overflow:hidden}#coachbar .cbbar i{display:block;height:100%;background:var(--accent)}
+#coachbar ol{margin:8px 0 2px;padding-left:20px}#coachbar li{margin:4px 0}#coachbar li.done{color:var(--muted)}#coachbar li .d{color:var(--muted);font-size:12px}
 a.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 12px;text-decoration:none;display:inline-block}a.btn:hover{background:var(--soft)}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:8px 18px}
 button.primary:hover{filter:brightness(1.08)}
@@ -176,6 +179,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
   <button data-t="handover">Handover</button>
   <button data-t="logs">Logs</button>
 </nav>
+<div id="coachbar"></div>
 
 <div class="view on" id="v-setup"><div class="wrap">
   <div class="wiz">
@@ -374,7 +378,26 @@ async function load(){S=await api("/api/state");const c=S.current;
   $("#hmanual")&&($("#hmanual").onclick=e=>{e.preventDefault();goManual()});
   const ag=c&&c.aiguard&&c.aiguard.live;$("#hpol").style.display=ag?"":"none";if(ag){$("#polsel").value=c.aiguard.profile;$("#polstate").textContent=""}
   $("#povsel").innerHTML=S.povs.length?S.povs.map(p=>`<option value="${esc(p.id)}" ${c&&p.id==c.id?"selected":""}>${esc(p.customer)} (${esc(p.id)})</option>`).join(""):'<option>No POVs</option>';
-  $("#povsel").disabled=!S.povs.length;return S}
+  $("#povsel").disabled=!S.povs.length;coachBar();return S}
+let COACH_OPEN=false;
+async function coachBar(){const el=$("#coachbar");if(!el)return;if(!S||!S.current){el.innerHTML="";return}
+  let k;try{k=await api("/api/coach",{})}catch(e){el.innerHTML="";return}
+  const pct=Math.round(100*k.done/k.total),n=k.next;
+  const item=x=>`<li class="${x.done?"done":""}">${x.done?"✓":"○"} <b>${esc(x.title)}</b>${x.rehearsal?' <span class="chip">rehearsal</span>':""}${x.go&&!x.done?` <a href="#" class="cbgo" data-go="${esc(x.go)}">Go ›</a>`:""}<div class="d">${esc(x.detail||"")}</div>
+    ${k.rehearsal?`<div class="row" style="gap:6px;margin-top:3px">${x.mark?`<span class="badge b-${x.mark.ok?"ok":"fail"}">${x.mark.ok?"worked":"problem"}</span> <span class="d">${esc(x.mark.note||"")}</span>`:""}<button class="cbm" data-id="${esc(x.id)}" data-ok="1" style="font-size:12px;padding:2px 8px">Worked</button><button class="cbm" data-id="${esc(x.id)}" data-ok="0" style="font-size:12px;padding:2px 8px">Problem…</button></div>`:""}</li>`;
+  el.innerHTML=`<div class="cbtop">${k.rehearsal?'<span class="badge b-warn">Rehearsal</span>':""}<b>POV checklist</b><span class="cbbar"><i style="width:${pct}%"></i></span><span>${k.done} of ${k.total}</span>
+    ${n?`<span>· Next: <b>${esc(n.title)}</b></span>${n.go?`<button class="cbgo primary" data-go="${esc(n.go)}" style="padding:3px 12px">Go ›</button>`:""}`:"<span>· All done</span>"}
+    <a href="#" id="cbtoggle">${COACH_OPEN?"Hide":"Show all"}</a>${k.rehearsal?'<a href="#" id="cbreport">Download rehearsal report</a>':""}</div>
+    ${COACH_OPEN?`<ol style="list-style:none;padding-left:4px">${k.steps.map(item).join("")}</ol>`:""}`;
+  $("#cbtoggle").onclick=e=>{e.preventDefault();COACH_OPEN=!COACH_OPEN;coachBar()};
+  $("#cbreport")&&($("#cbreport").onclick=async e=>{e.preventDefault();const r=await api("/api/coach",{report:true});download(r.name,r.text,"text/markdown")});
+  $$("#coachbar .cbgo").forEach(b=>b.onclick=e=>{e.preventDefault();const g=b.dataset.go;
+    if(g.startsWith("step:")){W.step=+g.slice(5);W.plan=null;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
+    else if(g.startsWith("tab:"))$$("#tabs button").find(x=>x.dataset.t==g.slice(4)).click()});
+  $$("#coachbar .cbm").forEach(b=>b.onclick=async()=>{const ok=b.dataset.ok=="1";
+    if(ok){await api("/api/coach",{mark:b.dataset.id,ok:true});return coachBar()}
+    const row=b.parentElement;row.innerHTML=`<input type="text" class="cbnote" placeholder="What went wrong? (goes in the rehearsal report)" style="flex:1;min-width:220px;font-size:12px"><button class="cbsave" style="font-size:12px;padding:2px 8px">Save</button>`;
+    const inp=row.querySelector(".cbnote");inp.focus();row.querySelector(".cbsave").onclick=async()=>{await api("/api/coach",{mark:b.dataset.id,ok:false,note:inp.value});coachBar()}})}
 $("#povsel").onchange=async e=>{await api("/api/pov/use",{id:e.target.value});await load();W.step=firstOpen();W.checks=null;W.plan=null;wizard();refreshTab()};
 $$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".view").forEach(v=>v.classList.toggle("on",v.id=="v-"+b.dataset.t));refreshTab()});
 function tab(){return $("#tabs button.on").dataset.t}
@@ -518,8 +541,8 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
             <input type="text" id="qcid" autocomplete="off" placeholder="Client ID">
             <input type="password" id="qsec" autocomplete="new-password" placeholder="Client secret (goes to this computer's keychain)">
             <input class="qzpa" type="text" id="qcust" placeholder="ZPA customer ID: Administration > API > Legacy API > Private Access API > Copy ID" style="display:none"></div></div></div>
-      <details class="adv" style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: lab tenant, prefix, end date, two API clients</summary><div class="form" style="margin-top:8px">
-        <span class="lbl">Lab</span><label class="chk"><input type="checkbox" id="wlab">This is my own lab tenant <span class="muted">(allows the self-test, which creates and deletes test objects)</span></label>
+      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: lab tenant (rehearsal), prefix, end date, two API clients</summary><div class="form" style="margin-top:8px">
+        <span class="lbl">Lab</span><label class="chk"><input type="checkbox" id="wlab">This is my own lab tenant: a <b>rehearsal</b> <span class="muted">(the checklist adds the field checks and a rehearsal report; allows the self-test, which creates and deletes test objects)</span></label>
         <span class="lbl">Prefix</span><input type="text" id="wprefix" value="" placeholder="ZPOV (or ZPOV2... if another POV here uses it)" maxlength="12">
         <span class="lbl">Ends</span><div><input type="date" id="wends" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"> <span class="hint">A reminder comes in the last week.</span></div>
         <span class="lbl">API clients</span><div>
