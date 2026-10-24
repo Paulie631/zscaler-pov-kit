@@ -157,10 +157,13 @@ def one_liner(pov, os_, email, pack=None):
 def test_command(pov, os_, pack, wait=20):
     """For a device that's already set up: installs (or refreshes) the POV's tests and runs them."""
     code = pack_code(pack)
+    # refreshes the probe first (a device set up with an older kit), then runs the tests
     if os_ == "macos":
-        return f"~/.zscaler-pov-probe/app/pov-probe test --wait {wait} --code '{code}'"
+        return (f"curl -fsSL {base_url()}/install-probe.sh | bash && "
+                f"~/.zscaler-pov-probe/app/pov-probe test --wait {wait} --code '{code}'")
     if os_ == "windows":
-        return f"& \"$env:USERPROFILE\\.zscaler-pov-probe\\app\\pov-probe.cmd\" test --wait {wait} --code '{code}'"
+        return (f"& ([scriptblock]::Create((irm {base_url()}/install-probe.ps1))); "
+                f"& \"$env:USERPROFILE\\.zscaler-pov-probe\\app\\pov-probe.cmd\" test --wait {wait} --code '{code}'")
     raise KitError("The OS is macos or windows.")
 
 

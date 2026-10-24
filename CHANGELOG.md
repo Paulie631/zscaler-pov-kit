@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.51
+
+- The *Run the tests* command refreshes the probe on the device first, so a device set up with an older kit runs
+  the POV's current tests too.
+
 ## 0.9.50
 
 - **Pilot-device testing, made plain.** *Set up a pilot device* is three numbered steps:
