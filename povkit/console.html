@@ -1327,7 +1327,8 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $$(".ucsave").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/library/save",{id:b.dataset.id});b.textContent="Saved as "+r.entry.id;b.disabled=true;usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
   $$(".ucact").forEach(b=>b.onclick=async()=>{try{await api("/api/usecase/status",{id:b.dataset.id,status:b.dataset.s});await load();usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
   $$(".ucdl").forEach(b=>b.onclick=async()=>{const r=await api(`/api/usecase/directions?id=${encodeURIComponent(b.dataset.id)}`);download(`${b.dataset.id}-directions.md`,r.text,"text/markdown")});
-  $$(".ucplan").forEach(b=>b.onclick=()=>{W.step=4;$$("#tabs button").find(x=>x.dataset.t=="setup").click()})}
+  $$(".ucplan").forEach(b=>b.onclick=()=>{W.step=4;$$("#tabs button").find(x=>x.dataset.t=="setup").click()});
+  $$(".ucmake").forEach(b=>b.onclick=()=>ucMake(b.dataset.id,$(`.ucmk[data-id="${b.dataset.id}"]`)))}
 function ucDetail(ch){const skip=new Set(["kind","name","why"]);return Object.entries(ch).filter(([k])=>!skip.has(k)).map(([k,v])=>`<span class="muted">${esc(k.replace(/_/g," "))}:</span> ${esc(Array.isArray(v)?v.join(", "):v)}`).join(" · ")}
 function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",directions:"warn",discarded:"fail"}[u.status];
   return `<div class="panel"><div class="row" style="justify-content:space-between"><div><span class="chip">${esc(u.id)}</span> <span class="badge b-${st}">${esc(u.status)}</span> <span class="muted" style="font-size:12px">${esc(u.at.slice(0,16).replace("T"," "))} UTC · ${esc(u.by)}</span></div></div>
@@ -1345,10 +1346,29 @@ function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",dir
     <div class="row" style="margin-top:14px">
       ${u.status=="accepted"||u.status=="directions"?`<button class="ucsave" data-id="${esc(u.id)}">Save to library</button>`:""}
       ${u.status=="proposed"?`${s.changes.length?`<button class="primary ucact" data-id="${esc(u.id)}" data-s="accepted">Add to the change list</button>`:""}<button class="ucact" data-id="${esc(u.id)}" data-s="directions">Keep as directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="discarded">Discard</button>`:""}
-      ${u.status=="accepted"?`<span class="hint" style="margin:0">In the change list. Make the change list again and get the customer's approval, then Apply.</span><button class="ucplan">Open the change list ›</button><button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Take it out</button>`:""}
+      ${u.status=="accepted"?`<button class="primary ucmake" data-id="${esc(u.id)}" title="Checks the tenant, shows exactly what changes, then signs off and applies">Make it in the tenant ›</button><button class="ucplan">Open the change list ›</button><button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Take it out</button>`:""}
       ${u.status=="directions"?`<button class="ucdl" data-id="${esc(u.id)}">Download directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Back to proposed</button>`:""}
       ${u.status=="discarded"?`<button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Restore</button>`:""}
-    </div></div>`}
+    </div><div class="ucmk" data-id="${esc(u.id)}"></div></div>`}
+async function ucMake(id,el){el.innerHTML='<div class="notice" style="margin-top:10px">Checking the tenant and making the change list (about a minute)…</div><div class="log" style="display:block"></div>';
+  let P;try{P=await runJob((await api("/api/usecase/make",{id,preview:true})).job,el.querySelector(".log"))}catch(e){el.innerHTML=note(e.message,"bad");return}
+  const li=xs=>`<ul style="margin:4px 0 0 18px;padding:0">${xs.map(i=>`<li><b>${esc(i.name)}</b> <span class="muted">· ${esc(i.product.toUpperCase())} ${esc(i.kind.replace(/_/g," "))}${i.affects?" · affects "+esc(i.affects):""}</span></li>`).join("")}</ul>`;
+  const se=P.mode=="se";let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
+  el.innerHTML=`<div class="card" style="margin-top:10px;border-left:4px solid var(--accent)"><b>Make ${esc(id)} in the tenant</b>
+    ${P.blocked.length?note("The checks found problems, so nothing can be changed yet: "+P.blocked.join("; "),"bad"):""}
+    ${P.mine.length?`<div style="margin-top:6px">This creates, for the pilot users only:</div>${li(P.mine)}`:`<div style="margin-top:6px">${esc(id)}’s changes are already in the tenant.</div>`}
+    ${P.others.length?`<div style="margin-top:8px">Also waiting in the change list, and made with it (apply makes the whole approved list):</div>${li(P.others)}`:""}
+    ${P.notes.length?`<div class="hint">${P.notes.map(esc).join("<br>")}</div>`:""}
+    ${!se&&!P.approved?note("This POV needs the customer’s approval: Setup › Sign-off sends them this change list. Once they approve, come back and make it.","warn"):""}
+    ${(P.mine.length||P.others.length)&&!P.blocked.length&&(se||P.approved)?`<div class="row" style="margin-top:10px;gap:8px">${se&&!P.approved?`<label class="chk"><input type="checkbox" class="mkrev"> I reviewed these changes</label><input type="text" class="mkby" placeholder="Your name (the sign-off)" value="${esc(by)}" style="width:200px">`:'<span class="hint" style="margin:0">Approved.</span>'}<button class="primary mkgo">Sign off and apply</button><button class="mkcancel">Cancel</button></div>`:'<div class="row" style="margin-top:10px"><button class="mkcancel">Close</button></div>'}
+    <div class="mkmsg"></div></div>`;
+  const q=k=>el.querySelector(k);q(".mkcancel").onclick=()=>el.innerHTML="";
+  q(".mkgo")&&(q(".mkgo").textContent=se&&!P.approved?"Sign off and apply":"Apply");
+  q(".mkgo")&&(q(".mkgo").onclick=async()=>{if(se&&!P.approved&&!(q(".mkrev").checked&&q(".mkby").value.trim())){q(".mkmsg").innerHTML=note("Tick the box and type your name for the sign-off.");return}
+    q(".mkgo").disabled=true;const nm=se&&!P.approved?q(".mkby").value.trim():"";try{if(nm)localStorage.setItem("pov.exby",nm)}catch(_){}
+    q(".mkmsg").innerHTML='<div class="log" style="display:block"></div>';
+    try{const n=await runJob((await api("/api/usecase/make",{id,hash:P.hash,by:nm})).job,q(".mkmsg .log"));q(".mkmsg").insertAdjacentHTML("beforeend",note(`Done: ${id} is in the tenant (ZIA changes activated). Run its tests from Device tests to prove it.`,"good"));load()}
+    catch(e){q(".mkmsg").insertAdjacentHTML("beforeend",note(e.message,"bad"));q(".mkgo").disabled=false}})}
 $("#ucask").onclick=async()=>{const b=$("#ucask");b.disabled=true;$("#uclog").style.display="block";$("#ucmsg").innerHTML="";
   try{await runJob((await api("/api/usecase/propose",{prompt:$("#ucprompt").value})).job,$("#uclog"));$("#ucprompt").value="";usecases()}
   catch(e){$("#ucmsg").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};

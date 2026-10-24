@@ -150,6 +150,53 @@ def plan(pov, tenant_for):
     return items, notes, h, checks
 
 
+def _uc_key(uc_id):
+    import re as _re
+    m = _re.search(r"(\d+)$", str(uc_id))
+    if not m:
+        raise KitError(f"'{uc_id}' isn't a use case ID.")
+    return _re.compile(rf"\.uc{int(m.group(1)):02d}([.-]|$)")
+
+
+def make_preview(pov, tenant_for, uc_id):
+    """What making one use case in the tenant would change now: its own items not yet there, and anything else
+    waiting in the change list (apply makes the whole approved list). Writes the fresh change list. -> summary"""
+    pat = _uc_key(uc_id)
+    items, notes, h, checks = plan(pov, tenant_for)
+    led = ledger(pov)
+    pending = [i for i in items if i["action"] in ("create", "create_or_adopt") and not led.find(i["key"])]
+    mine = [i for i in pending if pat.search(i["key"]) or uc_id in (i.get("criteria") or [])]
+    others = [i for i in pending if i not in mine]
+    a = ChangeList(pov.dir).approval()
+    row = lambda i: {"name": i["name"], "kind": i["kind"], "product": i["product"], "affects": i.get("affects", "")}  # noqa: E731
+    return {"hash": h, "mine": [row(i) for i in mine], "others": [row(i) for i in others],
+            "blocked": [c["label"] + (f": {c['detail']}" if c.get("detail") else "") for c in checks if c["status"] == FAIL],
+            "mode": pov.cfg.get("approval") or "se", "approved": bool(a and a["hash"] == h),
+            "notes": [n for n in notes if uc_id in n or "UC" in n][:6]}
+
+
+def make_now(pov, tenant_for, uc_id, seen_hash, by, log=lambda *a: None):
+    """Signs off (SE sign-off POVs) the change list the SE just reviewed for this use case, then applies it."""
+    items, notes, h, checks = plan(pov, tenant_for)
+    if h != seen_hash:
+        raise KitError("The tenant or the change list changed since you reviewed it. Review it again, then make it.")
+    if any(c["status"] == FAIL for c in checks):
+        raise KitError("The checks found problems, so nothing was changed. Fix them first (Setup › Preflight).")
+    cl = ChangeList(pov.dir)
+    a = cl.approval()
+    if not (a and a["hash"] == h):
+        if (pov.cfg.get("approval") or "se") != "se":
+            raise KitError("This POV needs the customer's approval of the change list first: Setup › Sign-off sends "
+                           "them the change-list page. Nothing was changed.")
+        if not str(by or "").strip():
+            raise KitError("Type your name for the sign-off.")
+        rec = cl.approve(by, f"Reviewed by the SE from Use cases ({uc_id}); customer sign-off not required for this POV.")
+        pov.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']} for {uc_id}")
+        log("ok", f"Change list signed off by {rec['by']}")
+    led = apply(pov, tenant_for, log)
+    return len(led.active())
+
+
 def apply(pov, tenant_for, log):
     snaps, checks = discover(pov, tenant_for)
     failed = [c for c in checks if c["status"] == FAIL]

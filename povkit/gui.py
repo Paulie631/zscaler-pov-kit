@@ -498,6 +498,20 @@ def api(method, path, body, q):
             log("ok", s["headline"])
             return s
         return 200, {"job": start_job("summary", work)}
+    if path == "/api/usecase/make":   # make one accepted use case in the tenant, from its card
+        p = current()
+        uc = str(body.get("id") or "")
+        if body.get("preview"):
+            return 200, {"job": start_job("plan", lambda log: lifecycle.make_preview(p, tf, uc))}
+
+        def work_make(log):
+            n = lifecycle.make_now(p, tf, uc, body.get("hash"), body.get("by"), log)
+            try:
+                lifecycle.api_proofs(p, tf, auto=True, log=log)
+            except KitError as e:
+                log("warn", f"Couldn't check the success criteria yet: {e}")
+            return n
+        return 200, {"job": start_job("apply", work_make)}
     if path == "/api/apply":
         p = current()
         def work(log):

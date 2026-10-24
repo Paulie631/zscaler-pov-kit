@@ -55,6 +55,10 @@ letting Claude Desktop make changes.
    Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
    forgets it on your laptop, once it has checked nothing is left in the tenant.
 
+**A use case straight into the tenant:** on an accepted use case, **Make it in the tenant ›** shows what it creates
+(pilot users only) and anything else waiting in the change list; on an SE sign-off POV, tick, sign and apply from
+there. POVs that need the customer's approval still go through Sign-off.
+
 ## Live demos
 
 - **AI Guard tab › Guided demos** and **Device tests tab › Guided demos**: short stories with what to say and a Run

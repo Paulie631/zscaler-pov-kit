@@ -152,3 +152,29 @@ def test_a_bad_answer_is_reported(pov, ready, monkeypatch):
     monkeypatch.setattr(ai, "TRANSPORT", lambda *a, **k: Reply(body={"content": [{"type": "text", "text": "Sure!"}]}))
     with pytest.raises(KitError, match="expected JSON"):
         usecases.propose(pov, ready, "anything")
+
+
+def test_make_a_use_case_from_its_card(pov, tenant, tenant_for, ready):
+    lifecycle.plan(pov, tenant_for)
+    ChangeList(pov.dir).approve("Jane Doe")
+    lifecycle.apply(pov, tenant_for, log)
+    usecases.propose(pov, ready, "Let pilot users open Dropbox but not upload to it")
+    usecases.set_status(pov, "UC-01", "accepted")
+    pv = lifecycle.make_preview(pov, tenant_for, "UC-01")
+    assert {i["name"] for i in pv["mine"]} >= {"ZPOV: UC1 Block test sites"} and not pv["others"]
+    assert pv["mode"] == "se" and not pv["approved"] and not pv["blocked"]
+    with pytest.raises(KitError, match="changed since you reviewed"):
+        lifecycle.make_now(pov, tenant_for, "UC-01", "stale", "Paul", log)
+    with pytest.raises(KitError, match="name"):
+        lifecycle.make_now(pov, tenant_for, "UC-01", pv["hash"], "", log)
+    lifecycle.make_now(pov, tenant_for, "UC-01", pv["hash"], "Paul", log)
+    assert tenant.by_name("url_filtering", "ZPOV: UC1 Block test sites")["groups"] == [77]
+    assert "UC-01" in ChangeList(pov.dir).approval()["note"]
+    assert lifecycle.make_preview(pov, tenant_for, "UC-01")["mine"] == []
+    pov.cfg["approval"] = "customer"
+    pov.save()
+    usecases.propose(pov, ready, "Block another site")
+    usecases.set_status(pov, "UC-02", "accepted")
+    pv = lifecycle.make_preview(pov, tenant_for, "UC-02")
+    with pytest.raises(KitError, match="customer's approval"):
+        lifecycle.make_now(pov, tenant_for, "UC-02", pv["hash"], "Paul", log)

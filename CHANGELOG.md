@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.70
+- Use cases: **Make it in the tenant ›** on an accepted use case. The console checks the tenant, makes the change list and shows exactly what it would create for that use case (pilot users only), plus anything else waiting in the change list (apply makes the whole approved list). On an SE sign-off POV, tick "I reviewed these changes", type your name, and **Sign off and apply**: the sign-off is recorded against that exact change list (it refuses if the tenant changed since you looked), then the changes are applied and activated and the success criteria checked. A POV that needs the customer's approval says so and changes nothing.
+
 ## 0.9.69
 - **POV device tests** (`pov-probe ui`): the pilot device's own test runner, in the probe package. The console's Device tests tab cut down to running tests: the POV's tests with results and what they mean, Guided demos with Show it (pages open in this computer's browser) and Check again, in **Presenter** (talk track) or **Plain** mode. No tenant settings, no keys; a page on this computer only, with a one-time token. Full runs are saved to the Desktop and, with a link code (pasted on the page or `pov-probe link`), sent to the SE's console.
 - The AWS pilot template and the CloudShare Windows script put **POV device tests** on the desktop and open it at sign-in.
