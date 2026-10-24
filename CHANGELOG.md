@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.66
+- Success criteria: an API check made before a criterion's test changed no longer stands. Each API proof records which test sites it checked; when the criterion's tests change (reddit.com became facebook.com for IS-URL-02), the old result shows as needing a re-check and the automatic check runs again.
+
 ## 0.9.65
 - Setup no longer opens on Preflight every time the page loads. Preflight's results were kept only in the open page, so after a reload or an update the step looked undone; a POV with a change list (or applied objects) now counts it as done, and Setup opens on the first step really left.
 

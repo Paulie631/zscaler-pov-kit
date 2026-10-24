@@ -112,7 +112,12 @@ def evaluate(pov, ids=None):
         mine = [a for a in atts if a["criterion"] == c["id"]]
         if "api" in c["proofs"]:
             auto = apis.get(c["id"])
-            if auto and auto["status"] in (PASS, FAIL_):
+            from .lifecycle import tests_hash
+            if auto and c.get("probe") and auto.get("tests") != tests_hash(c) and not c.get("aiguard"):
+                proofs["api"] = {"status": INCOMPLETE, "stale": True, "at": auto.get("at"),
+                                 "detail": "its tests changed after this was last checked: Test with the API again "
+                                           "(it runs by itself when Success criteria opens)"}
+            elif auto and auto["status"] in (PASS, FAIL_):
                 proofs["api"] = dict(auto, automated=True)
                 if auto["status"] == FAIL_:
                     from .proof_explain import explain, explain_ai_guard

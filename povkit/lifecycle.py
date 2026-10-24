@@ -279,6 +279,7 @@ def api_proofs(pov, tenant_for, ids=None, auto=False, log=lambda *a: None):
             res = {"status": "incomplete", "detail": f"couldn't run: {str(e)[:160]}"}
         if res:
             res["at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            res["tests"] = tests_hash(c)
             saved[c["id"]] = ran[c["id"]] = res
     pov.write_json("api_proofs.json", saved)
     pov.write_json("api_proofs_meta.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "auto": auto})
@@ -288,6 +289,22 @@ def api_proofs(pov, tenant_for, ids=None, auto=False, log=lambda *a: None):
         log("ok" if not bad else "warn", f"Success criteria checked: {len(ran) - len(bad)} of {len(ran)} pass"
             + (f" (not yet: {', '.join(bad[:8])})" if bad else ""))
     return ran
+
+
+def tests_hash(c):
+    """What an API proof checked: the criterion's test sites. A changed test makes the old proof stale."""
+    import hashlib
+    import json as _j
+    return hashlib.sha256(_j.dumps(c.get("probe") or [], sort_keys=True).encode()).hexdigest()[:12]
+
+
+def stale_proofs(pov):
+    """Criteria whose saved API proof checked different tests than the criterion has now."""
+    from . import evidence
+    saved = pov.read_json("api_proofs.json", {}) or {}
+    return [c["id"] for c in evidence.selected_criteria(pov)
+            if c["id"] in saved and saved[c["id"]].get("tests") and saved[c["id"]]["tests"] != tests_hash(c)
+            or c["id"] in saved and not saved[c["id"]].get("tests") and c.get("probe")]
 
 
 def proofs_due(pov, hours=3):
@@ -301,7 +318,7 @@ def proofs_due(pov, hours=3):
                for c in evidence.selected_criteria(pov)):
         return False
     at = (pov.read_json("api_proofs_meta.json", {}) or {}).get("at")
-    if not at:
+    if not at or stale_proofs(pov):
         return True
     then = dt.datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
     return (dt.datetime.now(dt.timezone.utc) - then).total_seconds() > hours * 3600

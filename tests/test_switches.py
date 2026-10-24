@@ -66,3 +66,15 @@ def test_switched_tests_expect_the_switch(pov, tenant, tenant_for, monkeypatch):
     seen = []
     out = devtests.run(pov, social["tests"], on_result=seen.append)
     assert out["ok"] == 1 and "switched to Block" in seen[0]["switched"] and out["evidence"] == []
+
+
+def test_api_proof_goes_stale_when_its_tests_change(pov, tenant_for):
+    from povkit import evidence
+    applied(pov, tenant_for)
+    lifecycle.api_proofs(pov, tenant_for, ids=["IS-URL-02"])
+    row = lambda: next(r for r in evidence.evaluate(pov, ["IS-URL-02"]))  # noqa: E731
+    assert not row()["proofs"]["api"].get("stale") and not lifecycle.stale_proofs(pov)
+    saved = pov.read_json("api_proofs.json", {})
+    saved["IS-URL-02"]["tests"] = "old"
+    pov.write_json("api_proofs.json", saved)
+    assert row()["proofs"]["api"]["stale"] and lifecycle.proofs_due(pov)
