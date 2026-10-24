@@ -172,14 +172,20 @@ class ZCC(Product):
         mac_default = next((a for a in mac_apps if re.search(r"default", str(g(a, "name")), re.I)), None) or \
             (sorted(mac_apps, key=lambda a: int(g(a, "ruleOrder") or 0))[-1] if mac_apps else None)
         snap["source_apps"] = {"macos": {"id": g(mac_default, "id"), "name": g(mac_default, "name")}} if mac_default else {}
+        if not src_fwd:   # no Windows default to follow: the Mac default's forwarding profile, else one named Default
+            src_fwd = next((f for f in fwds if str(g(f, "id")) == str(g(mac_default or {}, "forwardingProfileId"))), None) \
+                or next((f for f in fwds if re.search(r"default", str(g(f, "name")), re.I)), None) \
+                or (fwds[0] if len(fwds) == 1 else None)
         snap.update(readable=True, fwd_count=len(fwds), app_count=len(apps),
                     source_app={"id": g(default_app, "id"), "name": g(default_app, "name")} if default_app else None,
                     source_fwd={"id": g(src_fwd, "id"), "name": g(src_fwd, "name")} if src_fwd else None,
                     customer_names=[str(g(x, "name")) for x in fwds + apps
                                     if not naming.has_prefix(g(x, "name"), pov.prefix)])
-        checks.append(check("zcc-source", "Default Windows profiles found to copy", OK if src_fwd else WARN,
-                            f"{snap['source_app']['name']} / {snap['source_fwd']['name']}" if src_fwd else
-                            "no default Windows app profile with a forwarding profile",
+        have = [x for x in (f"Windows app profile '{snap['source_app']['name']}'" if default_app else "",
+                            f"macOS app profile '{mac_default and g(mac_default, 'name')}'" if mac_default else "",
+                            f"forwarding profile '{snap['source_fwd']['name']}'" if src_fwd else "") if x]
+        checks.append(check("zcc-source", "Default profiles found to copy", OK if src_fwd and (default_app or mac_default)
+                            else WARN, ", ".join(have) or "none",
                             "" if src_fwd else "The POV profiles will be built by hand (the change list prints the "
                             "spec).", console="zcc.app_profiles"))
         fwd_name, app_name = names(pov.prefix, pov.id)

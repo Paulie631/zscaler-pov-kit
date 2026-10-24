@@ -641,7 +641,12 @@ class ZIA(Product):
         mine = [i for i in items_ if i["product"] == "zia" and i["action"] == "create"]
         if any(i["kind"] == "nss_feed" for i in mine) and not ledger_of(pov).find("zia.nss_feed"):
             from .. import logfeed
-            logfeed.connection(pov)   # before anything is created: stops here if the feed's address isn't ready
+            try:
+                logfeed.connection(pov)
+            except KitError as e:   # the log feed waits; everything else in the change list still goes in
+                log("warn", f"Log feed not made yet: {e} The rest of the change list is applied; apply again "
+                            "once the tunnel is on to add the feed.")
+                mine = [i for i in mine if i["kind"] != "nss_feed"]
         for kind in [k for k in KINDS if not KINDS[k]["rule"]]:
             for it in [i for i in mine if i["kind"] == kind]:
                 k = KINDS[kind]
@@ -740,7 +745,7 @@ class ZIA(Product):
             if live is None:
                 gone.append(it["name"])
                 continue
-            ok, why = ledger.owns("zia", e["kind"], live)
+            ok, why = ledger.owns("zia", e["kind"], dict(live, name=obj_name(live)))
             if not ok:
                 foreign.append(f"{it['name']}: {why}")
                 continue

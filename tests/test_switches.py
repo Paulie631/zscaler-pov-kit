@@ -78,3 +78,11 @@ def test_api_proof_goes_stale_when_its_tests_change(pov, tenant_for):
     saved["IS-URL-02"]["tests"] = "old"
     pov.write_json("api_proofs.json", saved)
     assert row()["proofs"]["api"]["stale"] and lifecycle.proofs_due(pov)
+
+
+def test_mac_profile_made_without_a_windows_default(pov, tenant, tenant_for):
+    tenant.apps = []   # a Mac-only tenant: no Windows app profile to follow
+    applied(pov, tenant_for)
+    names = [a["name"] for a in tenant.mac_apps]
+    assert any("pilot Macs" in n for n in names)
+    assert any(f["name"].startswith("ZPOV") for f in tenant.fwds)

@@ -5,7 +5,6 @@ import urllib.request
 import pytest
 
 from povkit import devlink, evidence, lifecycle, logfeed
-from povkit.core import KitError
 from povkit.core.changelist import ChangeList
 
 
@@ -22,9 +21,10 @@ def test_log_feed_end_to_end(pov_all, tenant, tenant_for):
     feed = next(i for i in items if i["kind"] == "nss_feed")
     assert feed["body"]["users"] and "filled in at apply" in feed["body"]["connection_url"]
     devlink.LISTEN.pop("url", None)
-    with pytest.raises(KitError, match="tunnel"):
-        lifecycle.apply(pov, tenant_for, lambda *a: None)
-    assert not tenant.nss_feeds and not [w for w in tenant.writes if w[1].startswith("add")]
+    said = []
+    lifecycle.apply(pov, tenant_for, lambda lv, m: said.append(m))   # the feed waits; the rest goes in
+    assert not getattr(tenant, "nss_feeds", None) and any("Log feed not made yet" in m for m in said)
+    assert tenant.by_name("url_filtering", "ZPOV: Block gambling")
     st = devlink.start(pov, lambda: pov, port=18899)
     try:
         devlink.LISTEN["url"] = f"http://127.0.0.1:{st['port']}"   # stands in for the tunnel
