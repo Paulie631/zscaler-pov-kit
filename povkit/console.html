@@ -237,7 +237,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
     <div class="stat" id="crstat"></div>
     <div class="row" style="margin-top:14px">
       <button id="crapi" title="Read-only: checks the setup behind each criterion is in the tenant. The kit also does this after Apply, with Status, and when this page opens if the last check is a few hours old.">Check again</button>
-      <button id="crpack">Download probe pack</button>
+      <button id="crpack" title="The tests as a file, for pov-probe pack install. Set up a pilot device gives one command instead.">Download probe pack (file)</button>
       <label class="chk"><input type="file" id="crfile" accept=".json" style="display:none">Import probe results…</label>
       <span class="sp" style="flex:1"></span>
       <button class="primary" id="crreport">Build the report</button>
@@ -1397,7 +1397,8 @@ function detail(r,i){const c=r.criterion;
   return `<tr class="detail"><td colspan="4"><div>${esc(c.statement||"")}</div>${Object.entries(r.proofs).map(proof).join("")}${c.attest?`<div class="hint">To show it live: ${esc(c.attest)}</div>`:""}
     <div class="row" style="margin-top:10px;gap:8px"><input type="text" id="att${i}" placeholder="Optional: what you showed, e.g. the block in Web Insights" style="flex:1;min-width:240px"><button class="attgo" data-i="${i}">Demonstrated ✓</button></div><div class="hint">Shown live to the customer? Mark it: it counts as proved, in your name.</div><div id="attmsg${i}"></div></td></tr>`}
 $("#crapi").onclick=async()=>{$("#crmsg").innerHTML='<div class="log" id="crlog"></div>';try{await runJob((await api("/api/test-api",{})).job,$("#crlog"));$("#crmsg").innerHTML=note("Checked. Criteria that didn't pass say why: click a row.","good");criteria()}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
-$("#crpack").onclick=async()=>download(`pov-probe-pack-${S.current.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
+$("#crpack").onclick=async()=>{download(`pov-probe-pack-${S.current.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
+  $("#crmsg").innerHTML=note(`Saved pov-probe-pack-${S.current.id}.json: the POV's tests, for the probe to read (it isn't a program to run). On the device: ~/.zscaler-pov-probe/app/pov-probe pack install <the file>, then pov-probe test --wait 20. Simpler: Setup › Finish setup › Set up a pilot device › 2. Run the tests gives one command that carries them.`)};
 $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
   try{const r=await api("/api/import-probe",{data:JSON.parse(await f.text())});$("#crmsg").innerHTML=note(`Imported probe run ${r.run_id}: ${r.results} results.`,"good");criteria()}catch(err){$("#crmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
 $("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};

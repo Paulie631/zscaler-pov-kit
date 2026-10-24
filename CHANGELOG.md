@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.53
+
+- *Download probe pack* says what the file is (tests for the probe to read, not a program) and how to use it, and
+  points to the one-command way on Set up a pilot device.
+
 ## 0.9.52
 
 - **Review the POV's device tests before they go out** (Set up a pilot device > Review and add tests): every test the
