@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.48
+
+- **Set up a pilot device** shows the test user's password right there (**Show password**), instead of only on
+  Next steps, which stays locked until Finish setup is done. A ZIdentity test user says where to set one.
+
 ## 0.9.47
 
 - **Fixed: macOS setup could wrongly say the installer isn't signed by Zscaler.** The team-ID check piped

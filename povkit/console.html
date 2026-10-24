@@ -892,7 +892,7 @@ function deviceHTML(d){
   return `<div class="card" style="margin:6px 0 12px"><h4>Set up a pilot device</h4>
     <p class="muted" style="margin:4px 0 10px">Installs Client Connector signed in to this tenant (cloud, domain and user filled in, so nobody picks them by hand), then the POV probe (the kit's small pilot-device part: tests and traffic, no keys) with this POV's probe pack, which runs the POV's tests once traffic goes through Zscaler. The installer is the kit's pinned copy, checked on the device by SHA-256 and Zscaler's signature. Nothing changes in the tenant.</p>
     <div class="form"><span class="lbl">Zscaler cloud</span><div class="row" style="gap:8px"><input type="text" id="dcloud" value="${esc(d.cloud||"")}" placeholder="zscalertwo" style="width:160px"><button id="dcsave">Save</button><button id="dcdet">Detect</button></div>
-      <span class="lbl">Pilot user</span><div><input type="text" id="duser" list="dusers" value="${esc(d.users[0]||"")}" placeholder="jane@acme.com" style="width:280px"><datalist id="dusers">${d.users.map(u=>`<option value="${esc(u)}">`).join("")}</datalist></div>
+      <span class="lbl">Pilot user</span><div><input type="text" id="duser" list="dusers" value="${esc(d.users[0]||"")}" placeholder="jane@acme.com" style="width:280px"><datalist id="dusers">${d.users.map(u=>`<option value="${esc(u)}">`).join("")}</datalist> <button id="dpw" style="display:none">Show password</button><div id="dpwv" class="hint"></div></div>
       <span class="lbl">Device</span><div class="seg" id="dos"><button data-o="macos" class="${DEV_OS=="macos"?"on":""}">macOS</button><button data-o="windows" class="${DEV_OS=="windows"?"on":""}">Windows</button></div></div>
     <p class="hint" style="margin:6px 0">${ins?`Installer: Client Connector ${esc(ins.version)} (the kit's pinned copy).`:`No ${DEV_OS=="macos"?"macOS":"Windows"} installer pinned in the kit yet: the setup asks for the file from ${esc(d.platform_releases)} in the customer's Zscaler console (${DEV_OS=="macos"?"--pkg FILE":"-Msi FILE"}).`}</p>
     <div class="row" style="gap:8px;margin-top:6px"><button class="primary" id="dline">Copy the one-line command</button><button id="dscript">Download the setup script (with the probe pack)</button></div>
@@ -900,6 +900,11 @@ function deviceHTML(d){
 }
 function bindDevice(d,redraw){
   const out=(h)=>$("#dout").innerHTML=h, email=()=>$("#duser").value.trim();
+  // a test user the kit made: its password is in this computer's keychain (ZIA), or set in ZIdentity
+  const pwN=()=>{const m=email().match(/-pilot-(\d+)@/);return m?m[1]:null};
+  const pwShow=()=>{$("#dpw").style.display=pwN()?"":"none";$("#dpwv").innerHTML=""};pwShow();$("#duser").addEventListener("input",pwShow);
+  $("#dpw").onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:pwN()})).value;
+    $("#dpwv").innerHTML=v?`<span class="secret">${esc(v)}</span> · sign in to Client Connector with it`:"Not in this computer's keychain: the POV made this user in ZIdentity, which doesn't let the kit set passwords. Set one in ZIdentity: Administration › Authentication › Directory › Users."};
   const how=DEV_OS=="macos"?"Paste it into Terminal on the Mac. It asks for the Mac password once.":"Paste it into PowerShell opened with Run as administrator.";
   $$("#dos button").forEach(b=>b.onclick=()=>{DEV_OS=b.dataset.o;redraw()});
   const saveCloud=async body=>{try{const r=await api("/api/device/cloud",body);$("#dcloud").value=r.cloud||"";out(note(`Cloud: ${r.cloud}`,"good"))}catch(e){out(note(e.message,"bad"))}};
