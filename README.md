@@ -73,7 +73,7 @@ kit's wizard:
 
 **Status** compares the tenant with what was approved (and fixes drift on POV objects only) and holds the safety net
 (end date, encrypted backups, reminders), **Success criteria** runs the API proofs, imports probe results, records
-attestations, drafts the executive summary and builds the report, **Handover** exports to Terraform or tears down,
+criteria shown live (Demonstrated) and builds the report, **Handover** drafts the executive summary (customer and internal, Word and PowerPoint) and exports to Terraform or tears down,
 and **Logs** holds the activity log, the diagnostics zip and the lab tools (self-test, API recording).
 
 Everything is also on the command line:

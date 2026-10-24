@@ -10,9 +10,9 @@ SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_email
             "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain",
             "identity.pilot", "identity.create_users", "identity.users_in", "ai.model", "ai.share", "ends", "lab",
             "customer_id", "mcp.version", "zcc.cloud", "aiguard.proxy", "aiguard.provider",
-            "aiguard.provider_credential", "aiguard.model", "prefix", "manual.mode"}
+            "aiguard.provider_credential", "aiguard.model", "prefix", "manual.mode", "approval"}
 LISTS = {"criteria", "pilot_emails", "products", "zpa.domains", "zpa.tcp_ports", "identity.bypass_domains"}
-CHOICES = {"lab": ("yes", "no"), "manual.mode": ("live", "async"),
+CHOICES = {"lab": ("yes", "no"), "manual.mode": ("live", "async"), "approval": ("se", "customer"),
            "aiguard.proxy": ("none", "customer", "se"), "aiguard.provider": ("anthropic", "openai"),
            "identity.pilot": ("existing", "create", "test"),
            "identity.users_in": ("auto", "zia", "zidentity"), "identity.create_users": ("yes", "no"), "ai.share": ("full", "names_only"),

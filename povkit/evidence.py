@@ -118,7 +118,7 @@ def evaluate(pov, ids=None):
                         isinstance(x, dict) and x.get("pass") is False for x in ag_rows) else []) or \
                         explain(auto.get("detail"), auto["status"])
             elif mine:
-                proofs["api"] = {"status": PASS, "detail": "attested (no automated API proof for this one)",
+                proofs["api"] = {"status": PASS, "detail": "demonstrated live (no automated API proof for this one)",
                                  "attestation": mine[-1]}
             else:
                 proofs["api"] = {"status": INCOMPLETE, "detail": (auto or {}).get("detail")
@@ -128,7 +128,7 @@ def evaluate(pov, ids=None):
                     proofs["api"]["explain"] = explain(auto["detail"], "incomplete")
         if "attested" in c["proofs"] or c.get("attest"):
             proofs["attested"] = ({"status": PASS, "attestation": mine[-1]} if mine else
-                                  {"status": INCOMPLETE, "detail": c.get("attest") or "needs an attestation"})
+                                  {"status": INCOMPLETE, "detail": c.get("attest") or "show it live, then mark it Demonstrated"})
         sts = {p["status"] for p in proofs.values()}
         overall = FAIL_ if FAIL_ in sts else INCOMPLETE if INCOMPLETE in sts else PASS
         rows.append({"criterion": c, "status": overall, "proofs": proofs})

@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
       - name: Offline tests
-        run: uv run --with pytest --with requests --with keyring --with cryptography pytest -q
+        run: uv run --with pytest --with requests --with keyring --with cryptography --with python-docx --with python-pptx pytest -q
       - name: One-line installers parse
         shell: bash
         run: |

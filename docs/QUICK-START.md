@@ -20,13 +20,18 @@
 
 ## Your first POV
 
+The console opens in **Simple view**: the main path only. **Advanced view** (top right) adds the rest: prefix and
+client options, CloudShare and AWS traffic generators, AI Guard test users and rounds, Claude-drafted tests, and
+letting Claude Desktop make changes.
+
 1. **Before the kickoff:** Setup → Start a POV: customer and products, then **Step by step** → Connect → **Copy the
    role spec** for the customer's admin.
 2. **At the kickoff, on Connect:** the API client they created (with ZPA, the customer ID: Administration → API →
    Legacy API → Private Access API → Copy ID), then **Quick start from here**. The kit fills in the rest from the tenant,
    read-only, runs preflight and opens the change list. Fix anything under **Needs you**; products not ready yet are
    **added later** without holding up the rest.
-3. **Change list → Approval:** walk the admin through it, or send them the customer page and import their approval.
+3. **Change list → Sign-off:** review it, walk the admin through it, and sign it off yourself. If the account needs the
+   customer's formal approval, choose **Ask the customer to approve instead** on Sign-off.
 4. **Apply:** watch it run, then check the status. **Finish setup** then walks the steps for people that follow Apply
    (entitlement, connectors, pilot devices), with the admin or sent to them; the POV is ready to test once they're
    done. Preflight does the same for the steps before the change list.
@@ -34,9 +39,10 @@
    approval.
 6. **Next steps:** every step for people (with instructions and checks), **Set up a pilot device** (one line per device;
    never your own work laptop), the ZPA connector template or CloudShare commands.
-7. **Success criteria:** import probe results, run the API proofs, record attestations, draft the summary, build the
-   report.
-8. **Handover:** export to Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
+7. **Success criteria:** configuration is checked automatically; import probe results; anything you showed live, mark
+   **Demonstrated**. Then build the report.
+8. **Handover:** **Executive summary** (customer and internal versions, as Word and PowerPoint), then export to
+   Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
    forgets it on your laptop, once it has checked nothing is left in the tenant.
 
 ## Every customer session

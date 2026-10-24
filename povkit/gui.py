@@ -447,9 +447,14 @@ def api(method, path, body, q):
         return 200, {"items": items, "notes": notes, "hash": h, "checks": checks}
     if path == "/api/approve":
         p = current()
+        by_se = (p.cfg.get("approval") or "se") == "se"
         if not body.get("reviewed"):
-            raise KitError("Tick the box to confirm the customer reviewed the change list.")
-        rec = ChangeList(p.dir).approve(body.get("by"), body.get("note") or "")
+            raise KitError("Tick the box to confirm you reviewed the change list." if by_se else
+                           "Tick the box to confirm the customer reviewed the change list.")
+        note = body.get("note") or ""
+        if by_se:
+            note = ("Reviewed by the SE (customer sign-off not required for this POV). " + note).strip()
+        rec = ChangeList(p.dir).approve(body.get("by"), note)
         p.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']}")
         return 200, {"approval": rec}
     if path == "/api/approve/file":
@@ -465,6 +470,21 @@ def api(method, path, body, q):
             f.unlink(missing_ok=True)
         p.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']} on the change-list page")
         return 200, {"approval": rec}
+    if path == "/api/execsum":
+        from . import execsum
+        p = current()
+        if body.get("state"):
+            s, stale = execsum.current(p)
+            return 200, {"summary": execsum.fill(p, s) if s else None, "stale": stale, "customer": p.cfg.get("customer"),
+                         "route": ai.ROUTES.get(ai.route_name()), "ready": ai.available()}
+
+        def work(log):
+            log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]} for the executive summary: results, use cases and "
+                        "AI Guard counts, with the customer's names removed")
+            s = execsum.write(p, body.get("emphasis") or "", body.get("notes") or "", body.get("prepared_by") or "")
+            log("ok", execsum.fill(p, s)["customer"]["headline"])
+            return {"done": True}
+        return 200, {"job": start_job("execsum", work)}
     if path == "/api/summary":
         from . import summary
         p = current()
@@ -898,6 +918,9 @@ def page_file(path, q, token):
     if q.get("t") != token:
         return None
     p = current()
+    if path == "/execsum":
+        from . import execsum
+        return execsum.render(p, q.get("v") or "customer", q.get("f") or "docx")
     if path == "/aiguard-report":
         from . import aiguard_runner
         return aiguard_runner.report(p, q.get("customer")).encode("utf-8")
@@ -939,10 +962,12 @@ def serve(port=8790, open_browser=True):
         def log_message(self, *a):
             pass
 
-        def _send(self, code, obj=None, ctype="application/json", raw=None):
+        def _send(self, code, obj=None, ctype="application/json", raw=None, disposition=None):
             data = raw if raw is not None else json.dumps(obj, default=str).encode()
             self.send_response(code)
             self.send_header("Content-Type", ctype)
+            if disposition:
+                self.send_header("Content-Disposition", f'attachment; filename="{disposition}"')
             self.send_header("Cache-Control", "no-store")
             self.send_header("X-Content-Type-Options", "nosniff")
             self.send_header("Content-Length", str(len(data)))
@@ -962,6 +987,19 @@ def serve(port=8790, open_browser=True):
                 data = page_file(u.path, q, token)
                 return self._send(200, raw=data, ctype="text/html; charset=utf-8") if data else \
                     self._send(404, {"error": "not found"})
+            if u.path == "/execsum" and method == "GET":
+                try:
+                    data = page_file(u.path, q, token)
+                except KitError as e:
+                    return self._send(400, raw=str(e).encode(), ctype="text/plain; charset=utf-8")
+                if not data:
+                    return self._send(403, {"error": "bad token"})
+                from . import execsum
+                fmt = "docx" if q.get("f") != "pptx" else "pptx"
+                ctype = {"docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                         "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation"}[fmt]
+                return self._send(200, raw=data, ctype=ctype,
+                                  disposition=execsum.filename(current(), q.get("v") or "customer", fmt))
             if u.path == "/diagnostics" and method == "GET":
                 data = diagnostics_zip(q, token)
                 return self._send(200, raw=data, ctype="application/zip") if data else self._send(403, {"error": "bad token"})

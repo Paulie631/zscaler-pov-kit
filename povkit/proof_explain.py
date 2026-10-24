@@ -31,7 +31,7 @@ RULES = [
      ["Check the site in the console: search the menu for URL Lookup.",
       "Ask Claude (Use cases) for a use case that blocks this exact site for the pilot group, or pick a test site in "
       "the rule's category.",
-      "If the customer is happy that the category is right, record an attestation on this criterion instead."], None),
+      "If the customer is happy that the category is right, show it live and mark the criterion Demonstrated instead."], None),
     (r"URL lookup didn't run",
      "The kit couldn't ask ZIA how it classifies the test sites (the API client may lack URL lookup access).",
      ["Give the API client view access to ZIA's URL categories (role spec), then Check again."], None),
@@ -45,7 +45,7 @@ RULES = [
      "A customer access rule already lets everyone reach the app's domains, so the POV can't show that only the pilot "
      "group gets in.",
      ["Use the kit's test app (or a domain only the POV uses) in Setup > Pilot users.",
-      "Or the customer narrows their rule; otherwise attest what the POV shows instead."], "pilot"),
+      "Or the customer narrows their rule; otherwise show what the POV does live and mark it Demonstrated."], "pilot"),
     # ---- devices and users
     (r"(?P<k>\d+) of (?P<m>\d+) pilot devices registered|name the pilot users",
      "The kit can't find a pilot device registered in Client Connector for the pilot users yet.",
@@ -124,7 +124,7 @@ def explain_ai_guard(rows, enabled=None):
                         "test can fall either side.", "fix": [
                         "AI Guard > Test runner: open the row to see AI Guard's full verdict, and run it again.",
                         "If it keeps passing through, replace it with a clearer example (Draft more tests with "
-                        "Claude), or record an attestation that explains this one to the customer.",
+                        "Claude), or show it live and mark it Demonstrated.",
                         "Worth a note for the AI Guard team if a clear-cut example is missed."], "action": "runner"})
     return out
 

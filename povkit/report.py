@@ -38,7 +38,7 @@ KIND = {"label": "rule label", "url_category": "custom URL category", "network_s
         "members": "group members", "user_group": "user group", "department": "department"}
 PRODUCT = {"zid": "ZIdentity", "zia": "Internet Access", "zcc": "Client Connector", "zpa": "Private Access", "aiguard": "AI Guard",
            "zdx": "Digital Experience", "casb": "SaaS security", "eai": "AI Endpoint Security"}
-PROOF = {"probe": "Probe", "api": "API", "attested": "Attested"}
+PROOF = {"probe": "Probe", "api": "API", "attested": "Demonstrated"}
 
 
 def ids(xs):

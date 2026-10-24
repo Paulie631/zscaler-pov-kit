@@ -48,6 +48,8 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .stack>*+*{margin-top:16px}
 button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 11px;cursor:pointer}
 button:hover{background:var(--soft)}
+body.simple .adv{display:none!important}
+a.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:6px 12px;text-decoration:none;display:inline-block}a.btn:hover{background:var(--soft)}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;padding:8px 18px}
 button.primary:hover{filter:brightness(1.08)}
 button.danger{border-color:var(--bad);color:var(--bad)}
@@ -149,7 +151,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
 .greply{border:1px solid var(--line,#ddd);border-radius:8px;padding:10px 12px;margin-top:10px;font-size:13px}.greply.blocked{border-color:var(--bad,#b00020)}
 </style>
 </head>
-<body>
+<body class="simple">
 <header>
   <h1>Zscaler POV Console</h1>
   <span class="meta" id="hpov">No POV yet</span>
@@ -162,6 +164,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
   </div>
   <select id="povsel" title="Switch POV"></select>
   <a id="hconsole" href="https://console.zscaler.com/" target="_blank" rel="noopener" title="The Zscaler console (sign in as the customer's admin)">Zscaler console ↗</a>
+  <button class="theme" id="uimode" title="Simple shows the main path; Advanced shows every option">Simple view</button>
   <button class="theme" id="theme" title="Light, dark, or follow the system">Auto</button>
 </header>
 <nav class="tabs" id="tabs">
@@ -237,18 +240,27 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
     <div id="crprobe"></div>
     <div id="crmsg"></div>
     <div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>ID</th><th>Criterion</th><th>Proofs</th><th>Result</th></tr></thead><tbody id="crrows"></tbody></table></div>
-    <div class="hint">Click a row for its evidence, and to record what someone saw (an attestation).</div>
+    <div class="hint">Click a row for its evidence. Showed it live? Mark it Demonstrated.</div>
   </div>
   <div class="panel">
     <h2>Executive summary</h2>
-    <p class="muted" style="margin-top:0">Claude drafts the page that opens the report, from the results above only: criterion titles and outcomes, with the customer's names taken out. It goes through your AI Guard proxy key.</p>
-    <div id="crsum"></div>
-    <div class="row" style="margin-top:10px;gap:8px"><input type="text" id="crsumnote" placeholder="Optional: what to emphasize, e.g. lead with the ZPA results" style="flex:1;min-width:240px"><button id="crsumgo">Draft the summary</button></div>
-    <div class="log" id="crsumlog" style="display:none"></div>
+    <p class="muted" style="margin:0">Customer and internal versions, as Word and PowerPoint: <a href="#" id="crgoexec">Handover › Executive summary</a>.</p>
   </div>
 </div></div>
 
 <div class="view" id="v-handover"><div class="wrap stack">
+  <div class="panel" id="hoexec">
+    <h2>Executive summary</h2>
+    <p class="muted" style="margin-top:0">Claude drafts two versions from the POV's results: the success criteria, the use cases and the AI Guard test counts, with the customer's names taken out. The <b>customer</b> version is for their executives and ends with a recommended next step; the <b>internal</b> one is for Zscaler's deal review. The customer's name is filled in on this computer.</p>
+    <div id="exstate"></div>
+    <div class="grid2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:10px;margin-top:10px">
+      <label><div class="lbl">Prepared by (not sent to Claude)</div><input type="text" id="exby" placeholder="Your name and title" style="width:100%"></label>
+      <label><div class="lbl">What to emphasize</div><input type="text" id="exemph" placeholder="e.g. lead with the AI Guard results" style="width:100%"></label>
+    </div>
+    <label style="display:block;margin-top:10px"><div class="lbl">Internal notes: deal context, competitors, timeline (internal version only; names are removed before Claude sees them)</div><textarea id="exnotes" rows="2" style="width:100%" placeholder="e.g. competing with Netskope; decision by end of quarter; CISO is the sponsor"></textarea></label>
+    <div class="row" style="margin-top:10px"><button class="primary" id="exgo">Draft the summary</button></div>
+    <div class="log" id="exlog" style="display:none"></div>
+  </div>
   <div class="panel">
     <h2>Keep it: hand over as Terraform</h2>
     <p class="muted" style="margin-top:0">Writes a Terraform folder that adopts every POV object in place (import blocks, nothing recreated). The kit then never touches them again, and removes its secrets and the discovery data from this computer.</p>
@@ -366,6 +378,9 @@ async function load(){S=await api("/api/state");const c=S.current;
 $("#povsel").onchange=async e=>{await api("/api/pov/use",{id:e.target.value});await load();W.step=firstOpen();W.checks=null;W.plan=null;wizard();refreshTab()};
 $$("#tabs button").forEach(b=>b.onclick=()=>{$$("#tabs button").forEach(x=>x.classList.toggle("on",x===b));$$(".view").forEach(v=>v.classList.toggle("on",v.id=="v-"+b.dataset.t));refreshTab()});
 function tab(){return $("#tabs button.on").dataset.t}
+function uiMode(m){if(m)try{localStorage.setItem("pov.ui",m)}catch(e){}let v=m;if(!v)try{v=localStorage.getItem("pov.ui")}catch(e){}v=v=="advanced"?"advanced":"simple";
+  document.body.classList.toggle("simple",v=="simple");const b=$("#uimode");if(b){b.textContent=v=="simple"?"Simple view":"Advanced view";b.classList.toggle("on",v=="advanced")}return v}
+uiMode();$("#uimode").onclick=()=>uiMode(document.body.classList.contains("simple")?"advanced":"simple");
 function goManual(){W.step=8;$$("#tabs button").find(x=>x.dataset.t=="setup").click();setTimeout(()=>{const m=$("#manualtop");m&&m.scrollIntoView({behavior:"smooth"})},400)}
 $("#polsel").onchange=async e=>{const v=e.target.value;$("#polstate").textContent="switching…";
   try{await api("/api/aiguard-policy",{profile:v});$("#polstate").textContent="applied";await load()}catch(err){$("#polstate").textContent="failed";alert(err.message)}};
@@ -408,10 +423,10 @@ $("#updroll").onclick=async()=>{if(!confirm("Go back to the previously installed
   try{const r=await api("/api/update/rollback",{});updLine("ok",`Rolled back to ${r.version}.`);await api("/api/update/restart",{});await waitForRestart()}
   catch(e){updLine("fail",e.message)}};
 setTimeout(()=>checkUpd(false),1500);
-function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria"){criteria();ccInit()}if(t=="logs")logs();if(t=="usecases")usecases();if(t=="aiguard")aiguardTab()}
+function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria"){criteria();ccInit()}if(t=="logs")logs();if(t=="usecases")usecases();if(t=="aiguard")aiguardTab();if(t=="handover")execsum()}
 
 /* ---------------- setup wizard ---------------- */
-const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Approval","Apply","Finish setup","Next steps"];
+const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Sign-off","Apply","Finish setup","Next steps"];
 const W={step:0,checks:null,plan:null,role:null};
 function done(i){const c=S&&S.current;if(!c)return false;
   const clients=Object.values(c.clients);const s=c.settings;
@@ -503,7 +518,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
             <input type="text" id="qcid" autocomplete="off" placeholder="Client ID">
             <input type="password" id="qsec" autocomplete="new-password" placeholder="Client secret (goes to this computer's keychain)">
             <input class="qzpa" type="text" id="qcust" placeholder="ZPA customer ID: Administration > API > Legacy API > Private Access API > Copy ID" style="display:none"></div></div></div>
-      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: lab tenant, prefix, end date, two API clients</summary><div class="form" style="margin-top:8px">
+      <details class="adv" style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: lab tenant, prefix, end date, two API clients</summary><div class="form" style="margin-top:8px">
         <span class="lbl">Lab</span><label class="chk"><input type="checkbox" id="wlab">This is my own lab tenant <span class="muted">(allows the self-test, which creates and deletes test objects)</span></label>
         <span class="lbl">Prefix</span><input type="text" id="wprefix" value="" placeholder="ZPOV (or ZPOV2... if another POV here uses it)" maxlength="12">
         <span class="lbl">Ends</span><div><input type="date" id="wends" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"> <span class="hint">A reminder comes in the last week.</span></div>
@@ -633,23 +648,32 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   else if(W.step==5){
     const sep=c.settings.client_mode=="separate", ap=c.clients.apply||{};
     const ok=c.approval&&c.plan&&c.approval.hash==c.plan.hash;
-    st.innerHTML=head(5,"Approval","The customer approves this exact change list. The kit records who and when, and apply refuses any plan that differs from it.")+
+    const bySE=(c.settings.approval||"se")=="se";
+    let seBy="";try{seBy=localStorage.getItem("pov.exby")||""}catch(e){}
+    st.innerHTML=head(5,bySE?"Review":"Approval",bySE?"You review this exact change list and sign it off. The kit records who and when, and Apply refuses any plan that differs from it.":"The customer approves this exact change list. The kit records who and when, and apply refuses any plan that differs from it.")+
       (c.plan?`<p>Change list <code>${esc(c.plan.hash.slice(0,16))}</code>: ${c.plan.creates} objects, ${c.plan.items-c.plan.creates} customer actions.</p>`:note("Make the change list first (step 5).","bad"))+
-      (ok?note(`Approved by ${c.approval.by} on ${c.approval.at.slice(0,10)}.`,"good"):
+      (ok?note(`Approved by ${c.approval.by} on ${c.approval.at.slice(0,10)}.`,"good"):bySE?
+       `<div class="form"><span class="lbl">Reviewed by</span><input type="text" id="wby" placeholder="Your name" value="${esc(seBy)}">
+        <span class="lbl">Note <span class="muted">(optional)</span></span><textarea id="wnote" placeholder="e.g. scope agreed with the customer on the kickoff call"></textarea></div>
+        <label class="chk" style="margin-top:12px"><input type="checkbox" id="wrev">I reviewed this change list, and it's what the customer agreed the POV would do</label>
+        <p class="hint" style="margin-top:10px">Need the customer's formal sign-off for this account? <a href="#" id="wtocust">Ask the customer to approve instead</a>.</p>`:
        `<div class="form"><span class="lbl">Approved by</span><input type="text" id="wby" placeholder="Jane Doe, CISO">
         <span class="lbl">Note <span class="muted">(optional)</span></span><textarea id="wnote" placeholder="e.g. approved on the kickoff call; email sign-off attached to the POV record"></textarea></div>
         <label class="chk" style="margin-top:12px"><input type="checkbox" id="wrev">The customer reviewed this change list, including who it affects</label>
         <div class="group-h">Or: the customer approves on their own</div>
         <p class="muted" style="margin:4px 0 8px">Send them the change-list page (it opens offline and has an approval form). It saves an approval file they send back; import it here. The kit checks it's for this exact change list.</p>
-        <div class="row"><button id="wplanpg">Open the change-list page</button><label class="chk"><input type="file" id="wapf" accept=".json" style="display:none">Import their approval file…</label></div>`)+
+        <div class="row"><button id="wplanpg">Open the change-list page</button><label class="chk"><input type="file" id="wapf" accept=".json" style="display:none">Import their approval file…</label></div>
+        <p class="hint" style="margin-top:10px">No customer sign-off needed for this POV? <a href="#" id="wtose">Let me review it myself</a>.</p>`)+
       (sep?`<div class="group-h">Apply client (two-client mode)</div>${ap.saved?note(`Saved: apply client ${ap.client_id}`,"good"):`<p class="muted">Now that it's approved, the customer creates the apply client from the role spec.</p>`}
         <div class="form"><span class="lbl">Apply client ID</span><input type="text" id="wacid" value="${esc(ap.client_id||"")}"><span class="lbl">Secret</span><input type="password" id="wasec" autocomplete="new-password"></div>`:"")+
       '<div id="wmsg"></div>'+nav(true,true,ok?"Continue ›":"Approve ›",!c.plan);
     $("#wplanpg")&&($("#wplanpg").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank"));
+    const setAppr=v=>async e=>{e.preventDefault();try{await api("/api/settings",{values:{approval:v}});await load();wizard()}catch(err){$("#wmsg").innerHTML=note(err.message,"bad")}};
+    $("#wtocust")&&($("#wtocust").onclick=setAppr("customer"));$("#wtose")&&($("#wtose").onclick=setAppr("se"));
     $("#wapf")&&($("#wapf").onchange=async e=>{const f=e.target.files[0];if(!f)return;
       try{await api("/api/approve/file",{content:await f.text()});await load();wizard()}catch(err){$("#wmsg").innerHTML=note(err.message,"bad")}e.target.value=""});
     bindNav(async()=>{try{
-      if(!ok)await api("/api/approve",{by:$("#wby").value,note:$("#wnote").value,reviewed:$("#wrev").checked});
+      if(!ok){await api("/api/approve",{by:$("#wby").value,note:$("#wnote").value,reviewed:$("#wrev").checked});if(bySE)try{localStorage.setItem("pov.exby",$("#wby").value)}catch(e){}}
       if(sep&&($("#wasec").value||!ap.saved))await api("/api/connect",{slot:"apply",client_id:$("#wacid").value,secret:$("#wasec").value});
       await load();W.step=6;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }
@@ -698,14 +722,14 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
           <pre class="log" style="white-space:pre-wrap">pov-probe traffic check                  # is this device in the POV's tenant, as a pilot user?
 pov-probe traffic run                    # one round now, shaped by the probe pack
 pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove stops it)</pre>
-          <div class="row" style="gap:8px;margin-top:8px"><button id="ntrcs">CloudShare Windows pilot script</button><span class="hint">For the Windows pilot in the CloudShare POV lab (or any Windows pilot): installs the probe if needed, this POV's probe pack and the schedule. Run it after the pilot device setup.</span></div>
-          <div class="row" style="gap:8px;margin-top:8px"><button id="ntraws">AWS generator template</button><span class="hint">A Windows instance in the customer's (or your) AWS account, for the pilot user above: CloudFormation, no inbound ports, a weekday schedule. Sign in to Client Connector once over Fleet Manager.</span></div><div id="ntrmsg"></div></div>`:""}
+          <div class="row adv" style="gap:8px;margin-top:8px"><button id="ntrcs">CloudShare Windows pilot script</button><span class="hint">For the Windows pilot in the CloudShare POV lab (or any Windows pilot): installs the probe if needed, this POV's probe pack and the schedule. Run it after the pilot device setup.</span></div>
+          <div class="row adv" style="gap:8px;margin-top:8px"><button id="ntraws">AWS generator template</button><span class="hint">A Windows instance in the customer's (or your) AWS account, for the pilot user above: CloudFormation, no inbound ports, a weekday schedule. Sign in to Client Connector once over Fleet Manager.</span></div><div id="ntrmsg"></div></div>`:""}
         ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A template for two connectors in the customer's AWS account or Azure subscription, plus the provisioning key to paste into it.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>AWS template</button><button id="ntplaz" ${c.zpa_key?"":"disabled"}>Azure template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button><button id="ncs" ${c.zpa_key?"":"disabled"}>CloudShare commands</button></div><div id="nkeyv"></div></div>`:""}
         ${has("aiguard")?`<div class="card"><h4>AI Guard policy</h4><p class="muted" style="margin:4px 0 10px">What the POV's own policy blocks. Takes about 30 seconds to apply.</p><div class="seg" id="nag"><button data-p="monitor">Monitor</button><button data-p="attacks">Block attacks</button><button data-p="data">+ data leakage</button></div><div id="nagmsg" class="hint"></div></div>`:""}
         <div class="card"><h4>Ask Claude about this tenant</h4><p class="muted" style="margin:4px 0 8px">Read-only access for Claude Desktop through Zscaler's MCP server: "why was Jane blocked?", "what did the pilot group use today?". Changes, if the customer agrees, go through the change list (below). Requests go from Claude Desktop to Anthropic, not through AI Guard, with names as they are.</p>
           ${c.mcp.consent?note(`${c.mcp.consent.by} agreed on ${c.mcp.consent.at.slice(0,10)}.`,"good"):`<div class="row" style="gap:8px"><input type="text" id="nmcpby" placeholder="Who agreed (name, title)" style="flex:1"><button id="nmcpok">Record agreement</button></div>`}
           ${c.mcp.consent?(c.mcp.installed?`<p style="margin:6px 0">${note("In Claude Desktop as "+c.mcp.entry+" (using "+c.mcp.uses+"). Quit and reopen Claude Desktop to load it.","good")}</p><button id="nmcprm">Remove from Claude Desktop</button>`:`<div class="row" style="margin-top:6px"><button id="nmcpin">Add to Claude Desktop</button><button id="nmcpcfg">Copy config for another client</button></div>`):""}
-          ${c.mcp.consent&&c.mcp.installed?`<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b>Let Claude make changes</b> <span class="muted">(through the change list)</span>
+          ${c.mcp.consent&&c.mcp.installed?`<div class="adv" style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b>Let Claude make changes</b> <span class="muted">(through the change list)</span>
             <p class="muted" style="margin:4px 0 8px">A second connector, run by the kit: Claude Desktop can propose changes (each checked against the tenant, scoped to the pilot group and added to the change list for the customer to approve; you click Apply here), switch the POV's AI Guard policy, run AI Guard tests and API proofs, check status and Fix drift on the POV's own objects, and check the steps for people. It can't apply, and it never writes to the tenant directly.</p>
             ${c.mcp.actions_consent?note(`${c.mcp.actions_consent.by} agreed to changes through the change list on ${c.mcp.actions_consent.at.slice(0,10)}.`,"good"):`<div class="row" style="gap:8px"><input type="text" id="nactby" placeholder="Who at the customer agreed (name, title)" style="flex:1"><button id="nactok">Record agreement</button></div>`}
             ${c.mcp.actions_consent?(c.mcp.actions_installed?`${note("In Claude Desktop as "+c.mcp.actions_entry+". Quit and reopen Claude Desktop to load it.","good")}<button id="nactrm">Remove the changes connector</button>`:`<button id="nactin" style="margin-top:6px">Add the changes connector to Claude Desktop</button>`):""}</div>`:""}<div id="nmcpmsg"></div></div>
@@ -934,11 +958,11 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
           <div class="row" style="gap:18px;align-items:flex-end;flex-wrap:wrap">
             <div><div class="lbl">Mode</div><div class="seg" id="agmode"><button data-m="detect" class="${AGR.mode=="detect"?"on":""}" title="Scans with the Detection API: nothing goes to a model. Every result counts as evidence.">Detection API</button><button data-m="proxy" class="${AGR.mode=="proxy"?"on":""}" ${AG.keys.proxy?"":"disabled title='Set up proxy mode in AI Guard → Setup'"} title="Real prompts to the model through AI Guard's proxy: real replies, and AI Guard's block message.">LLM proxy</button></div></div>
             <div class="agpxopt" style="${AGR.mode=="proxy"?"":"display:none"}"><div class="lbl">Models (rotated)</div><div class="row" id="agprovs" style="gap:8px">${Object.entries(px.providers).filter(([,v])=>v.key).map(([pt,v])=>`<label class="chk"><input type="checkbox" value="${esc(pt)}" ${!AGR.provs||AGR.provs.has(pt)?"checked":""}> ${esc(v.label)} <span class="muted" style="font-size:12px">${esc(v.model)}</span></label>`).join("")||'<span class="muted" style="font-size:12px">none ready</span>'}</div></div>
-            <div id="agtagsf" class="agpxopt" style="${AGR.mode=="proxy"?"":"display:none"}"><div class="lbl">Proxy options</div><label class="chk" title="Also scans each prompt and the model's reply with the Detection API, so detectors show and results count as evidence"><input type="checkbox" id="agtags" ${AGR.tags?"checked":""}> Detector tags</label></div>
-            <div><div class="lbl">Rounds</div><input type="number" id="agrounds" value="${AGR.rounds}" min="1" max="10" style="width:70px"></div>
+            <div id="agtagsf" class="agpxopt adv" style="${AGR.mode=="proxy"?"":"display:none"}"><div class="lbl">Proxy options</div><label class="chk" title="Also scans each prompt and the model's reply with the Detection API, so detectors show and results count as evidence"><input type="checkbox" id="agtags" ${AGR.tags?"checked":""}> Detector tags</label></div>
+            <div class="adv"><div class="lbl">Rounds</div><input type="number" id="agrounds" value="${AGR.rounds}" min="1" max="10" style="width:70px"></div>
             <div class="row" style="gap:8px"><button class="primary" id="agrun" ${AG.keys.detection?"":"disabled"}>Run 0 tests</button><button id="agstop" disabled>Stop</button></div>
           </div>
-          <div style="margin-top:12px"><div class="lbl">Users (rotated across tests; how the POV's scans show in AI Guard Insights)</div>
+          <div class="adv" style="margin-top:12px"><div class="lbl">Users (rotated across tests; how the POV's scans show in AI Guard Insights)</div>
             <div class="row" id="agusers" style="gap:6px;flex-wrap:wrap">${[...new Set([...AG.pov_users,...AG.users.slice(0,3)])].map(u=>`<label class="chk"><input type="checkbox" value="${esc(u)}" ${AGR.users.has(u)?"checked":""}> ${esc(u)}${AG.pov_users.includes(u)?' <span class="chip">POV</span>':""}</label>`).join("")}</div></div>
           ${AG.keys.detection?"":note("The POV's AI Guard app and key are made when the change list is applied.","bad")}
           <div class="progress"><i id="agbar"></i></div>
@@ -995,7 +1019,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   const drawLib=()=>{
     $("#agpovgroups").innerHTML=AG.pov_groups.length?AG.pov_groups.map(g=>groupHTML("pov:"+g.criterion,g.title,g.tests,
       `<div style="padding:6px 0 4px 22px">${(g.drafts||[]).map(d=>`<div class="agdraft"><span class="dir">${esc(d.direction)}</span> <b>${esc(d.name)}</b> <span class="chip">draft</span><div class="muted" style="font-size:12px">${esc(d.text)}</div><div class="muted" style="font-size:12px">expects: ${esc((d.expect||[]).join(", ")||"nothing harmful")}</div><div class="row" style="gap:6px;margin-top:4px"><button class="agdok" data-c="${esc(g.criterion)}" data-i="${esc(d.id)}" style="padding:2px 10px;font-size:12px">Accept</button><button class="agdno" data-c="${esc(g.criterion)}" data-i="${esc(d.id)}" style="padding:2px 10px;font-size:12px">Discard</button></div></div>`).join("")}
-       <button class="agdraftgo" data-c="${esc(g.criterion)}" style="font-size:12px;padding:3px 10px;margin-top:4px">Draft more tests with Claude</button><div class="agdmsg" data-c="${esc(g.criterion)}"></div></div>`,g.criterion)).join(""):'<p class="muted" style="font-size:13px">No AI Guard criteria chosen for this POV (Success criteria).</p>';
+       <button class="agdraftgo adv" data-c="${esc(g.criterion)}" style="font-size:12px;padding:3px 10px;margin-top:4px">Draft more tests with Claude</button><div class="agdmsg" data-c="${esc(g.criterion)}"></div></div>`,g.criterion)).join(""):'<p class="muted" style="font-size:13px">No AI Guard criteria chosen for this POV (Success criteria).</p>';
     $("#aggroups").innerHTML=AG.groups.map(g=>groupHTML("g:"+g,g,AG.tests.filter(t=>t.group==g))).join("");
     $$(".aggroup").forEach(d=>d.ontoggle=()=>{d.open?AGopen.add(d.dataset.key):AGopen.delete(d.dataset.key)});
     $$("[data-g]").forEach(cb=>{cb.onclick=e=>e.stopPropagation();cb.onchange=()=>{const k=cb.dataset.g;
@@ -1214,7 +1238,7 @@ function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",dir
     <div class="group-h">How it's proved</div><div>${esc(t.statement)}</div>
     ${t.probe.length?`<ul style="margin:4px 0 0 18px;padding:0">${t.probe.map(p=>`<li><code>${esc(p.type)}</code> ${esc(p.url||p.host||p.name||"")}${p.port?":"+esc(p.port):""} → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
     ${(t.aiguard||[]).length?`<div class="hint" style="margin-top:6px">AI Guard test prompts (scanned with the POV's key):</div><ul style="margin:4px 0 0 18px;padding:0">${t.aiguard.map(p=>`<li><code>${esc(p.direction)}</code> “${esc(p.text)}” → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
-    ${t.attest?`<div class="hint">A person checks: ${esc(t.attest)}</div>`:""}
+    ${t.attest?`<div class="hint">Shown live: ${esc(t.attest)}</div>`:""}
     ${u.history&&u.history.length?`<div class="hint">Refined ${u.history.length} time${u.history.length>1?"s":""}; last: “${esc(u.history[u.history.length-1].feedback)}”</div>`:""}
     ${u.from_library?`<div class="hint">From the library entry ${esc(u.from_library)}, checked against this tenant (no AI call).</div>`:""}
     ${u.status=="proposed"||u.status=="accepted"?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="ucrf${esc(u.id)}" placeholder="Refine: e.g. make it Caution, not Block; only the Sales group's sites" style="flex:1;min-width:240px"><button class="ucref" data-id="${esc(u.id)}">Refine</button></div><div class="log" id="ucrl${esc(u.id)}" style="display:none"></div>`:""}
@@ -1251,7 +1275,6 @@ $("#stcheck").onclick=()=>status(false);$("#stfix").onclick=()=>status(true);
 let CR=[],open=null;
 async function criteria(){let R;try{R=await api("/api/criteria");CR=R.rows}catch(e){$("#crrows").innerHTML=`<tr><td colspan="4">${esc(e.message)}</td></tr>`;return}
   const sm=R.summary,li=(t,xs)=>xs&&xs.length?`<div class="group-h">${t}</div><ul style="margin:4px 0 0 18px;padding:0">${xs.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
-  $("#crsum").innerHTML=sm?`<p><b>${esc(sm.headline)}</b></p>${li("Proved",sm.proved)}${li("Not proved yet",sm.open)}${li("What it means",sm.value)}${li("Next steps",sm.next_steps)}<div class="hint">Drafted ${esc(sm.at.slice(0,16).replace("T"," "))} UTC${R.summary_stale?" · the results have changed since: draft it again":""}. It opens the report.</div>`:'<div class="empty">Not drafted yet.</div>';
   const n=s=>CR.filter(r=>r.status==s).length;
   api("/api/probe/status").then(ps=>{$("#crprobe").innerHTML=probeStatusHTML(ps)}).catch(()=>{});
   $("#crapi").style.display=R.only_runner?"none":"";
@@ -1259,11 +1282,11 @@ async function criteria(){let R;try{R=await api("/api/criteria");CR=R.rows}catch
   if(R.proofs_due&&!CRAUTO){CRAUTO=true;$("#crwhen").innerHTML='<span class="hint">Checking the setup behind each criterion (read-only)…</span>';
     api("/api/test-api",{auto:true}).then(async r=>{if(r.job){await runJob(r.job,document.createElement("div"));criteria()}}).catch(()=>{$("#crwhen").innerHTML=""})}
   $("#crstat").innerHTML=`<div><b>${n("pass")}</b>passed</div><div><b>${n("fail")}</b>failed</div><div><b>${n("incomplete")}</b>still to prove</div><div><b>${CR.length}</b>criteria</div>`;
-  $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span>${whyShort(r)}${r.waiting_on?`<div class="hint" style="margin-top:4px">waiting on: ${r.waiting_on.map(w=>`<a href="#" class="crwait">${esc(w.title)}</a>`).join("; ")}</div>`:""}</td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
+  $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k=="attested"?"demonstrated":k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span>${whyShort(r)}${r.waiting_on?`<div class="hint" style="margin-top:4px">waiting on: ${r.waiting_on.map(w=>`<a href="#" class="crwait">${esc(w.title)}</a>`).join("; ")}</div>`:""}</td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
   $$("#crrows tr.r").forEach(tr=>tr.onclick=()=>{open=open==+tr.dataset.i?null:+tr.dataset.i;criteria()});
   $$(".crwait").forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();goManual()});
   $$(".attgo").forEach(b=>b.onclick=async e=>{e.stopPropagation();const i=+b.dataset.i;
-    try{await api("/api/attest",{criterion:CR[i].criterion.id,note:$("#att"+i).value,by:$("#attby"+i).value});criteria()}catch(err){alertIn(i,err.message)}});
+    try{await api("/api/attest",{criterion:CR[i].criterion.id,note:$("#att"+i).value.trim()||"Demonstrated live to the customer",by:(()=>{try{return localStorage.getItem("pov.exby")||"the SE"}catch(e){return "the SE"}})()});criteria()}catch(err){alertIn(i,err.message)}});
   $$("#crrows tr.detail").forEach(tr=>tr.onclick=e=>e.stopPropagation())}
 let CRAUTO=false;
 function whyShort(r){const ex=Object.values(r.proofs).flatMap(p=>p.explain||[]);return ex.length&&r.status!="pass"?`<div class="hint" style="margin-top:4px;max-width:340px">${esc(ex[0].why)}</div>`:""}
@@ -1271,18 +1294,37 @@ function explainHTML(ex){if(!ex||!ex.length)return "";
   return `<div class="gate" style="margin:8px 0;border-color:var(--warn)"><b>Why it didn't pass</b>${ex.map(e=>`<div style="margin-top:8px"><div class="muted" style="font-size:12.5px">Found: ${esc(e.problem)}</div><div style="margin:3px 0">${esc(e.why)}</div><b style="font-size:12.5px">How to fix</b><ol style="margin:2px 0 0 18px;padding:0">${e.fix.map(f=>`<li style="margin:2px 0">${esc(f)}</li>`).join("")}</ol>${e.action?`<div class="body" style="padding:0;border:0;background:none">${actHTML(e.action)}</div>`:""}</div>`).join("")}</div>`}
 function alertIn(i,m){$("#attmsg"+i).innerHTML=note(m,"bad")}
 function detail(r,i){const c=r.criterion;
-  const proof=([k,p])=>`${explainHTML(p.explain)}<div style="margin:6px 0"><span class="badge b-${esc(p.status)}">${esc(k)}</span> ${esc(p.detail||"")}${p.attestation?` <span class="muted">· ${esc(p.attestation.note)} (${esc(p.attestation.by)}, ${esc(p.attestation.at)})</span>`:""}${p.results?`<ul style="margin:4px 0 0 18px;padding:0">${p.results.map(x=>`<li>${esc(x.spec?(x.spec.url||x.spec.host||x.spec.name||x.spec.type):(x.expect||x.device||""))}: ${esc(x.outcome??(x.detected||x.scores||[]).join?.(", ")??"")} ${x.expect&&x.spec?`<span class="muted">(expected ${esc(x.expect)})</span>`:""}</li>`).join("")}</ul>`:""}</div>`;
-  return `<tr class="detail"><td colspan="4"><div>${esc(c.statement||"")}</div>${Object.entries(r.proofs).map(proof).join("")}${c.attest?`<div class="hint">To attest: ${esc(c.attest)}</div>`:""}
-    <div class="row" style="margin-top:10px;gap:8px"><input type="text" id="att${i}" placeholder="What was seen, e.g. the block in Web Insights for the pilot user" style="flex:1;min-width:240px"><input type="text" id="attby${i}" placeholder="Who" style="width:140px"><button class="attgo" data-i="${i}">Record attestation</button></div><div id="attmsg${i}"></div></td></tr>`}
+  const proof=([k,p])=>`${explainHTML(p.explain)}<div style="margin:6px 0"><span class="badge b-${esc(p.status)}">${esc(k=="attested"?"demonstrated":k)}</span> ${esc(p.detail||"")}${p.attestation?` <span class="muted">· ${esc(p.attestation.note)} (${esc(p.attestation.by)}, ${esc(p.attestation.at)})</span>`:""}${p.results?`<ul style="margin:4px 0 0 18px;padding:0">${p.results.map(x=>`<li>${esc(x.spec?(x.spec.url||x.spec.host||x.spec.name||x.spec.type):(x.expect||x.device||""))}: ${esc(x.outcome??(x.detected||x.scores||[]).join?.(", ")??"")} ${x.expect&&x.spec?`<span class="muted">(expected ${esc(x.expect)})</span>`:""}</li>`).join("")}</ul>`:""}</div>`;
+  return `<tr class="detail"><td colspan="4"><div>${esc(c.statement||"")}</div>${Object.entries(r.proofs).map(proof).join("")}${c.attest?`<div class="hint">To show it live: ${esc(c.attest)}</div>`:""}
+    <div class="row" style="margin-top:10px;gap:8px"><input type="text" id="att${i}" placeholder="Optional: what you showed, e.g. the block in Web Insights" style="flex:1;min-width:240px"><button class="attgo" data-i="${i}">Demonstrated ✓</button></div><div class="hint">Shown live to the customer? Mark it: it counts as proved, in your name.</div><div id="attmsg${i}"></div></td></tr>`}
 $("#crapi").onclick=async()=>{$("#crmsg").innerHTML='<div class="log" id="crlog"></div>';try{await runJob((await api("/api/test-api",{})).job,$("#crlog"));$("#crmsg").innerHTML=note("Checked. Criteria that didn't pass say why: click a row.","good");criteria()}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
 $("#crpack").onclick=async()=>download(`pov-probe-pack-${S.current.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
 $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
   try{const r=await api("/api/import-probe",{data:JSON.parse(await f.text())});$("#crmsg").innerHTML=note(`Imported probe run ${r.run_id}: ${r.results} results.`,"good");criteria()}catch(err){$("#crmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
-$("#crsumgo").onclick=async()=>{const b=$("#crsumgo");b.disabled=true;$("#crsumlog").style.display="block";
-  try{await runJob((await api("/api/summary",{note:$("#crsumnote").value})).job,$("#crsumlog"));criteria()}catch(e){$("#crsumlog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
 $("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
 
 /* ---------------- handover ---------------- */
+async function execsum(){const el=$("#exstate");if(!el||!S.current)return;
+  let r;try{r=await api("/api/execsum",{state:true})}catch(e){el.innerHTML=note(e.message,"bad");return}
+  try{const k=localStorage.getItem("pov.exby");if(k&&!$("#exby").value)$("#exby").value=k}catch(e){}
+  $("#exgo").textContent=r.summary?"Draft it again":"Draft the summary";
+  if(!r.ready){el.innerHTML=note("Claude isn't set up on this computer yet: AI Guard tab › Setup, or Setup › Connect (Claude).","warn")}
+  if(!r.summary){if(r.ready)el.innerHTML='<div class="empty">Not drafted yet.</div>';return}
+  const c=r.summary.customer,n=r.summary.internal,dl=(v,f,l)=>`<a class="btn" href="/execsum?t=${encodeURIComponent(TOKEN)}&v=${v}&f=${f}" download>${l}</a>`;
+  el.innerHTML=`${r.stale?note("The results have changed since this was drafted: draft it again before you send it.","warn"):""}
+    <div class="cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+    <div class="card"><h4>Customer version <span class="muted" style="font-weight:400;font-size:12px">for ${esc(r.customer||"the customer")}'s executives</span></h4>
+      <p><b>${esc(c.headline)}</b></p><p class="muted" style="font-size:13px"><b>Recommendation:</b> ${esc(c.recommendation)}</p>
+      <div class="row" style="gap:8px">${dl("customer","docx","Word")}${dl("customer","pptx","PowerPoint")}</div></div>
+    <div class="card"><h4>Internal version <span class="badge b-fail">Zscaler only</span></h4>
+      <p><b>${esc(n.verdict)}</b></p><p class="muted" style="font-size:13px">${esc(n.recommendation)}</p>
+      <div class="row" style="gap:8px">${dl("internal","docx","Word")}${dl("internal","pptx","PowerPoint")}</div></div></div>
+    <div class="hint">Drafted ${esc(r.summary.at.slice(0,16).replace("T"," "))} UTC. Read it before sending: Claude only knows the recorded results. The customer version also opens the evidence report.</div>`}
+$("#exgo").onclick=async()=>{const b=$("#exgo");b.disabled=true;$("#exlog").style.display="block";
+  try{localStorage.setItem("pov.exby",$("#exby").value)}catch(e){}
+  try{await runJob((await api("/api/execsum",{emphasis:$("#exemph").value,notes:$("#exnotes").value,prepared_by:$("#exby").value})).job,$("#exlog"));await execsum()}
+  catch(e){$("#exlog").insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}};
+$("#crgoexec").onclick=e=>{e.preventDefault();$$("#tabs button").find(b=>b.dataset.t=="handover").click()};
 async function handover(body){$("#hoout").style.display="block";
   try{const r=await runJob((await api("/api/handover",body)).job,$("#holog"));
     if(r&&r.checks)$("#holog").insertAdjacentHTML("beforeend",`<div class="ok">${r.finished?"Done.":"Not finished: see above."}</div>`);await load()}

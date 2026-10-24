@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.39
+
+- **Executive summary, two versions, as Word and PowerPoint** (Handover tab). Claude drafts a *customer* version
+  for their executives (what was proved, in business terms, the AI Guard numbers, what's open, and a recommended next
+  step) and an *internal* one for Zscaler's deal review (verdict, win themes, risks, gaps, competitive notes, asks),
+  from the results, the use cases, the AI Guard counts and your notes, with the customer's names removed. The kit fills
+  in the customer's name on your computer. The customer version also opens the evidence report.
+- **Simple view by default.** Advanced view (top right) shows the rest: start options, CloudShare and AWS traffic
+  generators, AI Guard test users, rounds and detector tags, Claude-drafted tests, and Claude making changes.
+- **The SE signs off the change list by default.** Customer approval is now a choice per POV (Sign-off step:
+  *Ask the customer to approve instead*); Apply still refuses anything but the signed-off list.
+- **Demonstrated replaces attestations:** showed it live? One click marks the criterion proved, in your name.
+- The kit now uses python-docx and python-pptx (fetched automatically on the next start).
+
 ## 0.9.38
 
 - **Fixed: LLM proxy runs used only one model.** With both Anthropic and OpenAI ticked, the console sent no model
