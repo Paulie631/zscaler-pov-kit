@@ -805,6 +805,14 @@ def api(method, path, body, q):
         p.path("report.html").write_text(render_report(p, evidence.evaluate(p), ChangeList(p.dir).approval()),
                                          encoding="utf-8")
         return 200, {"ok": True}
+    if path == "/api/test-user/password":   # a new password for a ZIA test user: typed, or generated
+        from .core.guard import LedgerTenant
+        p = current()
+        led = lifecycle.ledger(p)
+        pw = products.get("zia").set_test_password(LedgerTenant(tf(p, "apply"), led, []), p, led, body.get("n"),
+                                                   body.get("password") or "")
+        p.log("identity", f"new password for POV test user {body.get('n')} (kept in the keychain)")
+        return 200, {"value": pw}
     if path == "/api/aiguard-policy":
         from .core.guard import LedgerTenant
         p = current()

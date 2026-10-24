@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.49
+
+- **Set a test user's password from the console** (Set up a pilot device > Show password > Set new password):
+  type one, or leave it empty for a random one. The kit sets it in ZIA (on the POV's own test user only), activates,
+  and keeps it in the keychain. ZIdentity users still get theirs in ZIdentity: its API can't set passwords.
+
 ## 0.9.48
 
 - **Set up a pilot device** shows the test user's password right there (**Show password**), instead of only on

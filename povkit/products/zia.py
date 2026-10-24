@@ -627,6 +627,29 @@ class ZIA(Product):
         log("ok", "ZIA changes activated")
 
     # ---------------------------------------------------------------- live objects, drift, teardown
+    def set_test_password(self, t, pov, ledger, n, password=None, log=lambda *a: None):
+        """A new password for one of the POV's own ZIA test users: typed by the SE or generated. Set in ZIA, then
+        kept in the keychain. Only the ledger's own test user is touched. -> the password"""
+        e = ledger.find(f"zia.user.{int(n)}")
+        if not e:
+            raise KitError(f"Test user {n} isn't one of this POV's ZIA users (in ZIdentity, set it there: "
+                           "Administration > Authentication > Directory > Users).")
+        pw = (password or "").strip() or gen_password()
+        if len(pw) < 8 or not (any(c.isupper() for c in pw) and any(c.islower() for c in pw)
+                               and any(c.isdigit() for c in pw) and any(not c.isalnum() for c in pw)):
+            raise KitError("ZIA wants at least 8 characters with an upper-case letter, a lower-case letter, a digit "
+                           "and a special character. Or leave it empty and the kit makes one.")
+        live = self.live_object(t, e)
+        if not live:
+            raise KitError("The POV's test user is gone from ZIA. Status > Fix drift recreates it.")
+        body = {k: v for k, v in live.items() if k in ("name", "email", "groups", "department", "comments",
+                                                         "adminUser", "type")}
+        t.update(e, live, KINDS["user"]["res"], KINDS["user"]["upd"], *self._args(e), **dict(body, password=pw))
+        secrets.put(pov.id, TEST_PW.format(n=int(n)), pw)
+        t.activate()
+        log("ok", f"New password set for {live.get('email') or e['name']} and ZIA changes activated")
+        return pw
+
     def _args(self, entry):
         return (entry["rule_type"], entry["id"]) if KINDS[entry["kind"]].get("typed") else (entry["id"],)
 

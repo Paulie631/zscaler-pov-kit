@@ -904,7 +904,11 @@ function bindDevice(d,redraw){
   const pwN=()=>{const m=email().match(/-pilot-(\d+)@/);return m?m[1]:null};
   const pwShow=()=>{$("#dpw").style.display=pwN()?"":"none";$("#dpwv").innerHTML=""};pwShow();$("#duser").addEventListener("input",pwShow);
   $("#dpw").onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:pwN()})).value;
-    $("#dpwv").innerHTML=v?`<span class="secret">${esc(v)}</span> · sign in to Client Connector with it`:"Not in this computer's keychain: the POV made this user in ZIdentity, which doesn't let the kit set passwords. Set one in ZIdentity: Administration › Authentication › Directory › Users."};
+    $("#dpwv").innerHTML=v?`<span class="secret">${esc(v)}</span> · sign in to Client Connector with it`+pwForm():"Not in this computer's keychain: the POV made this user in ZIdentity, which doesn't let the kit set passwords. Set one in ZIdentity: Administration › Authentication › Directory › Users.";bindPw()};
+  const pwForm=()=>`<div class="row" style="gap:6px;margin-top:6px"><input type="password" id="dpwnew" placeholder="New password, or leave empty to generate one" autocomplete="new-password" style="width:300px"><button id="dpwset">Set new password</button></div><div id="dpwmsg"></div>`;
+  const bindPw=()=>{const b=$("#dpwset");if(!b)return;b.onclick=async()=>{b.disabled=true;$("#dpwmsg").innerHTML='<div class="notice">Setting it in ZIA and activating…</div>';
+    try{const r=await api("/api/test-user/password",{n:pwN(),password:$("#dpwnew").value});$("#dpwv").innerHTML=`<span class="secret">${esc(r.value)}</span> · the new password, set in ZIA and kept in this computer's keychain`+pwForm();bindPw()}
+    catch(e){$("#dpwmsg").innerHTML=note(e.message,"bad");b.disabled=false}}};
   const how=DEV_OS=="macos"?"Paste it into Terminal on the Mac. It asks for the Mac password once.":"Paste it into PowerShell opened with Run as administrator.";
   $$("#dos button").forEach(b=>b.onclick=()=>{DEV_OS=b.dataset.o;redraw()});
   const saveCloud=async body=>{try{const r=await api("/api/device/cloud",body);$("#dcloud").value=r.cloud||"";out(note(`Cloud: ${r.cloud}`,"good"))}catch(e){out(note(e.message,"bad"))}};
