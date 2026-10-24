@@ -10,7 +10,7 @@
     evidence) and API proofs, check status, Fix drift on the POV's own objects, and check the steps for people.
   - It never uses Zscaler's write tools. Each action is logged as Claude Desktop's.
 - Fixed: **Ask Claude** on the Use cases tab failed with "NameError: cannot access free variable 'ai'" (since
-  0.9.24). Mapping criteria and drafting the report summary had the same problem.
+  0.9.24). Drafting the report summary had the same problem.
 - Fixed: messages showed `&#39;` and similar where names had apostrophes.
 
 ## 0.9.32
