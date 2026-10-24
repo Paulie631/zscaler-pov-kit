@@ -73,6 +73,10 @@ letting Claude Desktop make changes.
   which needs `cloudflared` on the console's computer), run the command shown on the device, then pick it under
   **Run on**. Test runs, guided demos and Show it then use that device (pages open in its browser). Runs started on
   the device itself appear under Linked devices.
+- **Device tests › Tenant logs**: when a device can't be linked, ZIA streams the pilot users' web logs to the console
+  (Cloud NSS, a minute or two behind) and each line is matched to the device tests. Choose **To this console** (needs
+  the Cloudflare tunnel) or **To the customer's SIEM** (Splunk HEC), make the change list again, get it approved and
+  Apply. A run the logs saw in full can be counted as evidence. After a console restart, **Update the feed address**.
 - **Device tests › Demo helpers**: ZPA, ZDX and CASB talk tracks, and **Warm up the dashboards** the day before.
 
 ## Every customer session

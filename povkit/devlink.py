@@ -251,13 +251,21 @@ def start(pov, current, port=None, tunnel=False):
 
             def _go(self, method):
                 u = urlsplit(self.path)
-                body = {}
+                body, raw = {}, b""
                 if method == "POST":
                     n = int(self.headers.get("Content-Length") or 0)
-                    if n > 4 * 1024 * 1024:
+                    if n > 8 * 1024 * 1024:
                         return self._send(413, {"error": "too large"})
+                    raw = self.rfile.read(n) if n else b""
+                if u.path.startswith("/nss/") and method == "POST":   # the POV's Cloud NSS web-log feed
+                    from . import logfeed
                     try:
-                        body = json.loads(self.rfile.read(n) or b"{}")
+                        return self._send(*logfeed.handle(current(), u.path, raw))
+                    except Exception as e:   # noqa: BLE001
+                        return self._send(500, {"text": f"{type(e).__name__}", "code": 8})
+                if method == "POST":
+                    try:
+                        body = json.loads(raw or b"{}")
                     except ValueError:
                         return self._send(400, {"error": "bad JSON"})
                 if not u.path.startswith("/agent/"):

@@ -43,6 +43,10 @@ KINDS = {
     "user": dict(res="user_management", get="get_user", add="add_user", upd="update_user", dele="delete_user",
                  lst="list_users", rule=False, title="Test user", tf=("zia_user_management_users", False),
                  by_prefix=True),
+    # the POV's web-log feed to the console or the customer's SIEM (logfeed.py): only when the SE turns it on
+    "nss_feed": dict(res="cloud_nss", get="get_nss_feed", add="add_nss_feed", upd="update_nss_feed",
+                     dele="delete_feed", lst="list_nss_feed", rule=False, title="Log feed (Cloud NSS)",
+                     tf=("zia_cloud_nss_feed", False), optional=True),
     "url_filtering": dict(res="url_filtering", rule=True, title="URL filtering", tf=("zia_url_filtering_rules", True)),
     "ssl": dict(res="ssl_inspection_rules", rule=True, title="SSL inspection", tf=("zia_ssl_inspection_rule", False)),
     "cloud_app_control": dict(res="cloudappcontrol", rule=True, typed=True, title="Cloud App Control",
@@ -108,7 +112,7 @@ ZSCALER_ENGINES = {"5 or more PII Identifiers", "5 or more Credit Card Numbers",
                    "PIPEDA - High Volume", "LGPD - Low Volume", "LGPD - High Volume", "FISMA - Low Volume",
                    "FISMA - High Volume", "PII (US) - Low Volume", "PII (US) - High Volume", "Credentials and Secrets",
                    "Finance", "Legal", "Medical", "DPDPA", "SOX"}
-UNSTAMPED = {"department", "user_group", "user"}   # ZIA keeps 'comments' on these, not a description: ledger + prefix
+UNSTAMPED = {"department", "user_group", "user", "nss_feed"}   # ZIA keeps 'comments' on these, not a description: ledger + prefix
 TEST_PW = "zia-test-user-{n}"
 
 
@@ -267,6 +271,8 @@ class ZIA(Product):
                            "full"),
                           ("ZIA: activation", "allowed")]
                 + ([("ZIA user management (for the POV's Hosted DB test users only)", "full")] if users else [])
+                + ([("ZIA Nanolog Streaming Service (the POV's Cloud NSS web-log feed)", "full")]
+                   if pov and (pov.cfg.get("logfeed") or {}).get("mode") in ("console", "siem") else [])
                 + [("ZIA administration, roles, authentication settings"
                     + ("" if users else ", user management"), "none")]}
 
@@ -399,7 +405,13 @@ class ZIA(Product):
         linked_ids = {e["kind"]: e["id"] for e in ledger.entries if e["state"] == "linked" and e["product"] == "zia"}
         from .zid import enabled as zid_pilot, group_name
         ours_zid = group_name(pov.prefix) if zid_pilot(pov.cfg) and ledger.find("zid.group") else None
+        from .. import logfeed
+        lf_on = logfeed.mode(pov) != "off"
+        if lf_on:
+            snap["nss"] = logfeed.discover(t, pov, snap, checks)
         for kind in KINDS:
+            if KINDS[kind].get("optional") and not lf_on:
+                continue
             types_ = sorted({r["rule_type"] for r in tpl["cloud_app_control"]}) if KINDS[kind].get("typed") else [None]
             rows = []
             for rt in types_:
@@ -564,6 +576,15 @@ class ZIA(Product):
         for r in tpl["dns"]:
             rule("dns", r, dict(action=r["action"], res_categories=r["res_categories"]))
 
+        from .. import logfeed
+        lf = logfeed.plan_item(pov, snap, P, pid)
+        if lf:
+            it_, note_ = lf
+            if it_:
+                out.append(it_)
+            if note_:
+                notes.append(note_)
+
         from .. import usecases   # accepted use cases join the change list as ordinary, approved items
         uc_items, uc_notes = usecases.zia_items(pov, snap, scope, affects, placement, snap.get("uc_cac") or {})
         out += uc_items
@@ -618,11 +639,17 @@ class ZIA(Product):
     def apply(self, t, pov, items_, log):
         self.guard_activation(t, "applied")
         mine = [i for i in items_ if i["product"] == "zia" and i["action"] == "create"]
+        if any(i["kind"] == "nss_feed" for i in mine) and not ledger_of(pov).find("zia.nss_feed"):
+            from .. import logfeed
+            logfeed.connection(pov)   # before anything is created: stops here if the feed's address isn't ready
         for kind in [k for k in KINDS if not KINDS[k]["rule"]]:
             for it in [i for i in mine if i["kind"] == kind]:
                 k = KINDS[kind]
                 try:
-                    if kind == "user":
+                    if kind == "nss_feed":   # the address and its key are filled in now, never in the change list
+                        from .. import logfeed
+                        t.create(it["key"], k["res"], k["add"], stamped=False, **logfeed.resolve(pov, it["body"]))
+                    elif kind == "user":
                         n = it["key"].rsplit(".", 1)[-1]
                         pw = secrets.get(pov.id, TEST_PW.format(n=n)) or gen_password()
                         secrets.put(pov.id, TEST_PW.format(n=n), pw)

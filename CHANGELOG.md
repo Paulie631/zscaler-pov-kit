@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.68
+- Device tests › **Tenant logs**: the console sees the device tests in ZIA's own logs, live, for when a device can't be linked. A Cloud NSS web-log feed (one change-list item, filtered to the pilot users: the POV's test users' department, or the named pilot users) streams to this console through the Cloudflare tunnel, or to the customer's SIEM (Splunk HEC). Each line is matched to the POV's device tests (the probe tags every test URL with its run), the view shows what Zscaler just saw with action, reason, category and the matching test, and a run the logs saw in full can be counted as evidence ("tenant logs"). Firewall, DNS and certificate tests aren't in web logs.
+- The feed's address and key are filled in at apply and never written into the change list, so the approval stands when the tunnel's address changes; **Update the feed address** points the POV's own feed at the new one. Teardown removes it. Discovery checks Cloud NSS is there and reads the tenant's own JSON web-log format.
+
 ## 0.9.67
 - Device tests › **Run on**: run the device tests on another computer with Client Connector and see the results in the console as they land. **Link a device** turns on a device listener (same network, or also from anywhere through a Cloudflare quick tunnel when `cloudflared` is installed) and shows a one-line command for macOS and Windows. The device runs `pov-probe link`, connects out to the console and waits: the Test runner, Guided demos, Show it (pages open in the device's browser) and Check again all work on the chosen device. Runs started on the device itself (`pov-probe test`) are sent to the console when linked, and count as evidence like an imported file.
 - The listener is separate from the console and serves only device requests carrying the POV's link token; it comes back on after a restart (the tunnel's address changes, so a device elsewhere relinks).

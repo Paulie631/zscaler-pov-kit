@@ -796,6 +796,23 @@ def api(method, path, body, q):
             return devtests.run(p, ids, log, on_result=job["items"].append, stop=lambda: job["stop"],
                                 on_device=body.get("device") or None)
         return 200, {"job": start_job("devtests", work, streams=True)}
+    if path == "/api/logfeed":   # tenant logs, live (logfeed.py): the POV's Cloud NSS web-log feed
+        from . import logfeed
+        p = current()
+        if body.get("mode"):
+            logfeed.set_mode(p, body["mode"], body.get("siem_url"), body.get("siem_token"))
+            return 200, dict(logfeed.view(p), message="Saved. Make the change list again (Setup › Change list): the "
+                                                      "log feed is an item the customer approves, then Apply.")
+        if body.get("update"):
+            out = []
+            logfeed.update_address(p, tf(p, "apply"), lambda lv, m: out.append(m))
+            return 200, dict(logfeed.view(p), message=" ".join(out))
+        if body.get("record"):
+            r = logfeed.record(p, str(body["record"]))
+            return 200, dict(logfeed.view(p), message=f"Counted from the tenant logs: {', '.join(r['criteria'])}."
+                             + (f" Seen only in part (not counted): {', '.join(r['skipped'])}." if r["skipped"] else "")
+                             + " Firewall, DNS and certificate tests aren't in web logs.")
+        return 200, logfeed.view(p)
     if path == "/api/devlink":   # linked pilot devices (devlink.py): the listener, the link command, the devices
         from . import devlink
         p = current()

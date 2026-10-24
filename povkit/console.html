@@ -1411,7 +1411,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
   try{DTP=await api("/api/devtests",{policy:true})}catch(_){DTP={switches:[],switched:false}}
   const all=DT.criteria.flatMap(x=>x.tests);
   try{DTL=await api("/api/devlink",{})}catch(_){DTL={on:false,devices:[]}}
-  w.innerHTML=`<div class="seg" id="dtsub" style="align-self:flex-start">${[["runner","Test runner"],["demos","Guided demos"],["policy","Policy"],["helpers","Demo helpers"]].map(([k,t])=>`<button data-s="${k}" class="${DTTAB==k?"on":""}">${t}</button>`).join("")}</div>
+  w.innerHTML=`<div class="seg" id="dtsub" style="align-self:flex-start">${[["runner","Test runner"],["demos","Guided demos"],["policy","Policy"],["logs","Tenant logs"],["helpers","Demo helpers"]].map(([k,t])=>`<button data-s="${k}" class="${DTTAB==k?"on":""}">${t}</button>`).join("")}</div>
   <div class="panel" style="padding:12px 16px"><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><b>Run on</b><select id="dtwhere" style="min-width:260px"></select><button id="dtlinkbtn">Link a device…</button><span class="muted" id="dtwherenote" style="font-size:13px"></span></div>
     <div id="dtlink" style="display:none;margin-top:12px"></div></div>
   <div id="dtbanner"></div>
@@ -1419,6 +1419,9 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     <p class="muted" style="margin:4px 0 10px">Switch what a POV rule does, in front of the customer, then run its test again: the page the user sees changes. Only the POV’s own rules (pilot group only) change, then ZIA activates; allow about a minute for it to reach the cloud. While anything is switched, test results aren’t recorded as evidence. • marks the planned action.</p>
     <div id="dtpolicy"></div>
     <div class="row" style="gap:8px;margin-top:12px"><button id="dtputback">Put everything back as planned</button></div><div id="dtpolmsg"></div></div></div>
+  <div class="dtview" data-v="logs"><div class="panel"><h2>Tenant logs, live</h2>
+    <p class="muted" style="margin:4px 0 10px">For when a device can’t be linked: the device runs its tests on its own, and ZIA streams the pilot users’ web logs here (Cloud NSS), a minute or two behind. Each line is matched to the POV’s device tests; a run the logs saw in full can count as evidence. Firewall, DNS and certificate tests aren’t in web logs.</p>
+    <div id="dtlf"><div class="empty">Loading…</div></div></div></div>
   <div class="dtview" data-v="helpers"><div id="dthelp"><div class="empty">Loading…</div></div></div>
   <div class="dtview" data-v="runner" style="display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:16px;align-items:start">
     <div class="panel"><h2>Tests</h2>
@@ -1437,7 +1440,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       <p style="margin:6px 0"><b>Say first:</b> ${esc(st.say)}</p><p style="margin:6px 0"><b>Point at:</b> ${esc(st.point)}</p><p style="margin:6px 0"><b>Then:</b> ${esc(st.after)}</p>
       <div class="row" style="gap:8px;margin-top:8px"><button class="primary dtshow" data-id="${esc(st.id)}" title="Step by step: each test’s page opens in this computer’s browser for the room, then the test runs">Show it (${st.tests.length} step${st.tests.length==1?"":"s"})</button><button class="dtstory" data-id="${esc(st.id)}">Just run the tests</button></div><div class="dtsout" data-id="${esc(st.id)}"></div></div>`).join("")||'<div class="empty">No device tests in this POV’s criteria.</div>'}</div></div>`;
   const show=()=>{$$(".dtview").forEach(v=>v.style.display=v.dataset.v==DTTAB?(v.dataset.v=="runner"?"grid":""):"none");$$("#dtsub button").forEach(b=>b.classList.toggle("on",b.dataset.s==DTTAB))};
-  $$("#dtsub button").forEach(b=>b.onclick=()=>{DTTAB=b.dataset.s;show();if(DTTAB=="helpers")drawHelpers()});show();if(DTTAB=="helpers")drawHelpers();
+  $$("#dtsub button").forEach(b=>b.onclick=()=>{DTTAB=b.dataset.s;show();if(DTTAB=="helpers")drawHelpers();if(DTTAB=="logs")drawTenantLogs()});show();if(DTTAB=="helpers")drawHelpers();if(DTTAB=="logs")setTimeout(()=>drawTenantLogs(),0);
   const count=()=>{const n=[...DTsel].filter(id=>all.some(t=>t.id==id)).length;$("#dtrun").textContent=`Run ${n} test${n==1?"":"s"}`;$("#dtshowall").textContent=`Show ${n==1?"it":"them"}, step by step`};
   const drawLib=()=>{$("#dtlib").innerHTML=DT.criteria.map(g=>`<div style="margin:10px 0"><label class="chk" style="font-weight:600"><input type="checkbox" class="dtgrp" data-c="${esc(g.criterion)}" ${g.tests.every(t=>DTsel.has(t.id))?"checked":""}> <code>${esc(g.criterion)}</code> ${esc(g.title)}</label>
       ${g.tests.map(t=>`<label class="agtest" style="margin-left:22px"><input type="checkbox" class="dtt" data-t="${esc(t.id)}" ${DTsel.has(t.id)?"checked":""}><span>${esc(t.text)}</span></label>`).join("")}</div>`).join("");
@@ -1558,6 +1561,31 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     catch(e){out.innerHTML=note(e.message,"bad")}finally{b.disabled=false}});
 }
 
+let DTLF=null,DTLFtimer=null;
+async function drawTenantLogs(msg){const el=$("#dtlf");if(!el)return;
+  try{DTLF=await api("/api/logfeed",{})}catch(e){el.innerHTML=note(e.message,"bad");return}
+  const F=DTLF,f=F.feed||{};
+  const modes=[["off","Off"],["console","To this console"],["siem","To the customer’s SIEM"]];
+  el.innerHTML=`<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><b>Log feed</b><div class="seg" id="lfmode">${modes.map(([k,t])=>`<button data-m="${k}" class="${F.mode==k?"on":""}">${t}</button>`).join("")}</div></div>
+    <div id="lfsiem" style="display:none;margin-top:10px;max-width:640px"><div class="hint">A Splunk HTTP Event Collector address and token (or any SIEM that takes Splunk HEC). The console doesn’t see these logs.</div>
+      <input type="text" id="lfurl" placeholder="https://splunk.acme.com:8088/services/collector" style="width:100%;margin:6px 0"><input type="password" id="lftok" autocomplete="off" placeholder="HEC token (goes to this computer’s keychain)" style="width:100%"><button class="primary" id="lfsave" style="margin-top:6px">Save</button></div>
+    ${F.mode=="console"?`<div style="margin-top:10px">${f.applied?'<span class="badge b-ok">feed applied</span>':'<span class="badge b-warn">not applied yet</span> <span class="muted" style="font-size:13px">Make the change list again (Setup › Change list), get it approved, Apply.</span>'}
+      ${f.tunnel?` <span class="muted" style="font-size:13px">tunnel ${esc(f.tunnel)}</span>`:` <span class="badge b-warn">tunnel off</span> <button id="lftun">Start the tunnel</button>`}
+      ${f.applied?` <button id="lfupd" title="The tunnel’s address changes when the console restarts: point the POV’s feed at the current one">Update the feed address</button>`:""}
+      <span class="muted" style="font-size:13px"> · ${F.count} line${F.count==1?"":"s"} received${F.last!=null?`, last ${F.last}s ago`:""}</span></div>`:""}
+    <div id="lfmsg">${msg||""}</div>
+    ${F.mode=="console"?`<div class="lbl" style="margin-top:14px">Device runs seen in the logs</div>
+      ${(F.runs||[]).length?`<table style="width:100%;font-size:13px"><tr><th style="text-align:left">Run</th><th style="text-align:left">User</th><th style="text-align:left">Last line</th><th style="text-align:left">Web tests seen</th><th></th></tr>${F.runs.map(r=>`<tr><td><code>${esc(r.run)}</code></td><td>${esc(r.user)}</td><td>${esc(r.at)}</td><td>${r.seen} of ${r.web_tests} · ${r.ok} as expected</td><td><button class="lfrec" data-r="${esc(r.run)}">Count as evidence</button></td></tr>`).join("")}</table>`:'<div class="empty">None yet: run the tests on the device (its command is in Setup › Finish setup › Set up a pilot device).</div>'}
+      <div class="lbl" style="margin-top:14px">What Zscaler just saw (the pilot users, newest first)</div>
+      ${(F.events||[]).length?`<table style="width:100%;font-size:12px"><tr><th style="text-align:left">Received</th><th style="text-align:left">User</th><th style="text-align:left">Action</th><th style="text-align:left">Category</th><th style="text-align:left">Site</th><th style="text-align:left">Device test</th></tr>${F.events.slice(0,80).map(e=>`<tr><td>${esc(e.at)}</td><td>${esc(e.user)}</td><td><span class="badge b-${e.outcome=="allow"?"ok":"warn"}">${esc(e.outcome)}</span> <span class="muted">${esc(e.reason)}</span></td><td>${esc(e.category)}</td><td title="${esc(e.url)}">${esc(e.host||e.url)}${e.threat?` · ${esc(e.threat)}`:""}${e.dlp?` · DLP ${esc(e.dlp)}`:""}</td><td>${e.test?`<code>${esc(e.test.criterion)}</code> <span class="badge b-${e.test.pass?"ok":"warn"}">${e.test.pass?"as expected":"expected "+esc(e.test.expect)}</span>`:'<span class="muted">—</span>'}</td></tr>`).join("")}</table>`:'<div class="empty">No log lines yet.</div>'}`:""}`;
+  const sm=$("#lfsiem");if(F.mode=="siem")sm.style.display="";
+  $$("#lfmode button").forEach(b=>b.onclick=async()=>{if(b.dataset.m=="siem"){sm.style.display="";return}
+    try{const r=await api("/api/logfeed",{mode:b.dataset.m});drawTenantLogs(note(r.message,"good"))}catch(x){$("#lfmsg").innerHTML=note(x.message,"bad")}});
+  $("#lfsave").onclick=async()=>{try{const r=await api("/api/logfeed",{mode:"siem",siem_url:$("#lfurl").value,siem_token:$("#lftok").value});$("#lftok").value="";drawTenantLogs(note(r.message,"good"))}catch(x){$("#lfmsg").innerHTML=note(x.message,"bad")}};
+  $("#lftun")&&($("#lftun").onclick=async e=>{e.target.disabled=true;$("#lfmsg").innerHTML='<div class="notice">Starting the Cloudflare tunnel (up to 25 seconds)…</div>';try{await api("/api/devlink",{start:true,tunnel:true});drawTenantLogs()}catch(x){$("#lfmsg").innerHTML=note(x.message,"bad");e.target.disabled=false}});
+  $("#lfupd")&&($("#lfupd").onclick=async e=>{e.target.disabled=true;try{const r=await api("/api/logfeed",{update:true});drawTenantLogs(note(r.message,"good"))}catch(x){$("#lfmsg").innerHTML=note(x.message,"bad");e.target.disabled=false}});
+  $$(".lfrec").forEach(b=>b.onclick=async()=>{b.disabled=true;try{const r=await api("/api/logfeed",{record:b.dataset.r});drawTenantLogs(note(r.message,"good"));load()}catch(x){$("#lfmsg").innerHTML=note(x.message,"bad");b.disabled=false}});
+  clearInterval(DTLFtimer);if(F.mode=="console")DTLFtimer=setTimeout(()=>{if(tab()=="devtests"&&DTTAB=="logs"&&$("#dtlf")&&!document.activeElement.closest("#dtlf input"))drawTenantLogs($("#lfmsg")&&$("#lfmsg").innerHTML)},5000)}
 async function drawHelpers(){const el=$("#dthelp");let h;try{h=await api("/api/devtests",{helpers:true})}catch(e){el.innerHTML=note(e.message,"bad");return}
   const st=s=>`<span class="badge b-${s=="pass"?"ok":s=="fail"?"fail":"warn"}">${s=="pass"?"proved":s=="fail"?"not proved":"not yet"}</span>`;
   el.innerHTML=(h.traffic?`<div class="panel" style="margin-bottom:16px"><h2>Warm up the dashboards</h2>

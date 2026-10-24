@@ -91,6 +91,29 @@ class FakeTenant:
             if method == "status":
                 return {"status": self.activation}
             return {"status": "ACTIVE"}
+        if resource == "cloud_nss":   # Cloud NSS feeds (the log feed)
+            feeds = self.__dict__.setdefault("nss_feeds", {})
+            if not getattr(self, "nss", True):
+                raise KitError("403 Cloud NSS not subscribed")
+            if method == "list_feed_output":
+                return {"WEBLOG": '\\{ "sourcetype" : "zscalernss-web", "event" : \\{"user":"%s{elogin}"\\}\\}'}
+            if method == "list_nss_feed":
+                return copy.deepcopy(list(feeds.values()))
+            if method == "add_nss_feed":
+                o = dict(kw, id=self._id())
+                feeds[o["id"]] = o
+                return copy.deepcopy(o)
+            fid = int(a[0])
+            if fid not in feeds:
+                raise KitError("404 not found")
+            if method == "get_nss_feed":
+                return copy.deepcopy(feeds[fid])
+            if method == "update_nss_feed":
+                feeds[fid] = dict(kw, id=fid)
+                return copy.deepcopy(feeds[fid])
+            if method == "delete_feed":
+                del feeds[fid]
+                return 204
         if resource == "authentication_settings":
             return {"orgAuthType": "SAFECHANNEL_DIR", "samlEnabled": self.saml}
         if resource == "zid.users":

@@ -65,7 +65,13 @@ def sweep(t, pov_id, prefix, product_names, cac_types=None):
         for kind, k in zia.KINDS.items():
             types_ = (cac_types or CAC_TYPES) if k.get("typed") else [None]
             for rt in types_:
-                rows = safe(f"ZIA {k['title']}" + (f" {rt}" if rt else ""), lambda kind=kind, rt=rt: zia.list_kind(t, kind, rt, prefix))
+                if k.get("optional"):   # a tenant without it (Cloud NSS) just has none of the POV's
+                    try:
+                        rows = zia.list_kind(t, kind, rt, prefix)
+                    except Exception:   # noqa: BLE001
+                        rows = []
+                else:
+                    rows = safe(f"ZIA {k['title']}" + (f" {rt}" if rt else ""), lambda kind=kind, rt=rt: zia.list_kind(t, kind, rt, prefix))
                 finds += _sort(pov_id, prefix, "zia", kind, rows, rt, zia.obj_name)
     if "zpa" in product_names:
         for kind, (res, meth) in zpa.LISTS.items():
