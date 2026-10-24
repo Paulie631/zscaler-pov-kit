@@ -49,6 +49,10 @@ def entry_name(pov):
     return f"zscaler-pov-{pov.id}"
 
 
+def actions_entry_name(pov):
+    return f"zscaler-pov-{pov.id}-actions"
+
+
 def desktop_config() -> Path:
     sysname = platform.system()
     if sysname == "Darwin":
@@ -174,6 +178,38 @@ def _write(path, cfg):
     tmp.replace(path)
 
 
+def actions_snippet(pov):
+    """The changes connector (mcp_actions): the kit's own actions, through the change list. No secret in it."""
+    return {actions_entry_name(pov): {"command": str(launcher()), "args": ["--pov", pov.id, "mcp", "actions"]}}
+
+
+def install_actions(pov, path=None):
+    from . import mcp_actions
+    mcp_actions.ready(pov)
+    path = Path(path) if path else desktop_config()
+    cfg = _read(path)
+    cfg.setdefault("mcpServers", {}).update(actions_snippet(pov))
+    _write(path, cfg)
+    pov.cfg.setdefault("mcp", {})["actions_installed"] = str(path)
+    pov.save()
+    pov.log("mcp", f"Claude Desktop entry {actions_entry_name(pov)} added (changes through the change list)")
+    return path
+
+
+def remove_actions(pov, path=None):
+    path = Path(path) if path else Path((pov.cfg.get("mcp") or {}).get("actions_installed") or desktop_config())
+    cfg = _read(path)
+    servers = cfg.get("mcpServers") or {}
+    if actions_entry_name(pov) not in servers:
+        return False
+    del servers[actions_entry_name(pov)]
+    _write(path, cfg)
+    (pov.cfg.get("mcp") or {}).pop("actions_installed", None)
+    pov.save()
+    pov.log("mcp", f"Claude Desktop entry {actions_entry_name(pov)} removed")
+    return True
+
+
 def install(pov, path=None):
     server_env(pov)   # refuses without the customer's agreement and a saved client
     path = Path(path) if path else desktop_config()
@@ -187,6 +223,11 @@ def install(pov, path=None):
 
 
 def remove(pov, path=None):
+    """Removes the read-only entry, and the changes entry with it (it needs the read-only agreement anyway)."""
+    try:
+        remove_actions(pov, path)
+    except KitError:
+        pass
     path = Path(path) if path else Path((pov.cfg.get("mcp") or {}).get("installed") or desktop_config())
     cfg = _read(path)
     servers = cfg.get("mcpServers") or {}
@@ -249,5 +290,7 @@ def status(pov):
                   "Optional: Next steps > Ask Claude about this tenant (record the customer's agreement, then Add to "
                   "Claude Desktop).")
     s, why = slot(pov)
-    return mk("mcp", "Claude Desktop read-only access", OK if s != "main" else WARN, f"{entry_name(pov)}, using {why}",
+    acts = (pov.cfg.get("mcp") or {}).get("actions_installed")
+    return mk("mcp", "Claude Desktop read-only access", OK if s != "main" else WARN, f"{entry_name(pov)}, using {why}"
+              + (f"; changes through the change list too ({actions_entry_name(pov)})" if acts else ""),
               "" if s != "main" else "Ask the customer for a view-only client for it: `pov-kit connect --mcp`.")

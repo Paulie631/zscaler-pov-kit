@@ -263,7 +263,8 @@
   "fix": [
    "Ask the customer: Claude Desktop sends what it reads to Anthropic, not through AI Guard, with names as they are. Record who agreed (name and title).",
    "Best practice: ask the customer for a separate view-only API client for it (`pov-kit connect --mcp`), so it never uses the POV's write access.",
-   "Add to Claude Desktop, then quit and reopen Claude Desktop."
+   "Add to Claude Desktop, then quit and reopen Claude Desktop.",
+   "Optional, with a second agreement from the customer: Let Claude make changes adds a second connector. Claude Desktop can then propose changes (they join the change list for the customer to approve; you Apply), switch the POV's AI Guard policy, run tests and proofs, and Fix drift on the POV's own objects."
   ],
   "retest": "Status > Check now.",
   "action": "mcp"

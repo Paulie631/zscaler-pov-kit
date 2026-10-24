@@ -380,6 +380,17 @@ Any step can be revisited after Quick start.
   review and approve the new change list.
 - **Ask Claude about the tenant:** with the customer's agreement, **Next steps → Ask Claude about this tenant → Add to
   Claude Desktop**. It is read-only: Claude can answer "why was Jane blocked?" but can't change anything.
+- **Let Claude make changes:** with a second agreement from the customer, the same card adds a **changes connector**
+  that the kit runs (`pov-kit mcp actions`). Claude Desktop can then:
+  - **propose a change** ("marketing can use ChatGPT but not upload files"): the kit checks every value against the
+    tenant, names and scopes each object to the pilot group, and adds it to the change list. The customer approves
+    the new change list and you click **Apply** in the console; Claude can't apply;
+  - switch the POV's AI Guard policy, run the AI Guard tests (results count as evidence) and the API proofs, check
+    status and **Fix drift** on the POV's own objects, and check the steps for people.
+
+  It never uses Zscaler's write tools and never writes to the tenant directly, so every change is approved, recorded
+  and removed at the end like the rest of the POV. Each action shows in Logs as done by Claude Desktop. Removing the
+  read-only entry removes the changes connector too.
 
 ## Part 6: Closing
 

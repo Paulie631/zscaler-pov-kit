@@ -329,7 +329,7 @@ document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.c
   const box=b.closest(".body"),msg=t=>{const m=box&&box.querySelector(".hactmsg");if(m)m.innerHTML=t};
   try{const a=b.dataset.a;
     if(a=="backup-setup"){b.disabled=true;await api("/api/backup",{folder:box.querySelector(".hdir").value,passphrase:box.querySelector(".hpw").value});await load();msg(note("Backups are on: every POV on this laptop was backed up, and will be after every change. Save the passphrase in your password manager.","good"))}
-    else if(a=="backup-now"){b.disabled=true;const r=await api("/api/backup",{now:true});msg(note("Backed up to "+esc(r.file)+".","good"))}
+    else if(a=="backup-now"){b.disabled=true;const r=await api("/api/backup",{now:true});msg(note("Backed up to "+r.file+".","good"))}
     else if(a=="mcp"){W.step=8;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
     else if(a=="approve"){W.step=4;W.plan=null;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
     else if(a=="fixdrift"){b.disabled=true;msg('<div class="notice">Fixing the POV\'s own objects…</div>');const checks=await runJob((await api("/api/status",{fix:true})).job,document.createElement("div"));
@@ -698,18 +698,22 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
           <div class="row" style="gap:8px;margin-top:8px"><button id="ntraws">AWS generator template</button><span class="hint">A Windows instance in the customer's (or your) AWS account, for the pilot user above: CloudFormation, no inbound ports, a weekday schedule. Sign in to Client Connector once over Fleet Manager.</span></div><div id="ntrmsg"></div></div>`:""}
         ${has("zpa")?`<div class="card"><h4>ZPA App Connectors</h4><p class="muted" style="margin:4px 0 10px">A template for two connectors in the customer's AWS account or Azure subscription, plus the provisioning key to paste into it.</p><div class="row"><button id="ntpl" ${c.zpa_key?"":"disabled"}>AWS template</button><button id="ntplaz" ${c.zpa_key?"":"disabled"}>Azure template</button><button id="nkey" ${c.zpa_key?"":"disabled"}>Show the provisioning key</button><button id="ncs" ${c.zpa_key?"":"disabled"}>CloudShare commands</button></div><div id="nkeyv"></div></div>`:""}
         ${has("aiguard")?`<div class="card"><h4>AI Guard policy</h4><p class="muted" style="margin:4px 0 10px">What the POV's own policy blocks. Takes about 30 seconds to apply.</p><div class="seg" id="nag"><button data-p="monitor">Monitor</button><button data-p="attacks">Block attacks</button><button data-p="data">+ data leakage</button></div><div id="nagmsg" class="hint"></div></div>`:""}
-        <div class="card"><h4>Ask Claude about this tenant</h4><p class="muted" style="margin:4px 0 8px">Read-only access for Claude Desktop through Zscaler's MCP server: "why was Jane blocked?", "what did the pilot group use today?". Writes stay with the change list. Requests go from Claude Desktop to Anthropic, not through AI Guard, with names as they are.</p>
+        <div class="card"><h4>Ask Claude about this tenant</h4><p class="muted" style="margin:4px 0 8px">Read-only access for Claude Desktop through Zscaler's MCP server: "why was Jane blocked?", "what did the pilot group use today?". Changes, if the customer agrees, go through the change list (below). Requests go from Claude Desktop to Anthropic, not through AI Guard, with names as they are.</p>
           ${c.mcp.consent?note(`${c.mcp.consent.by} agreed on ${c.mcp.consent.at.slice(0,10)}.`,"good"):`<div class="row" style="gap:8px"><input type="text" id="nmcpby" placeholder="Who agreed (name, title)" style="flex:1"><button id="nmcpok">Record agreement</button></div>`}
-          ${c.mcp.consent?(c.mcp.installed?`<p style="margin:6px 0">${note("In Claude Desktop as "+c.mcp.entry+" (using "+c.mcp.uses+"). Quit and reopen Claude Desktop to load it.","good")}</p><button id="nmcprm">Remove from Claude Desktop</button>`:`<div class="row" style="margin-top:6px"><button id="nmcpin">Add to Claude Desktop</button><button id="nmcpcfg">Copy config for another client</button></div>`):""}<div id="nmcpmsg"></div></div>
+          ${c.mcp.consent?(c.mcp.installed?`<p style="margin:6px 0">${note("In Claude Desktop as "+c.mcp.entry+" (using "+c.mcp.uses+"). Quit and reopen Claude Desktop to load it.","good")}</p><button id="nmcprm">Remove from Claude Desktop</button>`:`<div class="row" style="margin-top:6px"><button id="nmcpin">Add to Claude Desktop</button><button id="nmcpcfg">Copy config for another client</button></div>`):""}
+          ${c.mcp.consent&&c.mcp.installed?`<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px"><b>Let Claude make changes</b> <span class="muted">(through the change list)</span>
+            <p class="muted" style="margin:4px 0 8px">A second connector, run by the kit: Claude Desktop can propose changes (each checked against the tenant, scoped to the pilot group and added to the change list for the customer to approve; you click Apply here), switch the POV's AI Guard policy, run AI Guard tests and API proofs, check status and Fix drift on the POV's own objects, and check the steps for people. It can't apply, and it never writes to the tenant directly.</p>
+            ${c.mcp.actions_consent?note(`${c.mcp.actions_consent.by} agreed to changes through the change list on ${c.mcp.actions_consent.at.slice(0,10)}.`,"good"):`<div class="row" style="gap:8px"><input type="text" id="nactby" placeholder="Who at the customer agreed (name, title)" style="flex:1"><button id="nactok">Record agreement</button></div>`}
+            ${c.mcp.actions_consent?(c.mcp.actions_installed?`${note("In Claude Desktop as "+c.mcp.actions_entry+". Quit and reopen Claude Desktop to load it.","good")}<button id="nactrm">Remove the changes connector</button>`:`<button id="nactin" style="margin-top:6px">Add the changes connector to Claude Desktop</button>`):""}</div>`:""}<div id="nmcpmsg"></div></div>
         ${users.length?`<div class="card"><h4>Test users</h4>${users.map(u=>`<div class="row" style="gap:8px;margin:4px 0"><code>${esc(u.email)}</code><button data-n="${esc(u.n)}" class="nuser">Show password</button></div><div id="nuser${esc(u.n)}"></div>`).join("")}</div>`:""}
       </div>`+nav(true,true,"Go to Success criteria ›");
     bindNav(()=>{$$("#tabs button").find(b=>b.dataset.t=="criteria").click()});
     bindManual(()=>wizard());
     bindDevice(dev,()=>wizard());
     $("#ntrcs")&&($("#ntrcs").onclick=async()=>{try{const r=await api("/api/traffic/cloudshare",{});download(r.name,r.text,"text/plain");
-      $("#ntrmsg").innerHTML=note(`Saved ${esc(r.name)}. Copy it to the CloudShare Windows pilot and, once Client Connector is signed in as a pilot user, run in PowerShell: powershell -ExecutionPolicy Bypass -File .\\${esc(r.name)}. Traffic then runs every 30 minutes while the pilot user is signed in to Windows. After the criteria change, download it again and re-run it.`,"good")}catch(e){$("#ntrmsg").innerHTML=note(e.message,"bad")}});
+      $("#ntrmsg").innerHTML=note(`Saved ${r.name}. Copy it to the CloudShare Windows pilot and, once Client Connector is signed in as a pilot user, run in PowerShell: powershell -ExecutionPolicy Bypass -File .\\${r.name}. Traffic then runs every 30 minutes while the pilot user is signed in to Windows. After the criteria change, download it again and re-run it.`,"good")}catch(e){$("#ntrmsg").innerHTML=note(e.message,"bad")}});
     $("#ntraws")&&($("#ntraws").onclick=async()=>{try{const r=await api("/api/traffic/aws",{email:($("#duser")||{}).value||""});download(r.name,JSON.stringify(r.template,null,2),"application/json");
-      $("#ntrmsg").innerHTML=note(`Saved ${r.name} for ${esc(r.template.Parameters.PilotUser.Default)}. AWS console → CloudFormation → Create stack → Upload a template file. The stack's Outputs say how to connect; delete the stack to remove everything.`,"good")}catch(e){$("#ntrmsg").innerHTML=note(e.message,"bad")}});
+      $("#ntrmsg").innerHTML=note(`Saved ${r.name} for ${r.template.Parameters.PilotUser.Default}. AWS console → CloudFormation → Create stack → Upload a template file. The stack's Outputs say how to connect; delete the stack to remove everything.`,"good")}catch(e){$("#ntrmsg").innerHTML=note(e.message,"bad")}});
     api("/api/probe/status").then(ps=>{$("#npstat")&&($("#npstat").innerHTML=probeStatusHTML(ps))}).catch(()=>{});
     $("#npack").onclick=async()=>download(`pov-probe-pack-${c.id}.json`,JSON.stringify(await api("/api/probe-pack",{}),null,2),"application/json");
     $("#ntpl")&&($("#ntpl").onclick=async()=>download(`pov-${c.id}-app-connectors.json`,JSON.stringify((await api("/api/zpa-template",{})).template,null,2),"application/json"));
@@ -727,6 +731,9 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
     $("#nmcpin")&&($("#nmcpin").onclick=()=>mcpGo({what:"install"}));
     $("#nmcprm")&&($("#nmcprm").onclick=()=>mcpGo({what:"remove"}));
     $("#nmcpcfg")&&($("#nmcpcfg").onclick=()=>mcpGo({what:"config"}));
+    $("#nactok")&&($("#nactok").onclick=()=>mcpGo({what:"actions_consent",by:$("#nactby").value}));
+    $("#nactin")&&($("#nactin").onclick=()=>mcpGo({what:"actions_install"}));
+    $("#nactrm")&&($("#nactrm").onclick=()=>mcpGo({what:"actions_remove"}));
     $$(".nuser").forEach(b=>b.onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:b.dataset.n})).value;$("#nuser"+b.dataset.n).innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span>`});
     $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});
   }
@@ -1013,7 +1020,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
       let got=0,first=true;
       for(;;){const j=await api(`/api/job?id=${jid}&isince=${got}&since=99999`);got+=j.items.length;AGR.results.push(...j.items);
         if(j.total)$("#agbar").style.width=Math.round(100*got/j.total)+"%";if(j.items.length)drawRows();
-        if(first&&j.items[0]&&j.items[0].status=="error"){$("#agrunmsg").innerHTML=note("First test failed: "+esc(j.items[0].error),"bad")}if(j.items.length)first=false;
+        if(first&&j.items[0]&&j.items[0].status=="error"){$("#agrunmsg").innerHTML=note("First test failed: "+j.items[0].error,"bad")}if(j.items.length)first=false;
         if(j.stopping)$("#agstop").textContent="Stopping…";
         if(j.done){if(j.error)throw new Error(j.error);const r=j.result;AGR.job=null;
           if(r.evidence&&Object.keys(r.evidence).length)Object.assign(AG.evidence,r.evidence);drawEv();
@@ -1156,7 +1163,7 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
         ${UC.consent?note(`${UC.consent.by} agreed on ${UC.consent.at.slice(0,10)}${UC.consent.share=="full"?" (full snapshot":" (names replaced"}, ${(UC.consent.route||"aiguard")=="direct"?"directly to Anthropic":"through AI Guard"}).`,"good"):`<p class="muted" style="margin:6px 0">Claude reads ${UC.share=="full"?"the full discovery snapshot":"the discovery snapshot, with names replaced,"} of ${esc(c.customer)}'s tenant. It travels ${RT[UC.route||"aiguard"]}. Ask the customer before the first use.</p>
         <div class="row" style="gap:8px"><input type="text" id="ucby" placeholder="Name, title" style="flex:1"><button id="ucagree">Record agreement</button></div>`}</div>
       <div style="flex:1;min-width:280px"><b>How the kit reaches Claude</b>
-        ${UC.key?note("Using "+esc(UC.key_source)+". Model: "+esc(UC.model)+".","good"):`<p class="muted" style="margin:6px 0">${esc(UC.key_source)}</p>`}
+        ${UC.key?note("Using "+UC.key_source+". Model: "+UC.model+".","good"):`<p class="muted" style="margin:6px 0">${esc(UC.key_source)}</p>`}
         ${UC.proxy?"":`<div class="hint" style="margin:6px 0 2px">AI Guard app proxy key (preferred: AI Guard scans every request and reply)</div>
         <div class="row" style="gap:8px"><input type="password" id="uckey" placeholder="AI Guard app proxy key" style="flex:1" autocomplete="new-password"><button id="ucsavekey">Save</button></div>
         ${UC.direct?`<div class="row" style="gap:8px;margin-top:8px"><span class="hint">Your Anthropic API key is saved (used while there's no AI Guard key).</span><button id="ucrmdirect">Remove it</button></div>`:`<div class="hint" style="margin:10px 0 2px">No AI Guard tenant? Your own Anthropic API key instead (sent directly to Anthropic, not scanned)</div>

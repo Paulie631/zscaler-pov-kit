@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.33
+
+- **Claude Desktop can make changes, through the change list.** A second Claude Desktop connector, run by the kit,
+  with its own customer agreement (Next steps → Ask Claude about this tenant → Let Claude make changes):
+  - **Propose a change:** the kit checks it against the tenant, scopes it to the pilot group and adds it to the change
+    list. The customer approves and you Apply in the console; Claude can't apply.
+  - **Act on what's already approved:** switch the POV's AI Guard policy, run AI Guard tests (they count as
+    evidence) and API proofs, check status, Fix drift on the POV's own objects, and check the steps for people.
+  - It never uses Zscaler's write tools. Each action is logged as Claude Desktop's.
+- Fixed: **Ask Claude** on the Use cases tab failed with "NameError: cannot access free variable 'ai'" (since
+  0.9.24). Mapping criteria and drafting the report summary had the same problem.
+- Fixed: messages showed `&#39;` and similar where names had apostrophes.
+
 ## 0.9.32
 
 - **The AI Guard tab, rebuilt like the SE demo kit's test runner,** with four parts: Test runner, Guided demos, Policy,

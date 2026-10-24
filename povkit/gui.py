@@ -16,7 +16,7 @@ import time
 import uuid
 from pathlib import Path
 
-from . import VERSION, evidence, handover, installer, lifecycle, mcp, products, remind, rolespec, settings, updater
+from . import VERSION, ai, evidence, handover, installer, lifecycle, mcp, products, remind, rolespec, settings, updater
 from .core import KitError, pov as povs, secrets
 from .core.changelist import ChangeList
 from .core.checks import exit_code
@@ -75,7 +75,10 @@ def pov_state(p):
             "aiguard": {"live": bool(led.find("aiguard.policy")),
                         "profile": (p.cfg.get("aiguard") or {}).get("profile") or "monitor"},
             "mcp": {"consent": mcp.consent(p), "installed": (p.cfg.get("mcp") or {}).get("installed"),
-                    "uses": mcp.slot(p)[1], "entry": mcp.entry_name(p)}}
+                    "uses": mcp.slot(p)[1], "entry": mcp.entry_name(p),
+                    "actions_consent": (p.cfg.get("mcp") or {}).get("actions_consent"),
+                    "actions_installed": (p.cfg.get("mcp") or {}).get("actions_installed"),
+                    "actions_entry": mcp.actions_entry_name(p)}}
 
 
 def state():
@@ -274,7 +277,7 @@ def api(method, path, body, q):
             lines = f.read_text(encoding="utf-8").splitlines()[-500:] if f.exists() else []
             return 200, {"lines": [json.loads(x) for x in lines if x.strip()][::-1]}
         if path == "/api/usecases":
-            from . import ai, usecases
+            from . import usecases
             p = current()
             via, key, where = ai.route()
             from . import library
@@ -474,6 +477,13 @@ def api(method, path, body, q):
             mcp.record_consent(p, body.get("by"))
         elif what == "install":
             return 200, {"path": str(mcp.install(p))}
+        elif what == "actions_consent":
+            from . import mcp_actions
+            mcp_actions.record_actions_consent(p, body.get("by"))
+        elif what == "actions_install":
+            return 200, {"path": str(mcp.install_actions(p))}
+        elif what == "actions_remove":
+            return 200, {"removed": mcp.remove_actions(p)}
         elif what == "remove":
             return 200, {"removed": mcp.remove(p)}
         elif what == "config":
@@ -563,7 +573,7 @@ def api(method, path, body, q):
             text = body.get("text") or ""
         return 200, {"items": criteria_import.split(text)}
     if path == "/api/criteria/map":
-        from . import ai, criteria_import
+        from . import criteria_import
         p = current()
         items = [str(x).strip()[:600] for x in body.get("items") or [] if str(x).strip()][:criteria_import.MAX_ROWS]
 
@@ -729,11 +739,9 @@ def api(method, path, body, q):
             return 200, {"value": secrets.get(p.id, f"zia-test-user-{int(body['n'])}")}
         return 400, {"error": "unknown secret"}
     if path == "/api/ai/consent":
-        from . import ai
         ai.record_consent(current(), body.get("by"))
         return 200, {"ok": True}
     if path == "/api/ai/key":
-        from . import ai
         k = (body.get("key") or "").strip()
         if body.get("direct"):
             if body.get("remove"):
@@ -764,7 +772,6 @@ def api(method, path, body, q):
             return {k: v for k, v in uc.items() if k != "raw"}
         return 200, {"job": start_job("usecase", work)}
     if path == "/api/ai/share":
-        from . import ai
         settings.set_value(current(), "ai.share", body.get("share"))
         return 200, {"share": ai.share(current()), "consent": ai.consent(current())}
     if path == "/api/usecase/refine":

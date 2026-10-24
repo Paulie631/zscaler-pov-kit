@@ -566,6 +566,22 @@ def c_mcp(a):
     p = _pov(a)
     if a.what == "serve":
         return mcp.serve(p)
+    if a.what == "actions":
+        from . import mcp_actions
+        return mcp_actions.serve(p)
+    if a.what == "actions-consent":
+        from . import mcp_actions
+        if not a.by:
+            raise KitError("Say who agreed: `pov-kit mcp actions-consent --by \"Name, title\"`.")
+        mcp_actions.record_actions_consent(p, a.by)
+        print(f"Recorded: {a.by} agreed that Claude Desktop may propose changes (through the change list) and run "
+              "POV actions.")
+        return 0
+    if a.what == "actions-install":
+        path = mcp.install_actions(p, a.config)
+        print(f"Added '{mcp.actions_entry_name(p)}' to {path}. Quit and reopen Claude Desktop. Its changes go to the "
+              "change list; the customer approves and you Apply in the console.")
+        return 0
     if a.what == "consent":
         if not a.by:
             raise KitError("Say who agreed: `pov-kit mcp consent --by \"Name, title\"`.")
@@ -776,8 +792,10 @@ def parser():
     s.add_argument("--out")
     s = cmd("selftest", c_selftest, "in your lab tenant: read every product; create, read back and delete one object in ZIA, ZPA and AI Guard")
     s.add_argument("--lab", action="store_true")
-    s = cmd("mcp", c_mcp, "mcp consent|install|remove|config|status|serve: Claude Desktop's read-only access to the tenant")
-    s.add_argument("what", choices=["consent", "install", "remove", "config", "status", "serve"])
+    s = cmd("mcp", c_mcp, "mcp consent|install|remove|config|status|serve: Claude Desktop's read-only access; "
+            "actions-consent|actions-install|actions: changes through the change list")
+    s.add_argument("what", choices=["consent", "install", "remove", "config", "status", "serve", "actions-consent",
+                                    "actions-install", "actions"])
     s.add_argument("--by")
     s.add_argument("--config", help="a Claude Desktop config file other than the default")
     cmd("version", c_version, "print the version")

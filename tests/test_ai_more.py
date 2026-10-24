@@ -141,3 +141,9 @@ def test_console_saves_a_direct_key(pov, monkeypatch):
     assert r["route"] == "direct" and r["direct"] and not r["proxy"]
     gui.api("POST", "/api/ai/key", {"direct": True, "remove": True}, {})
     assert not ai.direct_key()
+
+
+def test_console_jobs_can_reach_ai():
+    """A job's closure inside gui.api must see the module's `ai` (a local import there broke Ask Claude)."""
+    from povkit import gui
+    assert "ai" not in gui.api.__code__.co_varnames and gui.ai is ai
