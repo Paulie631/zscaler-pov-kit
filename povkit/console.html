@@ -1405,13 +1405,15 @@ $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
 $("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
 
 /* ---------------- Device tests: the pilot-device tests run from here, and guided demos ---------------- */
-let DTP={switches:[],switched:false},DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null;
+let DTdev="",DTL=null,DTLtimer=null,DTP={switches:[],switched:false},DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null;
 async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
   try{DT=await api("/api/devtests",{})}catch(e){w.innerHTML=note(e.message,"bad");return}
   try{DTP=await api("/api/devtests",{policy:true})}catch(_){DTP={switches:[],switched:false}}
   const all=DT.criteria.flatMap(x=>x.tests);
+  try{DTL=await api("/api/devlink",{})}catch(_){DTL={on:false,devices:[]}}
   w.innerHTML=`<div class="seg" id="dtsub" style="align-self:flex-start">${[["runner","Test runner"],["demos","Guided demos"],["policy","Policy"],["helpers","Demo helpers"]].map(([k,t])=>`<button data-s="${k}" class="${DTTAB==k?"on":""}">${t}</button>`).join("")}</div>
-  <div class="notice" style="margin:0">Runs on <b>this computer</b>: it must be a pilot device, signed in to Client Connector as the pilot user (never a work laptop). The tests stop at the start if it isn't in ${esc(c.customer)}’s tenant. A customer’s device: Setup › Finish setup › Set up a pilot device.</div>
+  <div class="panel" style="padding:12px 16px"><div class="row" style="gap:10px;align-items:center;flex-wrap:wrap"><b>Run on</b><select id="dtwhere" style="min-width:260px"></select><button id="dtlinkbtn">Link a device…</button><span class="muted" id="dtwherenote" style="font-size:13px"></span></div>
+    <div id="dtlink" style="display:none;margin-top:12px"></div></div>
   <div id="dtbanner"></div>
   <div class="dtview" data-v="policy"><div class="panel"><h2>Policy switches</h2>
     <p class="muted" style="margin:4px 0 10px">Switch what a POV rule does, in front of the customer, then run its test again: the page the user sees changes. Only the POV’s own rules (pilot group only) change, then ZIA activates; allow about a minute for it to reach the cloud. While anything is switched, test results aren’t recorded as evidence. • marks the planned action.</p>
@@ -1448,7 +1450,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       <span class="badge b-${r.pass?"ok":String(r.outcome).startsWith("error")?"fail":"warn"}">${r.pass?"as expected":"got "+esc(r.outcome)}</span></div>
       ${r.switched?`<div class="hint" style="margin:4px 0 0"><b>Demo switch:</b> ${esc(r.switched)}, so this run expects ${esc(r.spec&&r.spec.expect||"")}.</div>`:""}
       ${r.detail?`<div class="hint" style="margin:4px 0 0">${esc(r.detail)}</div>`:""}
-      ${r.open&&r.id?`<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen" data-t="${esc(r.id)}">Show it in this computer’s browser ↗</button>${r.show&&r.show.look?`<span class="hint" style="margin:0">${esc(r.show.look)}</span>`:""}</div>`:""}</div>`;
+      ${r.open&&r.id?`<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen" data-t="${esc(r.id)}">${DTdev?"Show it on the linked device ↗":"Show it in this computer’s browser ↗"}</button>${r.show&&r.show.look?`<span class="hint" style="margin:0">${esc(r.show.look)}</span>`:""}</div>`:""}</div>`;
   const draw=()=>{$("#dtresults").innerHTML=DTres.length?DTres.map(card).join(""):'<div class="empty">Nothing run yet.</div>';
     $("#dts-run").textContent=DTres.length;$("#dts-ok").textContent=DTres.filter(r=>r.pass).length;
     $("#dts-bad").textContent=DTres.filter(r=>!r.pass&&!String(r.outcome).startsWith("error")).length;$("#dts-err").textContent=DTres.filter(r=>String(r.outcome).startsWith("error")).length};
@@ -1461,14 +1463,14 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     finally{DTpolling=null}}
   $("#dtrun").onclick=async()=>{const ids=[...DTsel].filter(id=>all.some(t=>t.id==id));if(!ids.length){$("#dtmsg").innerHTML=note("Pick some tests.");return}
     DTres=[];draw();$("#dtrun").disabled=true;$("#dtstop").disabled=false;$("#dtmsg").innerHTML='<div class="notice">Checking this computer is in the tenant, then running…</div>';
-    try{DTjob=(await api("/api/devtests",{run:true,ids:ids.length==all.length?null:ids})).job;
+    try{DTjob=(await api("/api/devtests",{device:DTdev,run:true,ids:ids.length==all.length?null:ids})).job;
       const r=await follow(DTjob,x=>{DTres.push(x);draw()});
       $("#dtmsg").innerHTML=note(`${r.stopped?"Stopped":"Done"}: ${r.ok} of ${r.total} as expected.${(r.switched||[]).length?" Not recorded: the policy is switched for the demo ("+r.switched.join(", ")+").":r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:" No criterion ran in full, so no evidence changed."}`,r.ok==r.total?"good":"warn");load()}
     catch(e){$("#dtmsg").innerHTML=note(e.message,"bad")}finally{DTjob=null;$("#dtrun").disabled=false;$("#dtstop").disabled=true;$("#dtstop").textContent="Stop"}};
   $("#dtstop").onclick=()=>{if(DTjob){api("/api/job/stop",{id:DTjob});$("#dtstop").disabled=true;$("#dtstop").textContent="Stopping…"}};
   w.onclick=async e=>{const sw=e.target.closest(".dtsw");if(sw){e.preventDefault();doSwitch(sw);return}
     const b=e.target.closest(".dtopen");if(!b)return;e.preventDefault();b.disabled=true;
-    try{await api("/api/devtests",{open:b.dataset.t})}catch(x){b.insertAdjacentHTML("afterend",note(x.message,"bad"))}finally{setTimeout(()=>b.disabled=false,1500)}};
+    try{await api("/api/devtests",{device:DTdev,open:b.dataset.t})}catch(x){b.insertAdjacentHTML("afterend",note(x.message,"bad"))}finally{setTimeout(()=>b.disabled=false,1500)}};
   const polRow=x=>`<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0"><span style="min-width:220px">${esc(x.name)} <span class="muted" style="font-size:12px">· ${esc(x.kind)} · ${x.criteria.map(esc).join(", ")}</span></span>
       <div class="seg">${x.choices.map(c=>`<button class="dtsw ${c.id==x.current?"on":""}" data-k="${esc(x.key)}" data-to="${esc(c.id)}" title="${c.id==x.planned?"The planned action":"Switch to "+esc(c.label)}">${esc(c.label)}${c.id==x.planned?" •":""}</button>`).join("")}</div></div>`;
   const drawPol=msg=>{const sw=DTP.switches||[],on=sw.filter(x=>x.current!=x.planned);
@@ -1484,6 +1486,34 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     try{const r=await api("/api/devtests",{putback:true});DTP=r;drawPol(note(r.message,"good"))}catch(x){drawPol(note(x.message,"bad"))}
     finally{$$("#dtputback,.dtputback2").forEach(x=>x.disabled=false)}}
   $("#dtputback").onclick=putBack;drawPol();
+  const ago=n=>n<60?`${n}s ago`:n<3600?`${Math.round(n/60)} min ago`:`${Math.round(n/3600)} h ago`;
+  const drawWhere=()=>{const devs=(DTL&&DTL.devices)||[];if(DTdev&&!devs.some(d=>d.id==DTdev&&d.online))DTdev="";
+    $("#dtwhere").innerHTML=`<option value="">This computer</option>`+devs.filter(d=>d.online).map(d=>`<option value="${esc(d.id)}" ${d.id==DTdev?"selected":""}>${esc(d.name||"device")}${d.user?" · "+esc(d.user):""} (linked)</option>`).join("");
+    $("#dtwherenote").innerHTML=DTdev?"Tests run on the linked device and its browser opens the pages; results land here as they run.":`This computer must be a pilot device, signed in to Client Connector as the pilot user (never a work laptop). The tests stop at the start if it isn’t in ${esc(c.customer)}’s tenant.`};
+  $("#dtwhere").onchange=e=>{DTdev=e.target.value;drawWhere()};
+  const drawLink=msg=>{const L=DTL||{},el=$("#dtlink");if(!el)return;
+    const cmd=(k,label)=>`<div style="margin:8px 0"><div class="lbl">${label}</div><div class="row" style="gap:8px;align-items:flex-start"><code style="flex:1;word-break:break-all;font-size:12px">${esc(L.commands[k])}</code><button class="dtlcp" data-k="${k}">Copy</button></div></div>`;
+    el.innerHTML=!L.on?`<p class="muted" style="margin:0 0 8px">Run the tests on another computer with Client Connector (a pilot device) and see the results here, live. The device runs one command; it connects to this console and waits for tests. Nothing on the device opens a port, and only device traffic reaches this console’s device listener, never the console itself.</p>
+        <div class="row" style="gap:8px;flex-wrap:wrap"><button class="primary" id="dtlon">Turn on: same network</button><button id="dtlonx" ${L.cloudflared?"":"disabled"} title="${L.cloudflared?"":"Needs cloudflared on this computer (macOS: brew install cloudflared)"}">Turn on: same network + anywhere</button></div>
+        ${L.cloudflared?"":'<div class="hint">“Anywhere” uses a Cloudflare quick tunnel: install cloudflared on this computer first (macOS: <code>brew install cloudflared</code>).</div>'}`
+      :`<div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><span class="badge b-ok">listening</span><span class="muted" style="font-size:13px">${(L.urls||[]).map(esc).join(" · ")}</span><button id="dtloff">Turn off</button>${L.tunnel?"":`<button id="dtlonx" ${L.cloudflared?"":"disabled"}>Also from anywhere</button>`}</div>
+        <p class="muted" style="margin:8px 0 0">On the pilot device, signed in to Client Connector as the pilot user, run this and leave the window open. The first time, macOS may ask whether Python may accept incoming connections on <b>this</b> computer: allow it.${L.tunnel?" The anywhere address changes when the console restarts: send the device a new command then.":" Same network only: turn on “Also from anywhere” for a device elsewhere."}</p>
+        ${cmd("macos","macOS (Terminal)")}${cmd("windows","Windows (PowerShell)")}
+        <div class="lbl" style="margin-top:10px">Linked devices</div>
+        ${(L.devices||[]).length?`<table style="width:100%;font-size:13px"><tr><th style="text-align:left">Device</th><th style="text-align:left">User</th><th style="text-align:left">Status</th><th style="text-align:left">Last run on the device</th></tr>${L.devices.map(d=>`<tr><td>${esc(d.name||"")}</td><td>${esc(d.user||"")}</td><td>${d.online?`<span class="badge b-ok">online</span>${d.busy?" running":""}`:`<span class="badge b-warn">offline</span> ${ago(d.seen)}`}</td><td>${d.last?`${d.last.ok} of ${d.last.total} as expected · <a href="#" class="dtlast" data-id="${esc(d.id)}">show</a>`:'<span class="muted">none yet</span>'}</td></tr>`).join("")}</table>`:'<div class="empty">No device linked yet.</div>'}`;
+    if(msg)el.insertAdjacentHTML("beforeend",msg);
+    $("#dtlon")&&($("#dtlon").onclick=()=>linkOn(false));$("#dtlonx")&&($("#dtlonx").onclick=()=>linkOn(true));
+    $("#dtloff")&&($("#dtloff").onclick=async()=>{try{DTL=await api("/api/devlink",{stop:true});drawLink();drawWhere()}catch(x){drawLink(note(x.message,"bad"))}});
+    $$(".dtlcp").forEach(b=>b.onclick=()=>copy(L.commands[b.dataset.k],b));
+    $$(".dtlast").forEach(a=>a.onclick=e=>{e.preventDefault();const d=L.devices.find(x=>x.id==a.dataset.id);DTres=d.last.results.map(r=>Object.assign({text:r.criterion+": "+(r.spec&&(r.spec.url||r.spec.host||r.spec.type)||"")},r));DTTAB="runner";show();draw();$("#dtmsg").innerHTML=note(`From ${d.name}: ${d.last.ok} of ${d.last.total} as expected (run on the device, ${String(d.last.at||"").slice(0,16).replace("T"," ")}). It counts as evidence like an imported results file.`,d.last.ok==d.last.total?"good":"warn")})};
+  async function linkOn(tunnel){$$("#dtlon,#dtlonx").forEach(b=>b.disabled=true);
+    if(tunnel)drawLink('<div class="notice">Starting the Cloudflare tunnel (up to 25 seconds)…</div>');
+    try{DTL=await api("/api/devlink",{start:true,tunnel:tunnel||!!(DTL&&DTL.tunnel)});drawLink();drawWhere()}catch(x){try{DTL=await api("/api/devlink",{})}catch(_){};drawLink(note(x.message,"bad"))}}
+  $("#dtlinkbtn").onclick=()=>{const el=$("#dtlink");el.style.display=el.style.display=="none"?"":"none";drawLink()};
+  if(DTL&&DTL.on&&!(DTL.devices||[]).length)$("#dtlink").style.display="";
+  drawWhere();drawLink();
+  clearInterval(DTLtimer);DTLtimer=setInterval(async()=>{if(tab()!="devtests"||!$("#dtwhere")){clearInterval(DTLtimer);return}
+    try{const prev=JSON.stringify(DTL);DTL=await api("/api/devlink",{});if(JSON.stringify(DTL)!=prev){if(!document.activeElement||document.activeElement.id!="dtwhere")drawWhere();drawLink()}}catch(_){}},5000);
   const flat=DT.criteria.flatMap(c=>c.tests.map(t=>Object.assign({criterion:c.criterion},t)));
   const copy=async(txt,b)=>{try{await navigator.clipboard.writeText(txt);b.textContent="Copied"}catch(_){b.textContent="Copy failed: select it by hand"}};
   $$(".dtshow").forEach(b=>b.onclick=()=>{const st=DT.stories.find(x=>x.id==b.dataset.id);walk(st.tests,$(`.dtsout[data-id="${st.id}"]`))});
@@ -1509,21 +1539,21 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       q(".dtnext").onclick=()=>{i++;i<tests.length?step():finish()};
       drawPol();
       const check=async()=>{q(".dtagain").disabled=true;res.innerHTML=`<div class="notice">${sh.open?"Opening the page in this computer’s browser, then checking…":"Checking…"}</div>`;
-        if(sh.open){try{await api("/api/devtests",{open:t.id})}catch(x){res.innerHTML=note(x.message+" Open "+sh.open+" by hand.","warn")}
+        if(sh.open){try{await api("/api/devtests",{device:DTdev,open:t.id})}catch(x){res.innerHTML=note(x.message+" Open "+sh.open+" by hand.","warn")}
           await new Promise(r=>setTimeout(r,1500))}
         if(ended)return;
-        try{const rs=[];await follow((await api("/api/devtests",{run:true,ids:[t.id]})).job,x=>rs.push(x));if(rs[0]&&rs[0].show&&q(".dtlook"))q(".dtlook").innerHTML="<b>Point at:</b> "+esc(rs[0].show.look||"");if(!ended)res.innerHTML=rs.map(card).join("").replace(/<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen"[^]*?<\/div>/,"")}
+        try{const rs=[];await follow((await api("/api/devtests",{device:DTdev,run:true,ids:[t.id]})).job,x=>rs.push(x));if(rs[0]&&rs[0].show&&q(".dtlook"))q(".dtlook").innerHTML="<b>Point at:</b> "+esc(rs[0].show.look||"");if(!ended)res.innerHTML=rs.map(card).join("").replace(/<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen"[^]*?<\/div>/,"")}
         catch(x){if(!ended)res.innerHTML=note(x.message,"bad")}
         q(".dtagain").disabled=false;q(".dtnext").disabled=false};
       q(".dtagain").onclick=check;await check()};
     const finish=async()=>{out.innerHTML=`<div class="notice" style="margin-top:8px">Recording all ${tests.length} tests together for the scorecard…</div>`;const rs=[];
-      try{const r=await follow((await api("/api/devtests",{run:true,ids})).job,x=>rs.push(x));
+      try{const r=await follow((await api("/api/devtests",{device:DTdev,run:true,ids})).job,x=>rs.push(x));
         const sum=note(`${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:""}${(r.switched||[]).length?" Not recorded: the policy is switched for the demo ("+r.switched.join(", ")+"). Put it back as planned, then run again to record.":""}`,r.ok==r.total&&!(r.switched||[]).length?"good":"warn");
         if(onDone){onDone(rs);out.innerHTML=sum}else out.innerHTML=rs.map(card).join("")+sum;load()}
       catch(x){out.innerHTML=note(x.message,"bad")}finally{end()}};
     step()}
   $$(".dtstory").forEach(b=>b.onclick=async()=>{const st=DT.stories.find(x=>x.id==b.dataset.id),out=$(`.dtsout[data-id="${st.id}"]`);b.disabled=true;out.innerHTML='<div class="notice">Running…</div>';const rs=[];
-    try{const jid=(await api("/api/devtests",{run:true,ids:st.tests})).job;const r=await follow(jid,x=>{rs.push(x);out.innerHTML=rs.map(card).join("")});
+    try{const jid=(await api("/api/devtests",{device:DTdev,run:true,ids:st.tests})).job;const r=await follow(jid,x=>{rs.push(x);out.innerHTML=rs.map(card).join("")});
       out.insertAdjacentHTML("beforeend",note(`${r.ok} of ${r.total} as expected.`,r.ok==r.total?"good":"warn"))}
     catch(e){out.innerHTML=note(e.message,"bad")}finally{b.disabled=false}});
 }

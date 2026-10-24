@@ -68,6 +68,11 @@ letting Claude Desktop make changes.
   Caution, Isolate or Allow in front of the customer, then **Check again** to show the page change. Each Show it step
   has the switches for its test. Only the POV's own rules change; results aren't recorded while anything is switched.
   **Put everything back as planned** when you're done (Status reminds you).
+- **Device tests › Run on › Link a device**: run the tests on another computer with Client Connector and watch the
+  results land here. Turn linking on (same network, or same network + anywhere through a Cloudflare quick tunnel,
+  which needs `cloudflared` on the console's computer), run the command shown on the device, then pick it under
+  **Run on**. Test runs, guided demos and Show it then use that device (pages open in its browser). Runs started on
+  the device itself appear under Linked devices.
 - **Device tests › Demo helpers**: ZPA, ZDX and CASB talk tracks, and **Warm up the dashboards** the day before.
 
 ## Every customer session

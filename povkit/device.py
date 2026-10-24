@@ -9,6 +9,7 @@ traffic.py, so the probe package carries no console, no tenant API code and no s
   pov-probe test [--wait N]     run the pack's tests; writes a results file for the SE
   pov-probe traffic check|run|schedule   the ZIA traffic generator, shaped by the pack's traffic profile
   pov-probe cleanup             remove the Endpoint AI test items a test left
+  pov-probe link CODE           link this device to the SE's console: it runs the tests the console sends, live
   pov-probe trust-ca            trust the Zscaler root CA on this device (if Client Connector didn't), for SSL inspection
 """
 from __future__ import annotations
@@ -138,6 +139,157 @@ def gate(crit, run_spec=None):
                           "company's Zscaler can't be a pilot device.")
 
 
+# ---------------------------------------------------------------- linked to the SE's console
+LINK = HOME / "link.json"
+
+
+def link_from_code(code) -> dict:
+    import base64
+    c = str(code or "").strip()
+    try:
+        d = json.loads(base64.urlsafe_b64decode(c + "=" * (-len(c) % 4)).decode("utf-8"))
+        assert d["u"] and d["t"]
+        return d
+    except Exception as e:   # noqa: BLE001
+        raise DeviceError("That link code is damaged: copy the command from the POV console again.") from e
+
+
+class Link:
+    """This device's side of a console link: it asks the console for work (the console never connects in)."""
+
+    def __init__(self, info, session=None, say=None):
+        import requests
+        self.info, self.s = info, session or requests.Session()
+        self.s.headers["Authorization"] = f"Bearer {info['t']}"
+        self.url, self.device = info.get("url"), info.get("device")
+        self.say = say or _say
+
+    def hello(self):
+        import getpass
+        body = {"device": self.device, "name": socket_name(), "os": platform.platform(), "version": VERSION,
+                "user": getpass.getuser()}
+        last = None
+        for u in ([self.url] if self.url else []) + [x for x in self.info["u"] if x != self.url]:
+            try:
+                r = self.s.post(f"{u}/agent/hello", json=body, timeout=8)
+                if r.status_code == 200:
+                    d = r.json()
+                    self.url, self.device = u, d["device"]
+                    self.customer = d.get("customer")
+                    return u
+                last = (r.json() or {}).get("error") or f"HTTP {r.status_code}"
+            except Exception as e:   # noqa: BLE001
+                last = type(e).__name__
+        raise DeviceError(f"Couldn't reach the SE's console ({last}). On the same network: check the console has "
+                          "device linking on. On another network: the SE turns on 'from anywhere' and sends a new "
+                          "link command.")
+
+    def post(self, path, body):
+        r = self.s.post(f"{self.url}{path}", json=dict(body, device=self.device), timeout=30)
+        return r.json() if r.headers.get("Content-Type", "").startswith("application/json") else {}
+
+    def do(self, cmd):
+        op = cmd.get("op")
+        if op == "open":
+            import webbrowser
+            if re.match(r"^https?://", str(cmd.get("url") or "")):
+                webbrowser.open(cmd["url"])
+                self.say("ok", f"opened {cmd['url']}")
+            return
+        if op != "run":
+            return
+        crit = cmd.get("criteria") or []
+        try:
+            gate(cmd.get("gate") or crit)
+        except DeviceError as e:
+            self.post("/agent/done", {"cmd": cmd["id"], "error": str(e)})
+            self.say("fail", str(e))
+            return
+        n = sum(len(c.get("probe") or []) for c in crit)
+        self.say("info", f"running {n} test{'s' * (n != 1)} for the SE…")
+        stop = {"v": False}
+
+        def landed(r):
+            self.say("ok" if r.get("pass") else "warn", f"{r['criterion']}: {r['outcome']} (expected {r['expect']})")
+            try:
+                stop["v"] = bool(self.post("/agent/result", {"cmd": cmd["id"], "result": r}).get("stop"))
+            except Exception:   # noqa: BLE001
+                pass
+        try:
+            res = probe.run(crit, pack=cmd.get("pack"), on_result=landed, stop=lambda: stop["v"])
+            self.post("/agent/done", {"cmd": cmd["id"], "res": res})
+        except Exception as e:   # noqa: BLE001
+            self.post("/agent/done", {"cmd": cmd["id"], "error": f"{type(e).__name__}: {e}"[:300]})
+
+    def serve(self, forever=True):
+        import time
+        wait = 2
+        while True:
+            try:
+                r = self.s.get(f"{self.url}/agent/next", params={"device": self.device}, timeout=40)
+                if r.status_code in (403, 404):
+                    self.hello()
+                    continue
+                cmd = r.json()
+                wait = 2
+                if cmd.get("op") not in (None, "none"):
+                    self.do(cmd)
+            except DeviceError:
+                raise
+            except Exception:   # noqa: BLE001 the console restarted, the Wi-Fi dropped: try again, then relink
+                time.sleep(wait)
+                wait = min(wait * 2, 30)
+                try:
+                    self.hello()
+                except DeviceError:
+                    pass
+            if not forever:
+                return
+
+
+def socket_name():
+    import socket
+    return socket.gethostname().removesuffix(".local")
+
+
+def saved_link():
+    try:
+        return json.loads(LINK.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def send_to_console(res, say=print):
+    """After a run started here: send the results to the linked console too (best effort)."""
+    info = saved_link()
+    if not info:
+        return False
+    try:
+        lk = Link(info)
+        lk.hello()
+        r = lk.post("/agent/upload", {"res": res})
+        if r.get("imported"):
+            say("The results are in the SE's console too.")
+            return True
+        say(f"Couldn't send the results to the SE's console: {r.get('error') or 'no answer'}.")
+    except Exception as e:   # noqa: BLE001
+        say(f"Couldn't send the results to the SE's console ({type(e).__name__}); send them the file instead.")
+    return False
+
+
+def c_link(a):
+    info = link_from_code(a.code)
+    lk = Link(info)
+    url = lk.hello()
+    HOME.mkdir(parents=True, exist_ok=True)
+    LINK.write_text(json.dumps(dict(info, url=url, device=lk.device)), encoding="utf-8")
+    print(f"Linked to the SE's console for {lk.customer or info.get('p')} ({url}).\n"
+          "Leave this window open: the SE runs the tests from the console, and the results show there as they land.\n"
+          "Ctrl+C to stop. Run the same command again to relink.")
+    lk.serve()
+    return 0
+
+
 # ---------------------------------------------------------------- command line (pov-probe)
 def _say(level, msg):
     mark = {"ok": "✓", "warn": "!", "fail": "✗"}.get(level, "·")
@@ -158,9 +310,10 @@ def c_test(a):
     ok = sum(r["pass"] for r in res["results"])
     for r in res["results"]:
         _say("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['outcome']} (expected {r['expect']}) {r['detail']}")
-    print(f"\n{ok} of {len(res['results'])} as expected. The results are in:\n  {path}\n"
-          "Next: in the POV console, Set up a pilot device > 3. Import the results, and pick that file (on another "
-          "computer than the SE's, send it to the SE first).")
+    print(f"\n{ok} of {len(res['results'])} as expected. The results are in:\n  {path}")
+    if not send_to_console(res):
+        print("Next: in the POV console, Set up a pilot device > 3. Import the results, and pick that file (on another "
+              "computer than the SE's, send it to the SE first).")
     if any(r["spec"]["type"] == "ai_artifacts" for r in res["results"]):
         print("Endpoint AI test files stay for the console's inventory; remove them afterwards: `cleanup`.")
     return 0
@@ -292,6 +445,9 @@ def parser():
     s.set_defaults(fn=c_traffic)
     s = sub.add_parser("cleanup", help="remove the Endpoint AI test items a test left")
     s.set_defaults(fn=c_cleanup)
+    s = sub.add_parser("link", help="link this device to the SE's console (the console shows the command)")
+    s.add_argument("code")
+    s.set_defaults(fn=c_link)
     s = sub.add_parser("trust-ca", help="trust the Zscaler root CA here (Client Connector normally does this)")
     s.set_defaults(fn=c_trust_ca)
     s = sub.add_parser("version", help="print the version")

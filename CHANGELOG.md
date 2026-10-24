@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.67
+- Device tests › **Run on**: run the device tests on another computer with Client Connector and see the results in the console as they land. **Link a device** turns on a device listener (same network, or also from anywhere through a Cloudflare quick tunnel when `cloudflared` is installed) and shows a one-line command for macOS and Windows. The device runs `pov-probe link`, connects out to the console and waits: the Test runner, Guided demos, Show it (pages open in the device's browser) and Check again all work on the chosen device. Runs started on the device itself (`pov-probe test`) are sent to the console when linked, and count as evidence like an imported file.
+- The listener is separate from the console and serves only device requests carrying the POV's link token; it comes back on after a restart (the tunnel's address changes, so a device elsewhere relinks).
+
 ## 0.9.66
 - Success criteria: an API check made before a criterion's test changed no longer stands. Each API proof records which test sites it checked; when the criterion's tests change (reddit.com became facebook.com for IS-URL-02), the old result shows as needing a re-check and the automatic check runs again.
 

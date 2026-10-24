@@ -140,7 +140,7 @@ def describe(sp):
     return evidence.describe_spec(sp)
 
 
-def open_here(pov, test_id):
+def open_here(pov, test_id, device=None):
     """Opens a test's page in this computer's default browser (the room sees the user's view). Only the POV's own
     test pages. -> the URL"""
     import webbrowser
@@ -150,6 +150,10 @@ def open_here(pov, test_id):
     url = open_url(sp)
     if not url:
         raise KitError("That test has no page to open.")
+    if device:   # a linked device opens it in its own browser
+        from . import devlink
+        devlink.open_on(device, url)
+        return url
     if not webbrowser.open(url):
         raise KitError("No browser could be opened on this computer.")
     return url
@@ -169,8 +173,8 @@ def library(pov):
     return {"criteria": rows, "stories": stories, "logs": LOGS}
 
 
-def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
-    """Runs the chosen tests (all of them without ids) on this computer. -> summary"""
+def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None, on_device=None):
+    """Runs the chosen tests (all of them without ids) on this computer, or on a linked device. -> summary"""
     from . import device
     pack = evidence.probe_pack(pov)
     every = _specs(pov)
@@ -178,10 +182,11 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
     chosen = [(cid, title, sid, sp) for cid, title, sid, sp in every if sid in want]
     if not chosen:
         raise KitError("Pick some tests first.")
-    try:
-        device.gate(pack["criteria"])
-    except device.DeviceError as e:
-        raise KitError(str(e)) from e
+    if not on_device:   # a linked device checks the tenant itself, before any test
+        try:
+            device.gate(pack["criteria"])
+        except device.DeviceError as e:
+            raise KitError(str(e)) from e
     crit, sid_of = [], {}
     sw = switched_expect(pov)
     for cid, title, sid, sp in chosen:
@@ -204,7 +209,15 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
         log("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['text']}: got {r['outcome']}")
         if on_result:
             on_result(r)
-    res = probe.run(crit, pack=pack, on_result=landed, stop=stop)
+    if on_device:
+        from . import devlink
+        gate_ = [c for c in pack["criteria"] if c["id"] == "IS-TEN-01"]
+        res = devlink.run_on(on_device, crit, {"pov": pack.get("pov"), "pack_id": pack.get("pack_id")},
+                             on_result=landed, stop=stop, gate=gate_)
+        where = f"on {res.get('device') or 'a linked device'}"
+    else:
+        res = probe.run(crit, pack=pack, on_result=landed, stop=stop)
+        where = "on this computer"
     # evidence: only the criteria whose every test ran
     full = {c["id"] for c in pack["criteria"]
             if sum(1 for r in res["results"] if r["criterion"] == c["id"]) == len(c["probe"])}
@@ -223,10 +236,10 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
             path.unlink(missing_ok=True)
         ev = sorted(full)
     ok = sum(1 for r in res["results"] if r["pass"])
-    pov.log("probe", f"device tests on this computer: {ok} of {len(res['results'])} as expected"
+    pov.log("probe", f"device tests {where}: {ok} of {len(res['results'])} as expected"
             + (" (stopped)" if res.get("stopped") else ""))
     return {"run_id": res["run_id"], "ok": ok, "total": len(res["results"]), "stopped": bool(res.get("stopped")),
-            "evidence": ev,
+            "evidence": ev, "device": res.get("device"),
             "switched": sorted(v.get("name", k) for k, v in switched.items()), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 

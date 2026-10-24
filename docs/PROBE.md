@@ -37,6 +37,7 @@ pov-probe traffic check                            # is this device in the POV's
 pov-probe traffic schedule --every 30              # traffic for the dashboards every 30 minutes (--remove stops)
 pov-probe cleanup                                  # remove Endpoint AI test items, if the POV tested them
 pov-probe trust-ca                                 # trust the Zscaler root CA here (admin), if Client Connector didn't
+pov-probe link '<code from the console>'           # link to the SE's console: it runs the tests from there, live
 ```
 
 On Windows, the command is `pov-probe.cmd` in the app folder.
@@ -49,6 +50,12 @@ criteria the customer chose. It also tells the traffic generator which kinds of 
 **Results:** each test writes a file to the Desktop (`pov-probe-results-<pov>-….json`). Send it to the SE, who
 imports it (Set up a pilot device > 3. Import the results); it holds test outcomes, the device name and OS, and
 nothing else.
+
+**Linked to the SE's console** (`link`, the command in Device tests › Link a device): the device connects out to the
+console's device listener and waits. The SE picks this device under **Run on** and runs tests (or Show it, which opens
+the test pages in this device's browser); each result appears in the console as it lands. A `test` run started here
+while linked is sent to the console too, so there's no file to send. The device opens no port; only the tests and page
+openings the console sends run, after the same tenant check as always. Ctrl+C stops it.
 
 ## Remove
 

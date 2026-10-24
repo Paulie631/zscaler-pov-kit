@@ -781,8 +781,8 @@ def api(method, path, body, q):
             return 200, dict(devtests.policy(p), message=("Put back as planned: " + ", ".join(done) + ". Allow a "
                                                           "minute for it to reach the cloud.") if done else
                              "Everything is already as planned.")
-        if body.get("open"):   # the test's page in this computer's default browser
-            return 200, {"url": devtests.open_here(p, body["open"])}
+        if body.get("open"):   # the test's page in this computer's default browser, or a linked device's
+            return 200, {"url": devtests.open_here(p, body["open"], body.get("device") or None)}
         if body.get("warmup"):
             rounds = int(body.get("rounds") or 3)
             return 200, {"job": start_job("traffic", lambda log, job: devtests.warm_up(
@@ -793,8 +793,17 @@ def api(method, path, body, q):
         def work(log, job):
             ids = body.get("ids") or None
             job["total"] = len(ids) if ids else sum(len(c["tests"]) for c in devtests.library(p)["criteria"])
-            return devtests.run(p, ids, log, on_result=job["items"].append, stop=lambda: job["stop"])
+            return devtests.run(p, ids, log, on_result=job["items"].append, stop=lambda: job["stop"],
+                                on_device=body.get("device") or None)
         return 200, {"job": start_job("devtests", work, streams=True)}
+    if path == "/api/devlink":   # linked pilot devices (devlink.py): the listener, the link command, the devices
+        from . import devlink
+        p = current()
+        if body.get("start"):
+            return 200, devlink.start(p, current, tunnel=bool(body.get("tunnel")))
+        if body.get("stop"):
+            return 200, devlink.stop(p)
+        return 200, devlink.status(p)
     if path == "/api/device/run-here":   # this computer is the pilot device: run the tests, import the results
         from . import device
         p = current()
@@ -1155,6 +1164,11 @@ def serve(port=8790, open_browser=True):
     if not srv:
         raise KitError(f"No free local port between {port} and {port + 19}.")
     SERVER.update(srv=srv, port=port)
+    try:   # devices linked before a restart (an update restarts the console) reconnect by themselves
+        from . import devlink
+        devlink.resume(current(), current, log=lambda lv, m: print(f"  {m}"))
+    except Exception:   # noqa: BLE001 no POV yet
+        pass
     url = f"http://127.0.0.1:{port}/"
     print(f"  POV console: {url}   (this computer only; Ctrl+C to stop)")
     if open_browser:
@@ -1165,6 +1179,8 @@ def serve(port=8790, open_browser=True):
         print("\n  Stopped.")
     if SERVER.pop("restart", False):   # an update or rollback asked for it: the main thread restarts, not a timer
         srv.server_close()
+        from . import devlink
+        devlink.stop_tunnel()   # the restarted console starts its own
         print("  Restarting the console with the installed kit...")
         _exec_installed(port)
     return srv
