@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.45
+
+- A console page left open across a restart (after an update, say) reloads itself instead of saying "bad token".
+
 ## 0.9.44
 
 - **macOS pilot devices: Client Connector 4.10.0.36 is pinned** (Zscaler's installer app, SHA-256 and Developer ID

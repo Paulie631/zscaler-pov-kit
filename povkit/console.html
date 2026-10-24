@@ -324,6 +324,10 @@ function mdLite(t){return esc(t).replace(/\n {2,}/g," ").replace(/\*\*([^*]+)\*\
 async function api(path,body){
   const r=await fetch(path,{method:body===undefined?"GET":"POST",headers:{"X-POV-Token":TOKEN,"Content-Type":"application/json"},body:body===undefined?undefined:JSON.stringify(body)});
   const j=await r.json().catch(()=>({error:"No answer from the kit. Is the console still running?"}));
+  if(r.status==403&&j.error=="bad token"){   // the console restarted (an update, say): a new run has a new token
+    let last=0;try{last=+sessionStorage.getItem("pov.reload")||0;sessionStorage.setItem("pov.reload",Date.now())}catch(e){}
+    if(Date.now()-last>15000){location.reload();throw new Error("The console restarted (an update?): reloading the page…")}
+    throw new Error("The console restarted: reload this page (Cmd+R or Ctrl+R).")}
   if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j}
 function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div>`}
