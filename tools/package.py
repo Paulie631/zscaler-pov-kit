@@ -33,6 +33,8 @@ PROBE_TOP = "zscaler-pov-probe/"
 PROBE_SHIP = {"pov-probe": "pov-probe", "pov-probe.cmd": "pov-probe.cmd", "pov_probe.py": "pov_probe.py",
               "docs/PROBE.md": "README.md", "povkit/__init__.py": "povkit/__init__.py", "povkit/device.py": "povkit/device.py",
               "povkit/probe.py": "povkit/probe.py", "povkit/traffic.py": "povkit/traffic.py",
+              "povkit/demo.py": "povkit/demo.py", "povkit/runner.py": "povkit/runner.py",
+              "povkit/runner.html": "povkit/runner.html",
               "povkit/traffic.json": "povkit/traffic.json", "povkit/zscaler_root_ca.crt": "povkit/zscaler_root_ca.crt"}
 EMAIL_BLOCKED = re.compile(r"\.(cmd|command|bat|ps1|exe)$", re.I)
 EXECUTABLE = re.compile(r"(^|/)(pov-kit|pov-probe|[^/]+\.command)$")

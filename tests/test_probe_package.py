@@ -132,6 +132,15 @@ def test_the_package_has_only_the_device_parts(tmp_path):
     assert r.stdout.split("\n")[0] == "[]" and "pov-probe" in r.stdout
     help_ = subprocess.run([sys.executable, "-I", "pov_probe.py", "--help"], cwd=app, capture_output=True, text=True)
     assert help_.returncode == 0 and "test" in help_.stdout and "traffic" in help_.stdout
+    # the device's own test runner runs from the package alone (no console modules)
+    r = subprocess.run([sys.executable, "-I", "-c", "import sys; sys.path.insert(0, '.'); from povkit import runner; "
+                        "import sys as s; bad=[m for m in s.modules if m.startswith('povkit.') and m not in "
+                        "('povkit.device','povkit.probe','povkit.traffic','povkit.demo','povkit.runner')]; "
+                        "print(bad); print(runner.library({'criteria': [{'id': 'IS-URL-01', 'probe': [{'type': 'http', "
+                        "'url': 'https://www.bet365.com/', 'expect': 'block'}]}]})['stories'][0]['id'])"],
+                       cwd=app, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split("\n")[0] == "[]" and "gambling" in r.stdout and "ui" in help_.stdout
 
 
 def test_aws_generator_carries_the_pack(pov_all):
@@ -140,7 +149,7 @@ def test_aws_generator_carries_the_pack(pov_all):
     name, t = traffic_aws.for_pov(pov_all)
     ud = t["Resources"]["Generator"]["Properties"]["UserData"]["Fn::Base64"]["Fn::Sub"]
     assert "__PACK_B64__" not in ud and "ZPOV_PACK_FILE" in ud and "pov-probe.cmd" in ud
-    assert len(ud) < 16000
+    assert len(ud) < 16000 and "POV device tests.lnk" in ud and "tests.cmd" in ud
 
 
 def test_kit_commands_still_work(pov, monkeypatch, tmp_path, capsys):
@@ -163,6 +172,7 @@ def test_cloudshare_traffic_script(pov):
     assert name == f"zpov-traffic-{pov.id}.ps1"
     assert "traffic schedule --every 15" in text and "traffic check --cloud zscalertwo" in text
     assert "install-probe.ps1" in text and "pack install" in text and "{" in text and "{{" not in text
+    assert "POV device tests.lnk" in text and '-ArgumentList "ui"' in text
     import base64
     b64 = text.split('FromBase64String("')[1].split('"')[0]
     assert json.loads(base64.b64decode(b64))["pov"] == pov.id

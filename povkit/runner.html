@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POV Device Tests</title>
+<style>
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#14181f;--muted:#5b6472;--line:#e3e6ea;--accent:#1f5eff;--accent-ink:#fff;--ok:#127a3e;--ok-bg:#e3f4ea;--warn:#9a5b00;--warn-bg:#fdf1dc;--bad:#b42318;--bad-bg:#fde8e7}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1218;--panel:#161a22;--ink:#e8ebf0;--muted:#9aa3b2;--line:#262c38;--accent:#5b8cff;--accent-ink:#0b0d12;--ok:#4cc77f;--ok-bg:#16301f;--warn:#e6a23c;--warn-bg:#33270f;--bad:#ff6b5e;--bad-bg:#3a1714}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+header{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+header h1{font-size:18px;margin:0}main{max-width:1200px;margin:0 auto;padding:16px;display:flex;flex-direction:column;gap:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}.panel h2{font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0 0 10px}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer}button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}button:disabled{opacity:.5;cursor:default}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}.seg button{border:0;border-radius:0}.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.muted{color:var(--muted)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.badge{font-size:12px;padding:2px 8px;border-radius:999px;font-weight:600}
+.b-ok{background:var(--ok-bg);color:var(--ok)}.b-warn{background:var(--warn-bg);color:var(--warn)}.b-fail{background:var(--bad-bg);color:var(--bad)}
+.notice{padding:10px 12px;border-radius:8px;background:var(--warn-bg);color:var(--warn);font-size:14px;margin:8px 0}.notice.good{background:var(--ok-bg);color:var(--ok)}.notice.bad{background:var(--bad-bg);color:var(--bad)}
+.card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:8px 0}.grid{display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:16px;align-items:start}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px}label.t{display:flex;gap:8px;margin:4px 0 4px 22px;font-size:14px}code{font-size:12px}
+.stats{display:flex;gap:24px;margin-top:10px}.stats b{display:block;font-size:22px}input[type=text]{font:inherit;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);min-width:320px}
+@media (max-width:760px){.grid{grid-template-columns:1fr}input[type=text]{min-width:0;width:100%}}
+body.plain .pres{display:none}
+</style></head><body>
+<header><h1>POV device tests</h1><span class="muted" id="who"></span><span style="flex:1"></span>
+  <div class="seg" id="mode"><button data-m="presenter">Presenter</button><button data-m="plain">Plain</button></div></header>
+<main>
+  <div class="panel" id="top"></div>
+  <div class="seg" id="sub" style="align-self:flex-start"><button data-s="runner">Test runner</button><button data-s="demos">Guided demos</button></div>
+  <div class="view grid" data-v="runner">
+    <div class="panel"><h2>Tests</h2><div class="row"><button id="all">All</button><button id="none">Clear</button></div><div id="lib"></div></div>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="panel"><h2>Run</h2><div class="row"><button class="primary" id="run">Run</button><button id="stop" disabled>Stop</button></div>
+        <div class="stats"><div><b id="n-run">0</b>run</div><div><b id="n-ok">0</b>as expected</div><div><b id="n-bad">0</b>not as expected</div></div><div id="msg"></div>
+        <div class="muted pres" style="font-size:13px;margin-top:6px">Each result: <b>Show it</b> opens the page in this computer’s browser for the room. The events are in <span id="logs"></span>.</div></div>
+      <div class="panel"><h2>Results</h2><div id="res"><div class="muted">Nothing run yet.</div></div></div>
+    </div></div>
+  <div class="view" data-v="demos"><div class="cards" id="stories"></div></div>
+</main>
+<script>
+const TOKEN="__TOKEN__",$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const note=(m,k)=>`<div class="notice ${k||""}">${esc(m)}</div>`;
+async function api(p,body){const r=await fetch(p,{method:body?"POST":"GET",headers:{"X-Token":TOKEN,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j}
+let INIT=false,S=null,SEL=new Set(),RES=[],TAB="runner",MODE="presenter";
+try{MODE=localStorage.getItem("zpov-mode")||"presenter";TAB=localStorage.getItem("zpov-tab")||"runner"}catch(_){}
+const setMode=m=>{MODE=m;document.body.classList.toggle("plain",m=="plain");$$("#mode button").forEach(b=>b.classList.toggle("on",b.dataset.m==m));try{localStorage.setItem("zpov-mode",m)}catch(_){}};
+const setTab=t=>{TAB=t;$$(".view").forEach(v=>v.style.display=v.dataset.v==t?(t=="runner"?"grid":""):"none");$$("#sub button").forEach(b=>b.classList.toggle("on",b.dataset.s==t));try{localStorage.setItem("zpov-tab",t)}catch(_){}};
+$$("#mode button").forEach(b=>b.onclick=()=>setMode(b.dataset.m));$$("#sub button").forEach(b=>b.onclick=()=>setTab(b.dataset.s));
+const card=r=>`<div class="card" style="border-left:4px solid ${r.pass?"var(--ok)":String(r.outcome).startsWith("error")?"var(--bad)":"var(--warn)"}">
+  <div class="row" style="justify-content:space-between"><div><code>${esc(r.criterion)}</code> ${esc(r.text)}</div><span class="badge b-${r.pass?"ok":String(r.outcome).startsWith("error")?"fail":"warn"}">${r.pass?"as expected":"got "+esc(r.outcome)}</span></div>
+  ${r.detail?`<div class="muted" style="font-size:13px;margin-top:4px">${esc(r.detail)}</div>`:""}
+  ${r.open?`<div class="row" style="margin-top:6px"><button class="showit" data-t="${esc(r.id)}">Show it ↗</button><span class="muted pres" style="font-size:13px">${esc(r.show&&r.show.look||"")}</span></div>`:""}</div>`;
+document.addEventListener("click",async e=>{const b=e.target.closest(".showit");if(!b)return;b.disabled=true;try{await api("/api/open",{id:b.dataset.t})}catch(x){b.insertAdjacentHTML("afterend",note(x.message,"bad"))}finally{setTimeout(()=>b.disabled=false,1500)}});
+async function follow(onItem){let got=0;for(;;){const j=await api(`/api/job?since=${got}`);got+=j.items.length;j.items.forEach(onItem);if(j.done){if(j.error)throw new Error(j.error);return j.result}await new Promise(r=>setTimeout(r,600))}}
+const resultNote=r=>r?note(`${r.stopped?"Stopped":"Done"}: ${r.ok} of ${r.total} as expected.${r.file?" Saved to "+r.file+".":""} ${r.sent?"Sent to the SE’s console.":(r.sent_note||"")}`,r.ok==r.total?"good":""):"";
+function drawTop(){const p=S.pack;$("#who").textContent=p?`${p.customer||""} · POV ${p.pov}`:"";
+  $("#top").innerHTML=!p?note("No POV tests on this device yet. The SE’s setup command installs them (pov-probe pack install FILE).","bad"):
+   `<div class="row" style="justify-content:space-between"><div><b>${esc(p.customer||"")}</b> <span class="muted">· ${esc(S.summary)}</span></div>
+    <div class="row">${S.link?`<span class="badge b-ok">results go to the SE’s console</span><button id="unlink">Unlink</button>`:`<span class="muted" style="font-size:13px">Results are saved as a file on the Desktop.</span><input type="text" id="code" placeholder="Link code from the SE (optional)"><button id="link">Link</button>`}</div></div>
+    <div class="muted pres" style="font-size:13px;margin-top:6px">This computer must be signed in to Client Connector as the pilot user. The tests check that first and stop if it isn’t in ${esc(p.customer||"the POV")}’s tenant.</div><div id="lmsg"></div>`;
+  $("#link")&&($("#link").onclick=async()=>{try{await api("/api/link",{code:$("#code").value});await load()}catch(x){$("#lmsg").innerHTML=note(x.message,"bad")}});
+  $("#unlink")&&($("#unlink").onclick=async()=>{await api("/api/unlink",{});await load()})}
+function drawRunner(){const L=S.library;if(!L)return;const all=L.criteria.flatMap(c=>c.tests);if(!INIT){INIT=true;all.forEach(t=>SEL.add(t.id))}
+  $("#lib").innerHTML=L.criteria.map(g=>`<div style="margin:10px 0"><label style="font-weight:600;display:flex;gap:8px"><input type="checkbox" class="grp" data-c="${esc(g.criterion)}" ${g.tests.every(t=>SEL.has(t.id))?"checked":""}><span><code>${esc(g.criterion)}</code> ${esc(g.title)}</span></label>
+    ${g.tests.map(t=>`<label class="t"><input type="checkbox" class="tt" data-t="${esc(t.id)}" ${SEL.has(t.id)?"checked":""}><span>${esc(t.text)}</span></label>`).join("")}</div>`).join("");
+  $$(".tt").forEach(x=>x.onchange=()=>{x.checked?SEL.add(x.dataset.t):SEL.delete(x.dataset.t);drawRunner()});
+  $$(".grp").forEach(x=>x.onchange=()=>{L.criteria.find(c=>c.criterion==x.dataset.c).tests.forEach(t=>x.checked?SEL.add(t.id):SEL.delete(t.id));drawRunner()});
+  const n=all.filter(t=>SEL.has(t.id)).length;$("#run").textContent=`Run ${n} test${n==1?"":"s"}`;$("#run").disabled=!n||S.running;
+  $("#all").onclick=()=>{all.forEach(t=>SEL.add(t.id));drawRunner()};$("#none").onclick=()=>{SEL.clear();drawRunner()}}
+const drawRes=()=>{$("#res").innerHTML=RES.length?RES.map(card).join(""):'<div class="muted">Nothing run yet.</div>';$("#n-run").textContent=RES.length;$("#n-ok").textContent=RES.filter(r=>r.pass).length;$("#n-bad").textContent=RES.filter(r=>!r.pass).length};
+$("#run").onclick=async()=>{const all=S.library.criteria.flatMap(c=>c.tests),ids=all.filter(t=>SEL.has(t.id)).map(t=>t.id);RES=[];drawRes();$("#run").disabled=true;$("#stop").disabled=false;$("#msg").innerHTML='<div class="notice">Checking this computer is in the tenant, then running…</div>';
+  try{await api("/api/run",{ids:ids.length==all.length?null:ids});const r=await follow(x=>{RES.push(x);drawRes()});$("#msg").innerHTML=resultNote(r)}catch(x){$("#msg").innerHTML=note(x.message,"bad")}finally{$("#run").disabled=false;$("#stop").disabled=true;$("#stop").textContent="Stop"}};
+$("#stop").onclick=()=>{api("/api/stop",{});$("#stop").disabled=true;$("#stop").textContent="Stopping…"};
+function drawStories(){const L=S.library;if(!L)return;const flat=L.criteria.flatMap(c=>c.tests.map(t=>Object.assign({criterion:c.criterion},t)));
+  $("#stories").innerHTML=L.stories.map(st=>`<div class="panel"><h3 style="margin:0 0 6px">${esc(st.title)} <span class="muted pres" style="font-weight:400;font-size:13px">· for ${esc(st.for)}</span></h3>
+    <div class="pres"><p style="margin:4px 0"><b>Say first:</b> ${esc(st.say)}</p><p style="margin:4px 0"><b>Point at:</b> ${esc(st.point)}</p><p style="margin:4px 0"><b>Then:</b> ${esc(st.after)}</p></div>
+    <div class="row" style="margin-top:8px"><button class="primary go" data-id="${esc(st.id)}">Show it (${st.tests.length} step${st.tests.length==1?"":"s"})</button></div><div class="out" data-id="${esc(st.id)}"></div></div>`).join("")||'<div class="muted">No guided demos for this POV’s tests.</div>';
+  $$(".go").forEach(b=>b.onclick=()=>{const st=L.stories.find(x=>x.id==b.dataset.id),out=$(`.out[data-id="${st.id}"]`),tests=st.tests.map(id=>flat.find(t=>t.id==id)).filter(Boolean);let i=0,ended=false;
+    $$(".go").forEach(x=>x.disabled=true);const end=()=>{ended=true;$$(".go").forEach(x=>x.disabled=false)};
+    const step=async()=>{const t=tests[i],sh=t.show||{};
+      out.innerHTML=`<div class="card" style="border-left:4px solid var(--accent)"><div class="muted" style="font-size:12px">Step ${i+1} of ${tests.length} · <code>${esc(t.criterion)}</code></div><div style="margin:4px 0"><b>${esc(t.text)}</b></div>
+        <div class="pres" style="margin:4px 0"><b>Point at:</b> ${esc(sh.look||"")}</div>${sh.terminal?`<div class="row" style="margin:6px 0"><code style="flex:1">${esc(sh.terminal)}</code><button class="cp">Copy</button></div>`:""}${sh.copy?`<button class="cpc">Copy the test card numbers</button>`:""}
+        <div class="r"></div><div class="row" style="margin-top:8px"><button class="again">Check again</button><button class="primary next" disabled>${i+1<tests.length?"Next ▸":"Finish and record ▸"}</button><button class="end">End</button></div></div>`;
+      const q=k=>out.querySelector(k),res=q(".r");
+      const copy=async(x,b)=>{try{await navigator.clipboard.writeText(x);b.textContent="Copied"}catch(_){b.textContent="Select it by hand"}};
+      q(".cp")&&(q(".cp").onclick=e=>copy(sh.terminal,e.target));q(".cpc")&&(q(".cpc").onclick=e=>copy(sh.copy,e.target));
+      q(".end").onclick=()=>{end();out.innerHTML=note("Ended.")};q(".next").onclick=()=>{i++;i<tests.length?step():finish()};
+      const check=async()=>{q(".again").disabled=true;res.innerHTML='<div class="notice">Opening the page, then checking…</div>';
+        if(t.open){try{await api("/api/open",{id:t.id})}catch(_){};await new Promise(r=>setTimeout(r,1500))}
+        if(ended)return;try{await api("/api/run",{ids:[t.id],record:false});const rs=[];await follow(x=>rs.push(x));if(!ended)res.innerHTML=rs.map(x=>card(Object.assign({},x,{open:null}))).join("")}catch(x){if(!ended)res.innerHTML=note(x.message,"bad")}
+        q(".again").disabled=false;q(".next").disabled=false};
+      q(".again").onclick=check;await check()};
+    const finish=async()=>{out.innerHTML='<div class="notice">Recording this demo’s tests together…</div>';const rs=[];
+      try{await api("/api/run",{ids:st.tests});const r=await follow(x=>rs.push(x));out.innerHTML=rs.map(card).join("")+resultNote(r)}catch(x){out.innerHTML=note(x.message,"bad")}finally{end()}};
+    step()})}
+async function load(){try{S=await api("/api/state")}catch(e){$("#top").innerHTML=note(e.message,"bad");return}
+  $("#logs").textContent=S.logs;drawTop();drawRunner();drawStories();if(S.last&&!RES.length)$("#msg").innerHTML=resultNote(S.last)}
+setMode(MODE);setTab(TAB);load();
+</script></body></html>

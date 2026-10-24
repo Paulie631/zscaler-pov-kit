@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.69
+- **POV device tests** (`pov-probe ui`): the pilot device's own test runner, in the probe package. The console's Device tests tab cut down to running tests: the POV's tests with results and what they mean, Guided demos with Show it (pages open in this computer's browser) and Check again, in **Presenter** (talk track) or **Plain** mode. No tenant settings, no keys; a page on this computer only, with a one-time token. Full runs are saved to the Desktop and, with a link code (pasted on the page or `pov-probe link`), sent to the SE's console.
+- The AWS pilot template and the CloudShare Windows script put **POV device tests** on the desktop and open it at sign-in.
+- The test descriptions, guided demos and Show it text now live in one module shared by the console and the device (same test IDs on both).
+
 ## 0.9.68
 - Device tests › **Tenant logs**: the console sees the device tests in ZIA's own logs, live, for when a device can't be linked. A Cloud NSS web-log feed (one change-list item, filtered to the pilot users: the POV's test users' department, or the named pilot users) streams to this console through the Cloudflare tunnel, or to the customer's SIEM (Splunk HEC). Each line is matched to the POV's device tests (the probe tags every test URL with its run), the view shows what Zscaler just saw with action, reason, category and the matching test, and a run the logs saw in full can be counted as evidence ("tenant logs"). Firewall, DNS and certificate tests aren't in web logs.
 - The feed's address and key are filled in at apply and never written into the change list, so the approval stands when the tunnel's address changes; **Update the feed address** points the POV's own feed at the new one. Teardown removes it. Discovery checks Cloud NSS is there and reads the tenant's own JSON web-log format.

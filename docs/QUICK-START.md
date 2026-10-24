@@ -77,6 +77,9 @@ letting Claude Desktop make changes.
   (Cloud NSS, a minute or two behind) and each line is matched to the device tests. Choose **To this console** (needs
   the Cloudflare tunnel) or **To the customer's SIEM** (Splunk HEC), make the change list again, get it approved and
   Apply. A run the logs saw in full can be counted as evidence. After a console restart, **Update the feed address**.
+- **On the pilot itself: POV device tests** (`pov-probe ui`): the Device tests runner without the console: the POV's
+  tests, guided demos and Show it, in Presenter or Plain mode. The AWS template and the CloudShare script put it on
+  the pilot's desktop and open it at sign-in. Results are saved to a file, and sent to your console when linked.
 - **Device tests › Demo helpers**: ZPA, ZDX and CASB talk tracks, and **Warm up the dashboards** the day before.
 
 ## Every customer session

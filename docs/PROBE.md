@@ -37,6 +37,7 @@ pov-probe traffic check                            # is this device in the POV's
 pov-probe traffic schedule --every 30              # traffic for the dashboards every 30 minutes (--remove stops)
 pov-probe cleanup                                  # remove Endpoint AI test items, if the POV tested them
 pov-probe trust-ca                                 # trust the Zscaler root CA here (admin), if Client Connector didn't
+pov-probe ui                                       # this device's test runner: run the tests, guided demos, Show it
 pov-probe link '<code from the console>'           # link to the SE's console: it runs the tests from there, live
 ```
 
@@ -50,6 +51,13 @@ criteria the customer chose. It also tells the traffic generator which kinds of 
 **Results:** each test writes a file to the Desktop (`pov-probe-results-<pov>-….json`). Send it to the SE, who
 imports it (Set up a pilot device > 3. Import the results); it holds test outcomes, the device name and OS, and
 nothing else.
+
+**The device's own test runner** (`pov-probe ui`, or **POV device tests** on the desktop of an AWS or CloudShare
+pilot): a page on this computer only, for running the POV's tests and the guided demos without the SE's console. Pick
+tests and Run, or open **Guided demos** and **Show it** (each test's page opens in this computer's browser, then the
+test runs). **Presenter** shows the talk track; **Plain** shows just the tests. Every full run is saved to the Desktop;
+with a link code from the SE (pasted at the top, or `pov-probe link`) it's also sent to the SE's console. No tenant
+settings, no keys.
 
 **Linked to the SE's console** (`link`, the command in Device tests › Link a device): the device connects out to the
 console's device listener and waits. The SE picks this device under **Run on** and runs tests (or Show it, which opens

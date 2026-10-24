@@ -54,6 +54,12 @@ $kit = "$root\home\.zscaler-pov-probe\app\pov-probe.cmd"
 $envs = "@echo off`r`nset USERPROFILE=$root\home`r`nset ZPOV_PROBE_HOME=$root\home\.zscaler-pov-probe`r`nset UV_CACHE_DIR=$root\uv-cache`r`nset UV_PYTHON_INSTALL_DIR=$root\python`r`nset PYTHONUTF8=1`r`nset NO_COLOR=1`r`n"
 Set-Content -Encoding ascii -Path "$root\traffic.cmd" -Value ($envs + "echo ==== %DATE% %TIME% >> `"$root\traffic.log`"`r`n`"$kit`" traffic %* >> `"$root\traffic.log`" 2>&1`r`n")
 
+# 2b. The device's own test runner (pov-probe ui) for whoever signs in: the POV's tests, guided demos and Show it,
+#     opened at sign-in and from the desktop. It runs as the signed-in user (so pages open in their browser), with
+#     the shared probe home.
+$ui = "@echo off`r`nset PATH=$root\home\.local\bin;%PATH%`r`nset ZPOV_PROBE_HOME=$root\home\.zscaler-pov-probe`r`nset UV_CACHE_DIR=$root\uv-cache`r`nset UV_PYTHON_INSTALL_DIR=$root\python`r`nset PYTHONUTF8=1`r`n`"$kit`" ui %*`r`n"
+Set-Content -Encoding ascii -Path "$root\tests.cmd" -Value $ui
+
 # 3. Scheduled tasks (as SYSTEM, so they run with nobody signed in to Windows)
 $a = New-ScheduledTaskAction -Execute "$root\traffic.cmd" -Argument "run --count ${RequestsPerType}"
 $t = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(10) -RepetitionInterval (New-TimeSpan -Minutes ${TrafficEveryMinutes})
@@ -65,6 +71,9 @@ Register-ScheduledTask -TaskName "Zscaler POV traffic check" -Action $a2 -Trigge
 $sh = New-Object -ComObject WScript.Shell
 foreach ($s in @(@("POV traffic log", "$root\traffic.log"), @("POV setup log", "$root\setup.log"))) {
   $l = $sh.CreateShortcut("C:\Users\Public\Desktop\" + $s[0] + ".lnk"); $l.TargetPath = $s[1]; $l.Save()
+}
+foreach ($d in @("C:\Users\Public\Desktop", "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp")) {
+  $l = $sh.CreateShortcut("$d\POV device tests.lnk"); $l.TargetPath = "$root\tests.cmd"; $l.WindowStyle = 7; $l.Save()
 }
 New-Item -ItemType File -Force -Path "$root\traffic.log" | Out-Null
 # 5. This box is single-purpose and only administrators can sign in, so local Users may modify C:\ZPOV.
@@ -273,6 +282,13 @@ Write-Host "  Checking this device is in the POV's tenant, as a pilot user..."
 if ($LASTEXITCODE -ne 0) {{ Write-Host "  Not ready yet: sign in to Client Connector as a pilot user. Rounds wait until traffic goes through Zscaler." }}
 & $probe traffic schedule --every {every}
 & $probe traffic run --count 2
+# The device's own test runner: the POV's tests, guided demos and Show it, on the desktop and at sign-in
+$sh = New-Object -ComObject WScript.Shell
+foreach ($d in @([Environment]::GetFolderPath("Desktop"), [Environment]::GetFolderPath("Startup"))) {{
+  $l = $sh.CreateShortcut((Join-Path $d "POV device tests.lnk")); $l.TargetPath = $probe; $l.Arguments = "ui"; $l.WindowStyle = 7; $l.Save()
+}}
+Write-Host "  'POV device tests' is on the desktop (and opens at sign-in). Opening it now..."
+Start-Process -FilePath $probe -ArgumentList "ui" -WindowStyle Minimized
 """
 
 

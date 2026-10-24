@@ -9,6 +9,7 @@ traffic.py, so the probe package carries no console, no tenant API code and no s
   pov-probe test [--wait N]     run the pack's tests; writes a results file for the SE
   pov-probe traffic check|run|schedule   the ZIA traffic generator, shaped by the pack's traffic profile
   pov-probe cleanup             remove the Endpoint AI test items a test left
+  pov-probe ui                  this device's own test runner (a page on this computer): run tests, guided demos, Show it
   pov-probe link CODE           link this device to the SE's console: it runs the tests the console sends, live
   pov-probe trust-ca            trust the Zscaler root CA on this device (if Client Connector didn't), for SSL inspection
 """
@@ -445,6 +446,10 @@ def parser():
     s.set_defaults(fn=c_traffic)
     s = sub.add_parser("cleanup", help="remove the Endpoint AI test items a test left")
     s.set_defaults(fn=c_cleanup)
+    s = sub.add_parser("ui", help="open this device's test runner: run the POV's tests and the guided demos")
+    s.add_argument("--port", type=int, default=8795)
+    s.add_argument("--no-browser", action="store_true")
+    s.set_defaults(fn=lambda a: __import__("povkit.runner", fromlist=["serve"]).serve(a.port, not a.no_browser) and 0)
     s = sub.add_parser("link", help="link this device to the SE's console (the console shows the command)")
     s.add_argument("code")
     s.set_defaults(fn=c_link)

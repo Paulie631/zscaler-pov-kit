@@ -163,23 +163,7 @@ def spec_id(cid, sp):
     return _h([cid, {k: v for k, v in sp.items() if k not in ("id", "by", "at")}])
 
 
-def describe_spec(sp):
-    """A probe test in plain words."""
-    t, e = sp.get("type"), sp.get("expect")
-    word = {"block": "blocked", "allow": "allowed", "caution": "a caution page", "isolate": "isolated",
-            "open": "open", "resolved": "resolves", "Zscaler": "inspected by Zscaler",
-            "not-Zscaler": "not inspected"}.get(e, e or "")
-    return {"http": f"Open {sp.get('url')} → expect {word}",
-            "eicar": "Download the EICAR antivirus test file → expect blocked",
-            "dlp_post": "Post 6 fake card numbers → expect blocked",
-            "tls_issuer": f"HTTPS to {sp.get('host')} → expect {word}",
-            "tcp": f"Connect to {sp.get('host')} on TCP {sp.get('port')} → expect {word}",
-            "dns": f"Look up {sp.get('name')} (DNS) → expect {word}",
-            "zcc_running": "Client Connector is running",
-            "via_zscaler": "Traffic goes through Zscaler (ip.zscaler.com)",
-            "ai_artifacts": "Plant AI test items for the AI asset inventory",
-            "ai_risky_skill": "Plant an inert risky AI skill → expect removed or locked",
-            "ai_local_prompt": "Send a prompt to a local AI app"}.get(t, t)
+from .demo import describe_spec  # noqa: E402,F401  (shared with the device runner)
 
 
 def add_test(pov, cid, kind, by="SE", **v):
