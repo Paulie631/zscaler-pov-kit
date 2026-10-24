@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.9.54
+
+- **Set up a pilot device, simplified to one command.** It installs Client Connector and the probe only if they're
+  missing (an existing Client Connector is left as it is), then runs the POV's tests once the pilot user signs in.
+  The long command isn't shown any more: one copy button, with *Show the command*, the setup script and *Review and
+  add tests* under **More**.
+- **Run the tests on this computer:** when the computer running the console is the pilot device, one button runs
+  the tests and imports the results. No Terminal.
+- **Before any test traffic, the probe checks the device is in the POV's tenant as a pilot user** (the POV's own
+  test page must be blocked). On another tenant (a work laptop's corporate Client Connector, say) it stops and says
+  so.
+
 ## 0.9.53
 
 - *Download probe pack* says what the file is (tests for the probe to read, not a program) and how to use it, and

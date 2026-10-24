@@ -114,11 +114,28 @@ def test(pack=None, wait=0, out=None, only=None, say=print, code=None):
     if wait and not probe.wait_for_zscaler(wait, say):
         raise DeviceError(f"Traffic still doesn't go through Zscaler after {wait} minutes, so the tests would mean "
                           "nothing. Check Client Connector is signed in with Internet Security On, then run this again.")
+    gate(crit)
     res = probe.run(crit, pack=p)
     path = Path(out or (desktop() / f"pov-probe-results-{(p or {}).get('pov', 'device')}-{res['run_id']}.json"))
     path.parent.mkdir(parents=True, exist_ok=True)
     probe.save(res, path)
     return res, path
+
+
+def gate(crit, run_spec=None):
+    """Before any test traffic: is this device in the POV's tenant, as a pilot user? Only the POV's own rule blocks
+    the tenant-check page, and only for the pilot group, so a device on another tenant (a work laptop's corporate
+    Client Connector, say) stops here and sends nothing else."""
+    sp = next((x for c in crit if c["id"] == "IS-TEN-01" for x in c.get("probe") or []), None)
+    if not sp:
+        return
+    import requests
+    r = (run_spec or probe.run_spec)(sp, "gate", requests.Session())
+    if r["outcome"] != r["expect"]:
+        raise DeviceError("This device isn't in the POV's tenant as a pilot user (the POV's own test page isn't "
+                          "blocked here), so no tests were run. Sign in to Client Connector as the pilot user the SE "
+                          "named, with Internet Security on, then run the command again. A work laptop on its "
+                          "company's Zscaler can't be a pilot device.")
 
 
 # ---------------------------------------------------------------- command line (pov-probe)

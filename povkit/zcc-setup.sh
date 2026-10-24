@@ -49,12 +49,13 @@ if [ -z "$REPLACE" ]; then
   likely). Installing here would fight them or take over the corporate Client Connector, so nothing was changed.
   Use a spare Mac or a macOS virtual machine for the pilot device."
   fi
-  if [ -d "/Applications/Zscaler/Zscaler.app" ] && ! mine; then
-    fail "Client Connector is already installed on this Mac (your company's, perhaps). This setup would reinstall it
-  for the POV's tenant and sign it out of its current one, so nothing was changed. Use a spare Mac or a macOS
-  virtual machine, or run again with --replace if this Mac is meant only for the POV."
-  fi
 fi
+SKIP=""
+if [ -z "$REPLACE" ] && [ -d "/Applications/Zscaler/Zscaler.app" ]; then
+  SKIP=1   # already installed: leave it as it is (the probe checks it's in the POV's tenant before testing)
+  say "Client Connector is already installed: leaving it as it is (--replace reinstalls it for this tenant)."
+fi
+if [ -z "$SKIP" ]; then
 # 1. the installer
 if [ -z "$PKG" ]; then
   curl -fsSL "https://github.com/$REPO/releases/latest/download/zcc_installers.json" -o "$TMP/pins.json" \
@@ -156,6 +157,9 @@ fi
 say "Client Connector installed. Sign in as ${ZUSER:-a pilot user}${ZUSER:+@$DOMAIN} when it opens."
 open -a "Zscaler" 2>/dev/null || true
 
+fi
+
+[ -n "$SKIP" ] && open -a "Zscaler" 2>/dev/null || true
 say "Installing the POV probe (tests and traffic only: no keys, nothing in the tenant)..."
 PHOME="${ZPOV_PROBE_HOME:-$HOME/.zscaler-pov-probe}"
 mkdir -p "$PHOME"

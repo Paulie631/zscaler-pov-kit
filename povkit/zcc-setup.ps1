@@ -44,37 +44,40 @@ try {
   # 0. never take over a device that already has Client Connector (a work laptop's corporate one, say)
   $have = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue |
     Where-Object { $_.DisplayName -match '^Zscaler' }
-  if ($have -and -not $Replace) {
-    Fail "Client Connector is already installed on this PC (your company's, perhaps). This setup would reinstall it for the POV's tenant and sign it out of its current one, so nothing was changed. Use a spare PC or a virtual machine, or run again with -Replace if this PC is meant only for the POV."
+  $skip = $have -and -not $Replace
+  if ($skip) {   # already installed: leave it as it is (the probe checks it's in the POV's tenant before testing)
+    Say "Client Connector is already installed: leaving it as it is (-Replace reinstalls it for this tenant)."
   }
-  # 1. the installer
-  if (-not $Msi) {
-    try { $pins = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/zcc_installers.json" }
-    catch { Fail "Couldn't reach GitHub. Ask IT to allow github.com downloads, or give -Msi FILE." }
-    $w = $pins.windows
-    if (-not $w) { Fail "The kit has no Windows installer pinned. Download the .msi from your Zscaler console (Platform Releases) and give -Msi FILE." }
-    Say "Downloading Client Connector $($w.version)..."
-    $Msi = Join-Path $Tmp $w.file
-    Invoke-WebRequest "https://github.com/$Repo/releases/download/$($pins.release_tag)/$($w.file)" -OutFile $Msi -UseBasicParsing
-    if ((Get-FileHash $Msi -Algorithm SHA256).Hash.ToLower() -ne $w.sha256.ToLower()) {
-      Fail "The installer doesn't match the kit's pinned SHA-256, so it wasn't installed."
+  if (-not $skip) {
+    # 1. the installer
+    if (-not $Msi) {
+      try { $pins = Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/zcc_installers.json" }
+      catch { Fail "Couldn't reach GitHub. Ask IT to allow github.com downloads, or give -Msi FILE." }
+      $w = $pins.windows
+      if (-not $w) { Fail "The kit has no Windows installer pinned. Download the .msi from your Zscaler console (Platform Releases) and give -Msi FILE." }
+      Say "Downloading Client Connector $($w.version)..."
+      $Msi = Join-Path $Tmp $w.file
+      Invoke-WebRequest "https://github.com/$Repo/releases/download/$($pins.release_tag)/$($w.file)" -OutFile $Msi -UseBasicParsing
+      if ((Get-FileHash $Msi -Algorithm SHA256).Hash.ToLower() -ne $w.sha256.ToLower()) {
+        Fail "The installer doesn't match the kit's pinned SHA-256, so it wasn't installed."
+      }
+      Say "Matches the kit's pinned SHA-256"
     }
-    Say "Matches the kit's pinned SHA-256"
-  }
-  if (-not (Test-Path $Msi)) { Fail "No installer at $Msi." }
-  $sig = Get-AuthenticodeSignature $Msi
-  if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notmatch 'CN="?Zscaler, Inc\.') {
-    Fail "The installer isn't validly signed by Zscaler, Inc. ($($sig.Status)), so it wasn't installed."
-  }
-  Say "Signed by Zscaler, Inc."
+    if (-not (Test-Path $Msi)) { Fail "No installer at $Msi." }
+    $sig = Get-AuthenticodeSignature $Msi
+    if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notmatch 'CN="?Zscaler, Inc\.') {
+      Fail "The installer isn't validly signed by Zscaler, Inc. ($($sig.Status)), so it wasn't installed."
+    }
+    Say "Signed by Zscaler, Inc."
 
-  # 2. install with this tenant's settings
-  $args_ = @("/i", "`"$Msi`"", "/quiet", "/norestart", "CLOUDNAME=$Cloud", "USERDOMAIN=$Domain")
-  if ($User) { $args_ += "UNAME=$User" }
-  Say "Installing Client Connector (cloud $Cloud, domain $Domain$(if ($User) { ", user $User" }))..."
-  $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList $args_
-  if ($p.ExitCode -notin 0, 3010) { Fail "The installer failed (msiexec exit code $($p.ExitCode))." }
-  Say "Client Connector installed. Sign in as $(if ($User) { "$User@$Domain" } else { 'a pilot user' }) when it opens."
+    # 2. install with this tenant's settings
+    $args_ = @("/i", "`"$Msi`"", "/quiet", "/norestart", "CLOUDNAME=$Cloud", "USERDOMAIN=$Domain")
+    if ($User) { $args_ += "UNAME=$User" }
+    Say "Installing Client Connector (cloud $Cloud, domain $Domain$(if ($User) { ", user $User" }))..."
+    $p = Start-Process msiexec.exe -Wait -PassThru -ArgumentList $args_
+    if ($p.ExitCode -notin 0, 3010) { Fail "The installer failed (msiexec exit code $($p.ExitCode))." }
+    Say "Client Connector installed. Sign in as $(if ($User) { "$User@$Domain" } else { 'a pilot user' }) when it opens."
+  }
 
   # 3. the POV probe and the POV's tests
   Say "Installing the POV probe (tests and traffic only: no keys, nothing in the tenant)..."

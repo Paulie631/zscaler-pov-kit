@@ -22,6 +22,7 @@ def fake_run(monkeypatch, outcome="block"):
                        tests={c["id"]: c.get("hash") for c in criteria if c.get("hash")})
         return out
     monkeypatch.setattr(probe, "run", run)
+    monkeypatch.setattr(probe, "run_spec", lambda sp, rid, s: {"outcome": outcome, "expect": sp.get("expect")})
 
 
 def accept_uc(pov, n, changes, probe_tests=()):
@@ -192,3 +193,12 @@ def test_pack_travels_in_the_commands(pov, tmp_path, monkeypatch):
     monkeypatch.setattr(device, "HOME", tmp_path)
     monkeypatch.setattr(device, "PACK", tmp_path / "pack.json")
     assert device.install_pack(device.from_code(code))["pov"] == pov.id
+
+
+def test_gate_stops_a_device_outside_the_tenant():
+    from povkit import device
+    crit = [{"id": "IS-TEN-01", "probe": [{"type": "http", "url": "https://www.example.com/", "expect": "block"}]}]
+    device.gate(crit, run_spec=lambda sp, rid, s: {"outcome": "block", "expect": "block"})   # in the tenant: fine
+    with pytest.raises(device.DeviceError, match="isn't in the POV's tenant"):
+        device.gate(crit, run_spec=lambda sp, rid, s: {"outcome": "allow", "expect": "block"})
+    device.gate([{"id": "AI-AIG-01", "probe": []}], run_spec=None)   # no ZIA tenant check in the pack: no gate

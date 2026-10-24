@@ -765,6 +765,28 @@ def api(method, path, body, q):
                 raise KitError("ZIdentity didn't say which cloud: type it (the Zscaler console's address or Client "
                                "Connector's About page shows it, such as zscalertwo).")
         return 200, {"cloud": settings.set_value(p, "zcc.cloud", c)}
+    if path == "/api/device/run-here":   # this computer is the pilot device: run the tests, import the results
+        from . import device
+        p = current()
+
+        def work(log):
+            pack = evidence.probe_pack(p)
+            n = sum(len(c["probe"]) for c in pack["criteria"])
+            log("info", f"Checking this computer is in {p.cfg['customer']}'s tenant as a pilot user, then running "
+                        f"the POV's {n} device tests...")
+            try:
+                res, path = device.test(pack=pack, say=lambda m: log("info", m))
+            except device.DeviceError as e:
+                raise KitError(str(e)) from e
+            d = evidence.import_probe(p, path)
+            ok = sum(r["pass"] for r in res["results"])
+            for r in res["results"]:
+                log("ok" if r["pass"] else "warn", f"{r['criterion']}: {evidence.describe_spec(r['spec'])}: got "
+                                                    f"{r['outcome']}")
+            log("ok", f"{ok} of {len(res['results'])} as expected. Imported: Success criteria shows them "
+                      f"(file: {path}).")
+            return {"ok": ok, "total": len(res["results"]), "run_id": d["run_id"]}
+        return 200, {"job": start_job("probe", work)}
     if path == "/api/probe-pack/review":   # the tests the device commands carry: review, add, leave out
         p = current()
         if body.get("add"):
