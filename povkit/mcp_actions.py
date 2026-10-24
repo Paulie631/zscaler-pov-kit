@@ -168,6 +168,11 @@ def t_tests(pov, a):
     if not tests:
         raise KitError("No AI Guard tests for those criteria. This POV's: " + ", ".join(g["criterion"] for g in groups))
     mode = "proxy" if a.get("mode") == "proxy" else "detect"
+    from . import aiguard_calibrate as cal
+    todo = cal.needs(pov, tests)
+    if todo:
+        cal.calibrate(pov, todo)   # each test should trigger what it's meant to show in this tenant
+    tests = cal.apply(pov, tests)
     res = ar.run(pov, tests, mode, tags=bool(a.get("tags", True)), rounds=1)
     ev = ar.record_evidence(pov, res)
     ok = [r for r in res if r.get("status") == "ok"]

@@ -252,7 +252,8 @@ def api(method, path, body, q):
                 return 404, {"error": "no such job"}
             since, isince = int(q.get("since", 0)), int(q.get("isince", 0))
             return 200, {"done": j["done"], "lines": j["lines"][since:], "result": j["result"], "error": j["error"],
-                         "items": j["items"][isince:], "total": j.get("total"), "stopping": j["stop"]}
+                         "items": j["items"][isince:], "total": j.get("total"), "stopping": j["stop"],
+                         "phase": j.get("phase")}
         if path == "/api/plan":
             p = current()
             cl = ChangeList(p.dir)
@@ -562,6 +563,22 @@ def api(method, path, body, q):
         live = bool(body.get("text"))
 
         def work(log, job):
+            nonlocal tests
+            from . import aiguard_calibrate as cal
+            if not live and body.get("calibrate", True):   # every test should trigger what it's meant to show
+                todo = cal.needs(p, [t for t in tests if mode != "proxy" or t.get("direction", "IN") == "IN"])
+                if todo:
+                    job["phase"] = {"calibrating": 0, "of": len(todo)}
+                    log("info", f"Checking {len(todo)} test(s) trigger their detectors in this tenant first")
+
+                    def step(rec):
+                        job["phase"] = {"calibrating": job["phase"]["calibrating"] + 1, "of": len(todo),
+                                        "last": rec.get("name"), "status": rec.get("status")}
+                    cal.calibrate(p, todo, log, stop=lambda: job["stop"], on_result=step)
+                    job["phase"] = None
+                    if job["stop"]:
+                        return {"results": [], "stopped": True, "evidence": {}}
+                tests = cal.apply(p, tests)
             n = len([t for t in tests if mode != "proxy" or t.get("direction", "IN") == "IN"])
             job["total"] = n * max(1, min(10, int(body.get("rounds") or 1)))
             provs = [x for x in (body.get("providers") or []) if x in agm.PROVIDERS] or None if mode == "proxy" else None
@@ -571,6 +588,21 @@ def api(method, path, body, q):
             ev = {} if live else aiguard_runner.record_evidence(p, res, stopped)
             return {"results": res, "stopped": stopped, "evidence": ev}
         return 200, {"job": start_job("aiguard", work, streams=True)}
+    if path == "/api/aiguard/calibrate":
+        from . import aiguard_calibrate as cal, aiguard_runner
+        p = current()
+        if body.get("state"):
+            c = cal.load(p)
+            return 200, {"tests": c["tests"], "summary": cal.summary(c["tests"]), "at": c.get("at"),
+                         "stale": c.get("stale", False)}
+        tests = aiguard_runner.find_tests(p, body.get("ids"), body.get("preset"), body.get("pack"))
+
+        def work(log, job):
+            job["total"] = len(tests)
+            out = cal.calibrate(p, tests, log, stop=lambda: job["stop"], on_result=job["items"].append,
+                                force=bool(body.get("force")))
+            return {"summary": cal.summary(out), "stopped": job["stop"]}
+        return 200, {"job": start_job("calibrate", work, streams=True)}
     if path == "/api/job/stop":
         j = JOBS.get(body.get("id"))
         if not j:

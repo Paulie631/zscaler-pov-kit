@@ -935,10 +935,13 @@ function ccDraw(){const el=$("#ccbody");
 /* ---------------- AI Guard tab (the demo kit's runner, profiles, proxy, customer prompts, report) ---------------- */
 let AG=null,AGsel=new Set(),AGhideMissed=false,AGTAB="runner",AGopen=new Set();
 const AGR={mode:"detect",tags:true,rounds:1,users:null,results:[],job:null};
+let AGCAL={tests:{},summary:{}};
+const CALCHIP={rewritten:["reworded","Reworded so it triggers in this tenant (internal note: the customer sees the test as it runs)"],swapped:["swapped","Replaced by another test for the same detectors"],missed:["won't trigger","No version triggered the expected detectors in this tenant"],ok:["✓ triggers","Checked: triggers its detectors in this tenant"]};
 async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
   if(!c.settings.products.includes("aiguard")){w.innerHTML='<div class="panel"><h2>AI Guard</h2><p class="muted">AI Guard isn\'t in this POV\'s products. Add it on Setup → Start a POV (Step by step), then make the change list again.</p></div>';return}
   try{AG=await api("/api/aiguard")}catch(e){w.innerHTML=note(e.message,"bad");return}
+  try{AGCAL=await api("/api/aiguard/calibrate",{state:true})}catch(e){AGCAL={tests:{},summary:{}}}
   if(!AGR.users)AGR.users=new Set(AG.pov_users.slice(0,3));
   const px=AG.proxy, det=AG.detectors, never=new Set(AG.never_block);
   const custom=AG.custom||{};
@@ -968,6 +971,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
           <div class="progress"><i id="agbar"></i></div>
           <div class="stats"><div><b id="ags-done">0</b>run</div><div><b id="ags-hits">0</b>with detections</div><div><b id="ags-block">0</b>blocked</div><div><b id="ags-miss">0</b>missed expected</div><div><b id="ags-err">0</b>errors</div></div>
           <div id="agrunmsg"></div>
+          <div class="hint" id="agcalsum" style="margin-top:8px"></div>
         </div>
         <div class="panel"><h2>Live prompt</h2><textarea id="aglive" placeholder="Type or paste a prompt to scan, e.g. one from the customer"></textarea>
           <div class="row" style="margin-top:10px;gap:10px"><div class="seg" id="aglivedir"><button data-d="IN" class="on">Prompt</button><button data-d="OUT">Model reply</button></div><button class="primary" id="aglivego" ${AG.keys.detection?"":"disabled"}>Scan</button><button id="aglivemodel" ${AG.keys.proxy?"":"disabled"}>Send to the model</button></div>
@@ -1013,7 +1017,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
 
   // ---- library
   const every=()=>[...AG.pov_groups.flatMap(g=>g.tests),...AG.tests,...Object.values(AG.packs).flatMap(p=>p.tests)];
-  const testRow=t=>`<label class="agtest" title="${esc(t.text)}"><input type="checkbox" data-t="${esc(t.id)}" ${AGsel.has(t.id)?"checked":""}><span><span class="dir">${esc(t.direction)}</span> ${esc(t.name)}${t.drafted?' <span class="chip">drafted</span>':""}<small>${esc(t.text)}</small></span></label>`;
+  const testRow=t=>`<label class="agtest" title="${esc(t.text)}"><input type="checkbox" data-t="${esc(t.id)}" ${AGsel.has(t.id)?"checked":""}><span><span class="dir">${esc(t.direction)}</span> ${esc(t.name)}${t.drafted?' <span class="chip">drafted</span>':""}${(()=>{const r=AGCAL.tests[t.id];if(!r||!CALCHIP[r.status])return "";const[l,h]=CALCHIP[r.status];return ` <span class="chip" title="${esc(h+(r.why?": "+r.why:"")+(r.text?"\n\nRuns as: "+r.text:""))}" style="${r.status=="missed"?"color:var(--bad)":r.status=="ok"?"color:var(--ok)":""}">${esc(l)}</span>`})()}<small>${esc((AGCAL.tests[t.id]&&AGCAL.tests[t.id].text)||t.text)}</small></span></label>`;
   const groupHTML=(key,title,ts,extra,chip)=>{const on=ts.filter(t=>AGsel.has(t.id)).length;
     return `<details class="aggroup" ${on||AGopen.has(key)?"open":""} data-key="${esc(key)}"><summary><input type="checkbox" data-g="${esc(key)}" ${on==ts.length&&on?"checked":""}>${chip?`<span class="chip">${esc(chip)}</span>`:""}<span class="agtitle">${esc(title)}</span><span class="n">${on}/${ts.length}</span></summary>${ts.map(testRow).join("")}${extra||""}</details>`};
   const drawLib=()=>{
@@ -1057,9 +1061,11 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
       for(;;){const j=await api(`/api/job?id=${jid}&isince=${got}&since=99999`);got+=j.items.length;AGR.results.push(...j.items);
         if(j.total)$("#agbar").style.width=Math.round(100*got/j.total)+"%";if(j.items.length)drawRows();
         if(first&&j.items[0]&&j.items[0].status=="error"){$("#agrunmsg").innerHTML=note("First test failed: "+j.items[0].error,"bad")}if(j.items.length)first=false;
+        if(j.phase&&j.phase.of)$("#agrunmsg").innerHTML=note(`Checking each test triggers its detectors in this tenant first: ${j.phase.calibrating} of ${j.phase.of}${j.phase.last?` · ${esc(j.phase.last)}: ${esc(j.phase.status)}`:""}`,"warn");
         if(j.stopping)$("#agstop").textContent="Stopping…";
         if(j.done){if(j.error)throw new Error(j.error);const r=j.result;AGR.job=null;
           if(r.evidence&&Object.keys(r.evidence).length)Object.assign(AG.evidence,r.evidence);drawEv();
+          try{AGCAL=await api("/api/aiguard/calibrate",{state:true});drawCal()}catch(e){}
           $("#agrunmsg").innerHTML=note(`${r.stopped?"Stopped":"Done"}: ${r.results.length} scan${r.results.length==1?"":"s"}${r.evidence&&Object.keys(r.evidence).length?`; evidence updated for ${Object.keys(r.evidence).join(", ")}`:""}. Insights shows them in 10 to 15 minutes, under the users above.`,"good");break}
         await new Promise(x=>setTimeout(x,700))}}
     catch(e){$("#agrunmsg").innerHTML=note(e.message,"bad")}
@@ -1076,10 +1082,15 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
     $("#ags-block").textContent=ok.filter(r=>r.action=="BLOCK").length;$("#ags-miss").textContent=AGhideMissed?"–":ok.filter(r=>(r.missed||[]).length).length;$("#ags-err").textContent=AGR.results.length-ok.length;
     const seen=new Set(ok.flatMap(r=>[...(r.detectors||[]),...(r.reply_detectors||[])])),panels={};Object.entries(AG.panels).forEach(([d,p])=>{panels[p]=panels[p]||seen.has(d)});
     $("#agcov").innerHTML=Object.entries(panels).map(([p,h])=>`<span class="${h?"hit":""}">${esc(p)}</span>`).join("")+`<span class="${ok.length?"hit":""}">Users${ok.length?` (${new Set(ok.map(r=>r.user)).size})`:""}</span><span class="${ok.some(r=>r.action=="BLOCK")?"hit":""}">Blocked prompts</span><span class="${ok.some(r=>r.mode=="proxy")?"hit":""}">Token usage (proxy)</span>`}
+  function drawCal(){const el=$("#agcalsum");if(!el)return;const m=AGCAL.summary||{},n=Object.values(m).reduce((a,b)=>a+b,0);
+    el.innerHTML=n?`Tests checked in this tenant: ${m.ok||0} trigger as written${m.rewritten?`, ${m.rewritten} reworded`:""}${m.swapped?`, ${m.swapped} swapped`:""}${m.missed?`, <b style="color:var(--bad)">${m.missed} won't trigger</b> (hover the chip for why)`:""}. <a href="#" id="agrecal">Check the picked tests again</a>`:
+      `Before each run the kit checks every test triggers its detectors in this tenant, and rewords or swaps any that don't (never the customer's own prompts).`;
+    const a=$("#agrecal");a&&(a.onclick=async e=>{e.preventDefault();const ids=[...AGsel];if(!ids.length){$("#agrunmsg").innerHTML=note("Pick the tests to check.");return}
+      $("#agrunmsg").innerHTML='<div class="log" id="agcallog"></div>';try{await runJob((await api("/api/aiguard/calibrate",{ids,force:true})).job,$("#agcallog"));AGCAL=await api("/api/aiguard/calibrate",{state:true});aiguardTab()}catch(err){$("#agrunmsg").innerHTML=note(err.message,"bad")}})}
   function drawEv(){const el=$("#agev");if(!el)return;
     el.innerHTML=AG.pov_groups.length?`<div class="tablewrap"><table><tr><th>Criterion</th><th>Tests</th><th>Result</th><th>From</th></tr>${AG.pov_groups.map(g=>{const e=AG.evidence[g.criterion];
       return `<tr><td><span class="chip">${esc(g.criterion)}</span> ${esc(g.title)}</td><td>${g.tests.length}</td><td>${e?`<span class="badge b-${esc(e.status)}">${esc(e.status)}</span> <span class="muted" style="font-size:12px">${esc(e.detail||"")}</span>`:'<span class="muted">not run yet</span>'}</td><td class="muted" style="font-size:12px">${e?esc((e.source||"API proofs")+" · "+(e.at||"").slice(0,16).replace("T"," ")):""}</td></tr>`}).join("")}</table></div><div class="hint">Detection API results count, and LLM proxy results with Detector tags on. A stopped run counts for what ran; a criterion whose tests didn't all run stays incomplete.</div>`:'<p class="muted">No AI Guard criteria in this POV yet.</p>'}
-  drawRows();drawEv();
+  drawRows();drawEv();drawCal();
 
   // ---- live prompt
   let ldir="IN";$$("#aglivedir button").forEach(b=>b.onclick=()=>{ldir=b.dataset.d;$$("#aglivedir button").forEach(x=>x.classList.toggle("on",x===b))});

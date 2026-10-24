@@ -42,7 +42,7 @@ def library(pov):
     packs = {k: {"name": v["name"], "description": v.get("description", ""), "tests": v["tests"], "customer": False}
              for k, v in LIB["packs"].items()}
     for k, v in customer_packs(pov).items():
-        packs[k] = dict(v, customer=True)
+        packs[k] = dict(v, customer=True, tests=[dict(t, customer=True) for t in v.get("tests") or []])
     return {"groups": LIB["groups"], "presets": LIB["presets"], "users": LIB["users"], "tests": LIB["tests"],
             "packs": packs, "stories": LIB["stories"], "panels": PANELS}
 
@@ -86,6 +86,10 @@ def criterion_tests(pov, c, led=None):
              "text": t["text"], "expect": _expect(t), "drafted": bool(t.get("status"))}
         if key_secret:
             x["key_secret"] = key_secret
+        if c.get("customer_pack"):
+            x["customer"] = True   # the customer's own prompts: calibration never changes them
+        if c.get("usecase"):
+            x["usecase_words"] = True
         out.append(x)
     return out
 

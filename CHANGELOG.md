@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.41
+
+- **Every AI Guard test triggers what it's meant to show.** Before a run, the kit scans each test once through the
+  POV's Detection API (no model involved). A test that misses is reworded by Claude (up to 3 tries) or swapped for
+  another test that expects the same detectors and does trigger them. The customer's own prompts are never changed.
+  Results are remembered per POV and redone when the policy changes; the test library shows each test's state, and
+  **Check the picked tests again** re-runs it. The internal readout lists what was reworded or swapped.
+
 ## 0.9.40
 
 - Executive summary: the AI Guard "risky prompts caught" figure now counts each harmful test once (its latest

@@ -147,7 +147,8 @@ def write(pov, emphasis="", internal_notes="", prepared_by=""):
            "facts": {k: f[k] for k in ("products", "started", "ends", "criteria_totals", "ai_guard")},
            "criteria": [{k: c[k] for k in ("id", "title", "result")} for c in f["criteria"]],
            "results": {c["id"]: c["result"] for c in f["criteria"]}, "at": now,
-           "prepared_by": prepared_by.strip()[:120], "emphasis": emphasis.strip()[:600]}
+           "prepared_by": prepared_by.strip()[:120], "emphasis": emphasis.strip()[:600],
+           "calibration": _calibration(pov)}
     pov.write_json("execsum.json", out)
     cu = out["customer"]
     pov.write_json("summary.json", {"headline": cu["headline"], "proved": cu["results"], "open": cu["open"],
@@ -155,6 +156,33 @@ def write(pov, emphasis="", internal_notes="", prepared_by=""):
                                     "results": out["results"]})
     pov.log("report", f"executive summary (customer and internal) written by Claude {ai.ROUTES[ai.route_name()]}")
     return out
+
+
+def _calibration(pov):
+    """How the AI Guard tests were calibrated (internal readout only; not sent to Claude)."""
+    try:
+        from . import aiguard_calibrate as cal
+        recs = cal.load(pov)["tests"]
+    except Exception:   # noqa: BLE001
+        return None
+    if not recs:
+        return None
+    m = cal.summary(recs)
+    return {"summary": m, "changed": [{"name": r.get("name"), "status": r["status"], "swap": r.get("swap_name")}
+                                      for r in recs.values() if r["status"] in ("rewritten", "swapped", "missed")][:20]}
+
+
+def calibration_lines(s):
+    c = s.get("calibration")
+    if not c:
+        return []
+    m = c["summary"]
+    lines = [f"{m.get('ok', 0)} AI Guard tests triggered as written, {m.get('rewritten', 0)} were reworded and "
+             f"{m.get('swapped', 0)} swapped for another test so they trigger in this tenant; {m.get('missed', 0)} "
+             "wouldn't trigger. The customer's own prompts were never changed."]
+    lines += [f"{x['name']}: " + {"rewritten": "reworded", "swapped": f"replaced by '{x.get('swap')}'",
+                                  "missed": "won't trigger here"}[x["status"]] for x in c["changed"]]
+    return lines
 
 
 def current(pov):
@@ -295,6 +323,13 @@ def _docx(pov, s, version):
                 for r in p.runs:
                     r.bold = True
 
+    if version == "internal" and calibration_lines(s):
+        heading("How the AI Guard tests were calibrated")
+        cl = calibration_lines(s)
+        d.add_paragraph(cl[0])
+        for x in cl[1:]:
+            d.add_paragraph(x, style="List Bullet")
+
     heading("Success criteria")
     t = d.add_table(rows=1, cols=3)
     t.style = "Light Grid Accent 1"
@@ -430,6 +465,12 @@ def _pptx(pov, s, version):
                 x = M + k * (half + Emu(300000))
                 box(sl, x, Emu(1100000), half, Emu(400000), lab, 15, True, QUIET)
                 bullets(sl, items, x, Emu(1500000), half, Emu(3900000), 15)
+
+    if internal and calibration_lines(s):
+        cl = calibration_lines(s)
+        sl = frame("How the AI Guard tests were calibrated")
+        box(sl, M, Emu(1050000), W - 2 * M, Emu(900000), cl[0], 16)
+        bullets(sl, cl[1:9], M, Emu(2100000), W - 2 * M, Emu(3300000), 14)
 
     # the criteria, on every version
     sl = frame("Success criteria")
