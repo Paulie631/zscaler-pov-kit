@@ -106,6 +106,9 @@ def evaluate(pov, ids=None):
                 ok = all(x["pass"] for x in res)
                 proofs["probe"] = {"status": PASS if ok else FAIL_, "run": run["run_id"], "at": run["at"],
                                    "device": run.get("device"), "results": res}
+                if not ok:
+                    from .proof_explain import explain_probe
+                    proofs["probe"]["explain"] = explain_probe(res)
         mine = [a for a in atts if a["criterion"] == c["id"]]
         if "api" in c["proofs"]:
             auto = apis.get(c["id"])

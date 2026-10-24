@@ -235,3 +235,16 @@ def test_every_product_has_the_full_lifecycle():
         assert p.criteria() or name == "zid", name    # from its catalog file (zid only serves the pilot group)
 
 
+
+
+def test_zcc_macos_profile_for_mac_pilots(pov, tenant, tenant_for):
+    led = applied(pov, tenant_for)
+    from povkit.products.zcc import mac_name
+    mac = next(a for a in tenant.mac_apps if a["name"] == mac_name(pov.prefix, pov.id))
+    fwd = next(f for f in tenant.fwds if f["name"] == zcc_names(pov.prefix, pov.id)[0])
+    assert mac["deviceType"] == "DEVICE_TYPE_MACOS" and mac["macPolicy"]["installCerts"] == 1
+    assert mac["forwardingProfileId"] == fwd["id"] and mac["groupIds"] == [77]
+    assert led.find("zcc.app.macos")["state"] == "owned" and led.find("zcc.app")["state"] == "owned"
+    assert next(a for a in tenant.mac_apps if a["name"] == "Default macOS")["macPolicy"]["installCerts"] == 0
+    lifecycle.teardown(pov, tenant_for, log)
+    assert [a["name"] for a in tenant.mac_apps] == ["Default macOS"]

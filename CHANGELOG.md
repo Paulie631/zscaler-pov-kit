@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.9.55
+
+From the first real pilot-device run (12 of 21 passed), fixes for the 9 that didn't:
+
+- **Mac pilot devices get their own Client Connector profile** (`… pilot Macs …`): the pilot group, the Zscaler
+  certificate and the POV's Z-Tunnel 2.0 forwarding profile, like the Windows one. Without it a Mac stayed on the
+  tenant's default profile (web traffic only), so the firewall and DNS tests (IS-FW-01, IS-DNS-01) never reached
+  Zscaler. Existing POVs: make the change list again, sign it off, and Apply.
+- **A blocked HTTPS site that isn't decrypted counts as blocked:** ZIA answers with a Zscaler-issued certificate, which
+  the probe took for an error (IS-THR-02).
+- **Test sites that match the rules:** the caution test opens facebook.com (ZIA files reddit.com under discussion
+  forums, not social networking); the GenAI block test opens poe.com (the tenant can't put DeepSeek in a Cloud App
+  Control rule, so Apply leaves it out).
+- **The probe looks like a browser** (headers browsers send), which caution and isolation pages respond to; the DLP
+  test posts ten fake card numbers as plain text to dlptest.com.
+- **Failed device tests explain themselves** on Success criteria: why (Z-Tunnel 1.0, no isolation, DLP not acting,
+  the site's category, an app not in the rule, a network error) and what to do.
+
 ## 0.9.54
 
 - **Set up a pilot device, simplified to one command.** It installs Client Connector and the probe only if they're

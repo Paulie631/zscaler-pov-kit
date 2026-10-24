@@ -51,7 +51,7 @@
    "probe": [
     {
      "type": "http",
-     "url": "https://www.reddit.com/",
+     "url": "https://www.facebook.com/",
      "expect": "caution"
     }
    ]
@@ -157,7 +157,7 @@
    "probe": [
     {
      "type": "dlp_post",
-     "url": "https://httpbin.org/post",
+     "url": "https://dlptest.com/http-post/",
      "expect": "block"
     }
    ]
@@ -179,7 +179,7 @@
     },
     {
      "type": "http",
-     "url": "https://chat.deepseek.com/",
+     "url": "https://poe.com/",
      "expect": "block"
     }
    ]
@@ -196,7 +196,7 @@
    "probe": [
     {
      "type": "dlp_post",
-     "url": "https://httpbin.org/post",
+     "url": "https://dlptest.com/http-post/",
      "expect": "block"
     }
    ],

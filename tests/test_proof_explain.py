@@ -56,3 +56,14 @@ def test_ai_guard_misses_explained_per_test():
     assert len(ex) == 2 and "is on in the POV's policy" in ex[0]["why"] and ex[0]["action"] == "runner"
     assert "isn't on" in ex[1]["why"] and ex[1]["action"] == "policy"
     assert "Data exfil: expected prompt_injection; AI Guard found language, prompt_tags (ALLOW)" == ex[0]["problem"]
+
+
+def test_probe_failures_are_explained():
+    from povkit.proof_explain import explain_probe
+    rows = [{"criterion": "IS-FW-01", "spec": {"type": "tcp", "host": "portquiz.net"}, "expect": "block", "outcome": "open", "pass": False},
+            {"criterion": "IS-URL-01", "spec": {"url": "https://www.bet365.com/"}, "expect": "block", "outcome": "block", "pass": True},
+            {"criterion": "IS-THR-02", "spec": {"url": "https://x/"}, "expect": "block", "outcome": "error:SSLError", "pass": False},
+            {"criterion": "IS-ZZZ", "spec": {"url": "https://y/"}, "expect": "block", "outcome": "allow", "pass": False}]
+    ex = explain_probe(rows)
+    assert len(ex) == 3 and "Z-Tunnel 2.0" in ex[0]["why"] and "network or TLS" in ex[1]["why"]
+    assert ex[2]["action"] == "fixdrift"

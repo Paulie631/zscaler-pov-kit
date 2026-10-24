@@ -90,6 +90,9 @@ def sweep(t, pov_id, prefix, product_names, cac_types=None):
         finds += _sort(pov_id, prefix, "zcc", "app_profile",
                        safe("Client Connector app profiles",
                             lambda: items(t.call("zcc.web_policy", "list_by_company", query_params={"device_type": "windows"}))))
+        finds += _sort(pov_id, prefix, "zcc", "app_profile",
+                       safe("Client Connector macOS app profiles",
+                            lambda: items(t.call("zcc.web_policy", "list_by_company", query_params={"device_type": "macos"}))))
     seen, unique = set(), []
     for f in finds:   # a rule can show up under more than one listing
         if (f["product"], f["kind"], f["id"]) not in seen:
@@ -100,12 +103,12 @@ def sweep(t, pov_id, prefix, product_names, cac_types=None):
 
 def link(finds, pov, t):
     """Upgrade 'name only' finds that something certain ties to this POV to 'linked'."""
-    from .products.zcc import names as zcc_names
+    from .products.zcc import mac_name, names as zcc_names
     stamped = {(f["product"], f["kind"]): set() for f in finds}
     for f in finds:
         if f["proof"] == "stamp":
             stamped.setdefault((f["product"], f["kind"]), set()).add(f["id"])
-    zcc_own = set(zcc_names(pov.prefix, pov.id))
+    zcc_own = set(zcc_names(pov.prefix, pov.id)) | {mac_name(pov.prefix, pov.id)}
     groups = stamped.get(("zpa", "connector_group"), set())
     policies = stamped.get(("aiguard", "policy"), set())
     ag_ids = {"app": set(), "key": set(), "rule": set()}

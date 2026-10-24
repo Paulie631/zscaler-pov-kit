@@ -130,6 +130,7 @@ def test_verify_marks_objects_deleted_in_the_console(pov, tenant, tenant_for):
     tenant.departments = [d for d in tenant.departments if not d["name"].startswith("ZPOV")]
     tenant.fwds = [f for f in tenant.fwds if not f["name"].startswith("ZPOV")]
     tenant.apps = [a for a in tenant.apps if not a["name"].startswith("ZPOV")]
+    tenant.mac_apps = [a for a in tenant.mac_apps if not a["name"].startswith("ZPOV")]
     v = delete_pov.verify(pov, tenant_for)
     assert v["ok"], v
     assert not lifecycle.ledger(pov).active()

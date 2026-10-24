@@ -148,3 +148,65 @@ def explain(detail, status="fail"):
                             "Status > Check now shows drift on the POV's objects; Setup > Finish setup lists what's "
                             "left for people."], "action": None})
     return out
+
+
+# ---------------------------------------------------------------- device (probe) tests that didn't go as expected
+PROBE = {
+    ("IS-FW-01", "IS-DNS-01"): (
+        "Firewall and DNS rules only see traffic that Client Connector sends to Zscaler with Z-Tunnel 2.0. This device "
+        "sent the port or DNS test straight out: it's on Z-Tunnel 1.0 (web only), or not on the POV's app profile.",
+        ["On the device: Client Connector > More shows the app profile: it should be the POV's ('pilot devices' on "
+         "Windows, 'pilot Macs' on macOS) and Tunnel version Z-Tunnel 2.0.",
+         "A Mac pilot and a POV made before kit 0.9.55: make the change list again (it now adds the macOS profile), "
+         "sign it off, and Apply.",
+         "Then in Client Connector: More > Update Policy, and run the tests again."], "finish"),
+    ("IS-CBI-01",): (
+        "Isolation needs Cloud Browser Isolation in the tenant, and only applies to browsers: the test page wasn't "
+        "isolated for this device.",
+        ["Open the test site in a browser on the device, signed in as the pilot user: it should open in isolation.",
+         "No isolation there either: check the tenant has Cloud Browser Isolation and the POV rule's isolation "
+         "profile (Policy > URL & Cloud App Control).",
+         "If it works in a browser, show it live and mark the criterion Demonstrated."], "runner_none"),
+    ("IS-DLP-01", "AI-GEN-02"): (
+        "The test post with fake card numbers went through: DLP didn't act on it for this device.",
+        ["Check the POV's DLP rule is enabled for the pilot group, with the engine '5 or more Credit Card Numbers'.",
+         "DLP only sees decrypted traffic: the HTTPS inspection test (IS-SSL-01) should pass on this device.",
+         "Rules take a few minutes after activation: run the tests again. Still through? Show a DLP block live "
+         "(paste card numbers into a web form) and mark it Demonstrated."], "fixdrift"),
+    ("IS-URL-02",): (
+        "No caution page: the site's category isn't in the POV's caution rule, or this device already clicked "
+        "through the caution page (ZIA remembers that for a while).",
+        ["Check the site's category (the console's URL Lookup) is in the caution rule.",
+         "Run the tests again later, or open the site in a browser on the device to see the caution page."], None),
+    ("AI-GEN-01",): (
+        "The GenAI app the test expects to be blocked was allowed: it isn't in the POV's block rule. Apply leaves out "
+        "apps the tenant can't put in a Cloud App Control rule.",
+        ["Check the POV's 'Block risky GenAI' rule (Policy > URL & Cloud App Control > AI & ML) for the app.",
+         "Review the device tests (Set up a pilot device > More) and test an app the rule lists."], None),
+}
+
+
+def explain_probe(results):
+    """Device tests that didn't go as expected, each with why and what to do."""
+    out = []
+    for r in results or []:
+        if r.get("pass"):
+            continue
+        cid, got, want = r.get("criterion"), str(r.get("outcome")), r.get("expect")
+        sp = r.get("spec") or {}
+        what = f"{sp.get('url') or sp.get('host') or sp.get('name') or sp.get('type')}: expected {want}, got {got}"
+        rule = next((v for k, v in PROBE.items() if cid in k), None)
+        if got.startswith("error:"):
+            out.append({"problem": what, "why": "The device couldn't complete the test (a network or TLS error), so "
+                        "there's no result to judge.", "fix": [
+                        "Check the device is online and signed in to Client Connector as the pilot user.",
+                        "Run the tests again; if it repeats, open the site in a browser on the device."], "action": None})
+        elif rule:
+            why, fix, action = rule
+            out.append({"problem": what, "why": why, "fix": fix, "action": None if action == "runner_none" else action})
+        else:
+            out.append({"problem": what, "why": "The device saw something other than what this criterion expects.",
+                        "fix": ["Status > Check now: is the POV's rule for this criterion in place and enabled?",
+                                "Run the tests again after a few minutes (changes take a moment after activation)."],
+                        "action": "fixdrift"})
+    return out

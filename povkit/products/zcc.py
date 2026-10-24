@@ -1,4 +1,4 @@
-"""Client Connector: a Windows app profile for the pilot group, with its own Z-Tunnel 2.0 forwarding profile.
+"""Client Connector: Windows and macOS app profiles for the pilot group, with their own Z-Tunnel 2.0 forwarding profile.
 
 Both are copies of the tenant's default Windows profiles, never edits of them. Ported from the AI Guard SE Demo Kit's
 setup_zcc: the forwarding profile copies the ZIA settings of a Z-Tunnel 2.0 profile the customer already has, if
@@ -91,9 +91,14 @@ BY_HAND = ("Build it by hand in the Client Connector portal, then Status > Fix d
            "name and adopts it: 1) Forwarding profile named exactly '{fwd}': a copy of '{src_fwd}' with ZIA action "
            "Tunnel and Z-Tunnel 2.0 on every network type. 2) Windows app profile named exactly '{app}': a copy of "
            "'{src_app}' for group '{group}' only, Install Zscaler SSL Certificate on, forwarding profile '{fwd}', and "
-           "no broader profile above it in the order. 3) Mac pilot devices: the same app profile under macOS (same name, "
-           "group, certificate and forwarding profile); the kit doesn't track the macOS one, so delete it by hand at the "
-           "end of the POV.")
+           "no broader profile above it in the order. 3) Mac pilot devices: the same app profile under macOS, named "
+           "exactly '{mac}' (same group, certificate and forwarding profile).")
+
+
+# the app profile per OS: (key, list device_type, policy field, install-certificate field, device type, label)
+OSES = (("zcc.app", "windows", "windowsPolicy", "installSslCerts", "DEVICE_TYPE_WINDOWS", "Windows"),
+        ("zcc.app.macos", "macos", "macPolicy", "installCerts", "DEVICE_TYPE_MACOS", "macOS"))
+OS_OF = {o[0]: o for o in OSES}
 
 
 def names(prefix, pov_id):
@@ -101,6 +106,11 @@ def names(prefix, pov_id):
     tag = pov_id.rsplit("-", 1)[-1]
     return (naming.safe_name(naming.name(prefix, f"Z-Tunnel 2.0 {tag}"), prefix),
             naming.safe_name(naming.name(prefix, f"pilot devices {tag}"), prefix))
+
+
+def mac_name(prefix, pov_id):
+    tag = pov_id.rsplit("-", 1)[-1]
+    return naming.safe_name(naming.name(prefix, f"pilot Macs {tag}"), prefix)
 
 
 NESTED_IDS = re.compile(r"^(id|.*ProfileId|.*PolicyId|.*_id)$")
@@ -155,6 +165,13 @@ class ZCC(Product):
         default_app = next((a for a in apps if re.search(r"default", str(g(a, "name")), re.I)), None) or \
             (sorted(apps, key=lambda a: int(g(a, "ruleOrder") or 0))[-1] if apps else None)
         src_fwd = next((f for f in fwds if str(g(f, "id")) == str(g(default_app or {}, "forwardingProfileId"))), None)
+        try:
+            mac_apps = self._list(t, "zcc.web_policy", device_type="macos")
+        except Exception:   # noqa: BLE001 - macOS profiles are a bonus: the Windows ones still work
+            mac_apps = []
+        mac_default = next((a for a in mac_apps if re.search(r"default", str(g(a, "name")), re.I)), None) or \
+            (sorted(mac_apps, key=lambda a: int(g(a, "ruleOrder") or 0))[-1] if mac_apps else None)
+        snap["source_apps"] = {"macos": {"id": g(mac_default, "id"), "name": g(mac_default, "name")}} if mac_default else {}
         snap.update(readable=True, fwd_count=len(fwds), app_count=len(apps),
                     source_app={"id": g(default_app, "id"), "name": g(default_app, "name")} if default_app else None,
                     source_fwd={"id": g(src_fwd, "id"), "name": g(src_fwd, "name")} if src_fwd else None,
@@ -183,7 +200,7 @@ class ZCC(Product):
         grp = (zia_snap or {}).get("pilot_group") or {}
         fwd_name, app_name = names(pov.prefix, pov.id)
         src_app, src_fwd = snap.get("source_app") or {}, snap.get("source_fwd") or {}
-        spec = BY_HAND.format(fwd=fwd_name, app=app_name, group=grp.get("name", "the pilot group"),
+        spec = BY_HAND.format(fwd=fwd_name, app=app_name, mac=mac_name(pov.prefix, pov.id), group=grp.get("name", "the pilot group"),
                               src_fwd=src_fwd.get("name") or "your usual forwarding profile (or a new one)",
                               src_app=src_app.get("name") or "your usual Windows app profile (or a new one)")
         if not src_fwd:
@@ -201,6 +218,14 @@ class ZCC(Product):
                  criteria=["IS-ZCC-01", "IS-ZCC-02"], spec=spec, body={
                      "name": app_name, "copy_of": src_app.get("id"), "groups": [grp.get("id")],
                      "install_ssl_certs": True, "forwarding_profile": "{ref:zcc.fwd}"}),
+            *([item("zcc", "app_profile", "zcc.app.macos", mac_name(pov.prefix, pov.id), action="create_or_adopt",
+                    affects=affects,
+                    criteria=["IS-ZCC-01", "IS-ZCC-02", "IS-FW-01", "IS-DNS-01"], spec=spec, body={
+                        "name": mac_name(pov.prefix, pov.id), "os": "macos", "copy_of": (snap.get("source_apps") or {})["macos"]["id"],
+                        "groups": [grp.get("id")], "install_ssl_certs": True, "forwarding_profile": "{ref:zcc.fwd}"},
+                    why="Mac pilot devices: the same profile under macOS, so their firewall and DNS traffic goes "
+                        "through Z-Tunnel 2.0 too.")]
+              if (snap.get("source_apps") or {}).get("macos") else []),
             item("zcc", "customer_action", "zcc.ca.devices",
                  f"Pilot devices have Client Connector installed and signed in as members of '{grp.get('name', '?')}'",
                  action="customer_action", criteria=["IS-ZCC-01"], console="zcc.enrolled_devices",
@@ -210,7 +235,7 @@ class ZCC(Product):
     # ---- apply: the forwarding profile (plainer copies on a bare 400), then the app profile that uses it
     def apply(self, t, pov, items_, log):
         by = {i["key"]: i for i in items_ if i["product"] == "zcc"}
-        fwd_it, app_it = by.get("zcc.fwd"), by.get("zcc.app")
+        fwd_it = by.get("zcc.fwd")
         if not fwd_it:
             return
         fwds = self._list(t, "zcc.forwarding_profile")
@@ -255,48 +280,55 @@ class ZCC(Product):
                 log("warn", "Client Connector refused every version of the forwarding profile, down to a minimal "
                             "Z-Tunnel 2.0 one (bare 400). " + fwd_it["spec"])
                 return
-        if not app_it or t.ledger.find("zcc.app"):
-            return
+        for key in (o[0] for o in OSES):
+            it = by.get(key)
+            if it and not t.ledger.find(key):
+                self._app(t, it, fwd_it, log)
+
+    def _app(self, t, app_it, fwd_it, log):
+        key, dev, field, cert, dtype, label = OS_OF[app_it["key"]]
         gid = (app_it["body"].get("groups") or [None])[0]
         if isinstance(gid, str) and gid.startswith("{ref:"):   # the kit's own pilot group (Hosted DB test users)
             gid = t.ids.get(gid[5:-1])
-        apps = self._list(t, "zcc.web_policy", device_type="windows")
+        apps = self._list(t, "zcc.web_policy", device_type=dev)
         src = next((a for a in apps if str(g(a, "id")) == str(app_it["body"].get("copy_of"))), None)
         fwd_id = t.ids.get("zcc.fwd")
         if not (src and gid and fwd_id):
-            log("warn", "The Windows app profile wasn't made (no default profile to copy, no pilot group, or no "
+            log("warn", f"The {label} app profile wasn't made (no default profile to copy, no pilot group, or no "
                         "forwarding profile). " + app_it["spec"])
             return
         if any(g(a, "name") == app_it["name"] for a in apps):
-            log("warn", f"An app profile named '{app_it['name']}' already exists and isn't in this POV's ledger, so "
-                        "the kit won't create another. If it was built for this POV, Status > Fix drift adopts it.")
+            log("warn", f"A {label} app profile named '{app_it['name']}' already exists and isn't in this POV's ledger, "
+                        "so the kit won't create another. If it was built for this POV, Status > Fix drift adopts it.")
             return
         app = strip_ids({k: v for k, v in src.items() if k not in DROP | {"forwardingProfileId"}})
-        win = dict(app.get("windowsPolicy") or {})
-        win["installSslCerts"] = 1
+        pol = dict(app.get(field) or {})
+        pol[cert] = 1
         app.update(name=app_it["name"], active=1, groupAll=0, groupIds=[int(gid)], userIds=[], ruleOrder=1,
-                   windowsPolicy=win, deviceType=app.get("deviceType") or "DEVICE_TYPE_WINDOWS")
+                   deviceType=app.get("deviceType") or dtype, **{field: pol})
         if carries_ids(app):
             raise GuardError("The app-profile body still carries an ID; nothing was sent.")
         app["forwardingProfileId"] = fwd_id   # ours, set after the check: the only ID the body may carry
         before = {str(g(a, "id")) for a in apps}
 
         def find_app(_):
-            return new_id(before, self._list(t, "zcc.web_policy", device_type="windows"), app_it["name"])
+            return new_id(before, self._list(t, "zcc.web_policy", device_type=dev), app_it["name"])
         try:
-            t.create("zcc.app", "zcc.web_policy", "web_policy_edit", extract_id=find_app, stamped=False, **app)
+            t.create(key, "zcc.web_policy", "web_policy_edit", extract_id=find_app, stamped=False, **app)
         except GuardError:
             raise
         except KitError as e:
-            log("warn", f"Client Connector refused the Windows app profile ({str(e)[:120]}). " + app_it["spec"])
+            log("warn", f"Client Connector refused the {label} app profile ({str(e)[:120]}). " + app_it["spec"])
             return
-        log("ok", f"Created {app_it['name']} (pilot group only, installs the Zscaler certificate, Z-Tunnel 2.0)")
-        self.verify(t, app_it["name"], fwd_it["name"], gid, log)
+        log("ok", f"Created {app_it['name']} for {label} (pilot group only, installs the Zscaler certificate, "
+                  "Z-Tunnel 2.0)")
+        self.verify(t, app_it["name"], fwd_it["name"], gid, log, os_key=key)
 
-    def verify(self, t, app_name, fwd_name, gid, log):
+    def verify(self, t, app_name, fwd_name, gid, log, os_key="zcc.app"):
         """Read both back: Client Connector's API can accept fields it then ignores."""
+        _, dev, field, cert, _, _ = OS_OF[os_key]
         f = next((x for x in self._list(t, "zcc.forwarding_profile") if g(x, "name") == fwd_name), None)
-        pols = self._list(t, "zcc.web_policy", device_type="windows")
+        pols = self._list(t, "zcc.web_policy", device_type=dev)
         a = next((x for x in pols if g(x, "name") == app_name), None)
         acts = (f or {}).get("forwardingProfileActions") or []
         z2 = [x for x in acts if is_z2(x)]
@@ -310,7 +342,7 @@ class ZCC(Product):
         ahead = [g(x, "name") for x in pols if int(g(x, "ruleOrder") or 0) < int(g(a, "ruleOrder") or 0)
                  and int(g(x, "active") or 0) == 1]
         good = str(g(a, "forwardingProfileId")) == str(g(f or {}, "id")) and int(gid) in groups and \
-            int((a.get("windowsPolicy") or {}).get("installSslCerts") or 0) == 1
+            int((a.get(field) or {}).get(cert) or 0) == 1
         log("ok" if good and not ahead else "warn",
             f"{app_name}: order {g(a, 'ruleOrder')}, pilot group {'yes' if int(gid) in groups else 'NO'}, "
             f"forwarding profile {'yes' if str(g(a, 'forwardingProfileId')) == str(g(f or {}, 'id')) else 'NO'}"
@@ -319,20 +351,27 @@ class ZCC(Product):
 
     def adopt_by_name(self, t, pov, items_, log):
         """status --fix: adopt hand-built profiles that match the change list's exact names."""
-        lists = {"forwarding_profile": self._list(t, "zcc.forwarding_profile"),
-                 "app_profile": self._list(t, "zcc.web_policy", device_type="windows")}
+        fwds = self._list(t, "zcc.forwarding_profile")
         for it in items_:
             if it["product"] != "zcc" or it["action"] != "create_or_adopt" or t.ledger.find(it["key"]):
                 continue
-            hit = next((x for x in lists[it["kind"]] if g(x, "name") == it["name"]), None)
+            pool = fwds if it["kind"] == "forwarding_profile" else \
+                self._list(t, "zcc.web_policy", device_type=OS_OF.get(it["key"], OSES[0])[1])
+            hit = next((x for x in pool if g(x, "name") == it["name"]), None)
             if hit:
                 t.adopt(it["key"], {"id": g(hit, "id"), "name": g(hit, "name")})
                 log("ok", f"Adopted {it['name']} (built by hand)")
 
     def live_object(self, t, entry):
-        res = "zcc.forwarding_profile" if entry["kind"] == "forwarding_profile" else "zcc.web_policy"
-        q = {} if entry["kind"] == "forwarding_profile" else {"device_type": "windows"}
-        return next((x for x in self._list(t, res, **q) if str(g(x, "id")) == entry["id"]), None)
+        if entry["kind"] == "forwarding_profile":
+            return next((x for x in self._list(t, "zcc.forwarding_profile") if str(g(x, "id")) == entry["id"]), None)
+        oses = [OS_OF[entry["key"]]] if entry["key"] in OS_OF else OSES   # a recovered profile: either OS
+        for o in oses:
+            hit = next((x for x in self._list(t, "zcc.web_policy", device_type=o[1]) if str(g(x, "id")) == entry["id"]),
+                       None)
+            if hit:
+                return hit
+        return None
 
     def drift(self, t, pov, ledger, items_):
         want = [i for i in items_ if i["product"] == "zcc" and i["action"] == "create_or_adopt"]

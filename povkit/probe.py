@@ -23,6 +23,10 @@ TIMEOUT = 15
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36"
 _EICAR_PARTS = ("X5O!P%@AP[4\\PZX54(P^)7CC)7}$", "EICAR-STANDARD-", "ANTIVIRUS-", "TEST-FILE!$H+H*")
 TEST_BINS = ("411111", "401288", "555555", "510510", "601111")
+# what a browser sends: ZIA's caution and isolation pages are for browsers (the isolation rule matches browser user
+# agents, and pages are served to clients that accept HTML)
+BROWSER = {"User-Agent": UA, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+           "Accept-Language": "en-US,en;q=0.9", "Upgrade-Insecure-Requests": "1"}
 ZS_PAGE = re.compile(r"zscaler", re.I)
 BLOCK_WORDS = re.compile(r"blocked|not allowed|restricted|acceptable use|policy|virus|malware|threat|denied|"
                          r"sorry|prohibited|data loss|sensitive", re.I)
@@ -216,19 +220,33 @@ def run_spec(spec, run_id, s):
     t0 = time.time()
     try:
         if kind == "http":
-            r = s.get(tag(spec["url"], run_id), timeout=TIMEOUT)
-            got = classify(r)
-            detail = f"HTTP {r.status_code}"
+            try:
+                r = s.get(tag(spec["url"], run_id), timeout=TIMEOUT)
+                got = classify(r)
+                detail = f"HTTP {r.status_code}"
+            except Exception as e:   # noqa: BLE001
+                if "SSL" not in type(e).__name__ and "certificate" not in str(e).lower():
+                    raise
+                # ZIA blocking an HTTPS site it doesn't decrypt answers with a Zscaler-issued certificate (its
+                # block notice): that's a block, as the traffic generator counts it
+                host = re.sub(r"^https?://([^/:]+).*$", r"\1", spec["url"])
+                got = "block" if tls_issuer(host) == "Zscaler" else "error:" + type(e).__name__
+                detail = "TLS refused; the certificate was issued by Zscaler (blocked without decryption)" \
+                    if got == "block" else str(e)[:120]
         elif kind == "eicar":
             b64 = base64.urlsafe_b64encode(eicar().encode()).decode()
             r = s.get(tag(spec["url"].format(b64=b64), run_id), timeout=TIMEOUT)
             got = classify(r)
             detail = f"HTTP {r.status_code}"
         elif kind == "dlp_post":
-            rows = "\n".join(f"Card {fake_card()} exp 12/29" for _ in range(6))
-            r = s.post(tag(spec["url"], run_id), data={"notes": rows}, timeout=TIMEOUT)
+            cards = [fake_card() for _ in range(10)]
+            fmt = [c if i % 3 == 0 else " ".join(c[j:j + 4] for j in range(0, 16, 4)) if i % 3 == 1
+                   else "-".join(c[j:j + 4] for j in range(0, 16, 4)) for i, c in enumerate(cards)]
+            body = "Customer payment records\n" + "\n".join(f"Card number: {c}  Exp: 12/29  CVV: 123" for c in fmt)
+            r = s.post(tag(spec["url"], run_id), data=body.encode(), timeout=TIMEOUT,
+                       headers={"Content-Type": "text/plain; charset=utf-8"})
             got = classify(r)
-            detail = f"HTTP {r.status_code}, 6 fake card numbers"
+            detail = f"HTTP {r.status_code}, 10 fake card numbers (plain text)"
         elif kind == "tls_issuer":
             issuer = tls_issuer(spec["host"])
             got = "Zscaler" if issuer == "Zscaler" else "not-Zscaler"
@@ -291,7 +309,7 @@ def wait_for_zscaler(minutes, say=print, session=None, sleep=time.sleep, every=1
     timeout. For a freshly set-up pilot device: the probe runs only once its results would mean something."""
     import requests
     s = session or requests.Session()
-    s.headers.update({"User-Agent": UA})
+    s.headers.update(BROWSER)
     deadline = time.time() + minutes * 60
     told = False
     while True:
@@ -314,7 +332,7 @@ def run(criteria, session=None, pack=None):
     each criterion's tests they ran, so the SE's kit can tell results for an older pack from current ones."""
     import requests
     s = session or requests.Session()
-    s.headers.update({"User-Agent": UA})
+    s.headers.update(BROWSER)
     run_id = secrets.token_hex(4)
     out = {"run_id": run_id, "device": socket.gethostname(), "os": platform.platform(),
            "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "results": []}

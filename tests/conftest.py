@@ -46,6 +46,8 @@ class FakeTenant:
                         "AI_ML": ["BLOCK_AI_ML_WEB_USE", "ALLOW_AI_ML_WEB_USE"]}
         self.fwds = [{"id": 5, "name": "Default", "forwardingProfileActions": [{"networkType": 0, "actionType": 2}]}]
         self.apps = [{"id": 9, "name": "Default Windows", "forwardingProfileId": 5, "ruleOrder": 1}]
+        self.mac_apps = [{"id": 19, "name": "Default macOS", "forwardingProfileId": 5, "ruleOrder": 1,
+                          "macPolicy": {"installCerts": 0}}]
         # ZPA, AI Guard, ZDX, CASB: one list per resource, with a customer object in each where it matters
         self.store = {
             "zpa.app_connector_groups": [{"id": "70001", "name": "Corp connectors", "connectors": []}],
@@ -192,15 +194,17 @@ class FakeTenant:
                 self.fwds = [f for f in self.fwds if str(f["id"]) != str(a[0])]
                 return {}
         if resource == "zcc.web_policy":
+            mac = (kw.get("query_params") or {}).get("device_type") == "macos" or kw.get("deviceType") == "DEVICE_TYPE_MACOS"
             if method == "list_by_company":
-                return copy.deepcopy(self.apps)
+                return copy.deepcopy(self.mac_apps if mac else self.apps)
             if method == "web_policy_edit":
                 if self.zcc_app_400:
                     raise KitError("400 Bad Request")
-                self.apps.append(dict(kw, id=self._id()))
+                (self.mac_apps if mac else self.apps).append(dict(kw, id=self._id()))
                 return {"success": "true"}
             if method == "delete_web_policy":
                 self.apps = [x for x in self.apps if str(x["id"]) != str(a[0])]
+                self.mac_apps = [x for x in self.mac_apps if str(x["id"]) != str(a[0])]
                 return {}
         if resource == "zpa.enrollment_certificates":
             return [{"id": "c1", "name": "Connector"}, {"id": "c2", "name": "Root"}]
