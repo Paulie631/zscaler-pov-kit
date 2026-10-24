@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.58
+- Device tests: ZIA's caution page ("cautioned for category") is read as a caution, and its Browser Isolation page as isolation, even though both pages carry the block template's text.
+- Device tests: when ZIA answers the HTTPS request on port 443 in plain HTTP (blocked at connection), the probe reads that answer directly and records a block.
+
 ## 0.9.57
 
 - **Device test results say what Zscaler's page said:** each web test's detail carries the page title and its reason

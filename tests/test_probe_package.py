@@ -219,3 +219,10 @@ def test_classify_caution_block_and_page_note():
     note = probe.page_note(block)
     assert "Internet Security by Zscaler" in note and "Website blocked" in note
     assert probe.page_note(_Resp(200, "<p>hello</p>")) == ""
+
+
+def test_classify_zia_caution_and_isolation_pages():
+    caution = _Resp(403, "<title>Internet Security by Zscaler</title>Website blocked Sorry ... cautioned for category "
+                         "Social Networking Proceeding to visit the site may violate your company policy")
+    iso = _Resp(200, "<title>Browser Isolation &middot; Zscaler</title><div>loading</div>")
+    assert probe.classify(caution) == "caution" and probe.classify(iso) == "isolate"

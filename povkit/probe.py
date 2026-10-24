@@ -66,6 +66,12 @@ def classify(resp=None, error=None):
         except Exception:
             text = ""
     zs = ZS_PAGE.search(text) or "gateway.zscaler" in trail or "zscaler.net" in trail
+    if zs:   # ZIA's own page words, before anything looser (a page template carries every variant's text)
+        title = (re.search(r"<title[^>]*>(.*?)</title>", text, re.S | re.I) or [None, ""])[1]
+        if re.search(r"browser isolation", title, re.I):
+            return "isolate"
+        if re.search(r"cautioned for category|proceeding to visit the site", text, re.I):
+            return "caution"
     if zs and re.search(r"caution|\bcontinue\b|proceed|acknowledge", text, re.I) and \
             not re.search(r"virus|malware|data loss|website blocked|permission to visit", text, re.I):
         return "caution"
@@ -99,8 +105,26 @@ def tls_refused(url, run_id, s, err):
             return "block", "TLS refused; the certificate was issued by Zscaler (blocked without decryption)"
     except Exception:   # noqa: BLE001
         pass
+    if "WRONG_VERSION_NUMBER" in str(err) or "wrong version" in str(err).lower():
+        # ZIA answered the TLS hello in plain HTTP on 443: read that answer
+        try:
+            path = re.sub(r"^https?://[^/]+", "", url) or "/"
+            with socket.create_connection((host, 443), timeout=TIMEOUT) as raw:
+                raw.sendall(f"GET {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n".encode())
+                data = b""
+                while len(data) < 65536:
+                    chunk = raw.recv(8192)
+                    if not chunk:
+                        break
+                    data += chunk
+            if b"zscaler" in data.lower():
+                why = re.search(rb"(Website blocked[^<.]{0,120}|Sorry[^<.]{0,120})", data, re.I)
+                return "block", "Zscaler answered on port 443 without TLS (blocked at connection)" + \
+                    (": " + why.group(1).decode("utf-8", "replace") if why else "")
+        except Exception:   # noqa: BLE001
+            pass
     try:
-        r = s.get(tag(re.sub(r"^https://", "http://", url), run_id), timeout=TIMEOUT)
+        r = s.get(tag(re.sub(r"^https://", "http://", url), run_id), timeout=TIMEOUT, allow_redirects=False)
         got = classify(r)
         if got != "allow":
             return got, f"HTTPS refused before TLS ({str(err)[:60]}); over HTTP, Zscaler answered" + page_note(r)
