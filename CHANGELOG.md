@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.72
+- AI Guard › Setup › Proxy mode: **Save applies it** on POVs with SE sign-off. The console makes the change list, signs it off in the SE's name (noted "when saving AI Guard proxy setup"), and applies only AI Guard's part: the provider keys, proxy keys and rules. Nothing outside AI Guard changes; other waiting items stay for the next Apply. POVs that need the customer's approval save the setting and say so.
+
 ## 0.9.71
 - Apply no longer stops when the log feed can't be made yet (the Cloudflare tunnel is off): the rest of the change list goes in, with a warning, and the feed is added by the next apply once the tunnel is on. Before, an approved log feed blocked every apply, including Make it in the tenant.
 - Client Connector: a tenant whose Windows default app profile has no forwarding profile (or that has none) now copies the macOS default's forwarding profile, or one named Default, so the POV's forwarding profile and the macOS pilot profile are made instead of being left to build by hand. The check now lists which defaults it found.

@@ -1,5 +1,8 @@
 """Proxy mode for Anthropic and OpenAI side by side, from what the customer's AI Guard has."""
+import pytest
+
 from povkit import aiguard_runner as runner, gui, lifecycle
+from povkit.core import KitError
 from povkit.core import secrets
 from povkit.core.changelist import ChangeList
 from povkit.products import aiguard as ag
@@ -121,3 +124,23 @@ def test_out_of_credit_model_is_dropped_mid_run(tmp_path, monkeypatch):
     r.run(P(), [{"id": str(i), "text": "hi"} for i in range(5)], mode="proxy", users=["u"], pause=0,
           providers=["anthropic", "openai"])
     assert seen == ["anthropic", "openai", "anthropic", "anthropic", "anthropic"]
+
+
+def test_saving_proxy_setup_applies_only_ai_guard(pov_all, tenant, tenant_for):
+    both(tenant)
+    lifecycle.plan(pov_all, tenant_for)
+    ChangeList(pov_all.dir).approve("Paul")
+    lifecycle.apply(pov_all, tenant_for, lambda *a: None)
+    pov_all.cfg["aiguard"] = {"providers": {"anthropic": {"use": "customer", "cred": 702}}}
+    pov_all.cfg["pilot_emails"] = pov_all.cfg.get("pilot_emails", [])
+    pov_all.save()
+    before = len(tenant.writes)
+    out = lifecycle.quick_apply(pov_all, tenant_for, ["aiguard"], "AI Guard proxy setup", "", lambda *a: None)
+    assert any("proxy" in n.lower() for n in out["made"]) and set(runner.proxy_keys(pov_all)) == {"anthropic"}
+    assert all(w[0].startswith("aiguard") for w in tenant.writes[before:])        # nothing outside AI Guard
+    a = ChangeList(pov_all.dir).approval()
+    assert a["by"] == "Paul" and "AI Guard proxy setup" in a["note"]
+    pov_all.cfg["approval"] = "customer"
+    pov_all.save()
+    with pytest.raises(KitError, match="customer's approval"):
+        lifecycle.quick_apply(pov_all, tenant_for, ["aiguard"], "AI Guard proxy setup", "", lambda *a: None)

@@ -1202,8 +1202,11 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
       for(const card of $$(".card[data-pt]")){const pt=card.dataset.pt,u=card.querySelector(".agpu").value,key=card.querySelector(".agpkey").value.trim();
         if(u=="se"&&key)await api("/api/aiguard/provider-key",{key,provider:pt});
         provs[pt]={use:u.startsWith("c:")?"customer":u,cred:u.startsWith("c:")?u.slice(2)||null:null,model:card.querySelector(".agpm").value.trim()}}
-      const r=await api("/api/aiguard/settings",{providers:provs,competitor:$("#agcomp").value});
-      $("#agpxmsg").innerHTML=note("Saved. "+(r.note||""),"good")}catch(e){$("#agpxmsg").innerHTML=note(e.message,"bad")}};
+      let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
+      const r=await api("/api/aiguard/settings",{providers:provs,competitor:$("#agcomp").value,apply:true,by});
+      $("#agpxsave").disabled=true;$("#agpxmsg").innerHTML='<div class="notice">Saved. Applying it to the tenant (about a minute)…</div><div class="log" style="display:block"></div>';
+      try{const res=await runJob(r.job,$("#agpxmsg .log"));$("#agpxmsg").insertAdjacentHTML("beforeend",note(res.made.length?`Applied: ${res.made.join(", ")}. LLM proxy is ready in the Test runner.`:"Applied: nothing new to create (AI Guard already matches).","good"))}
+      catch(e){$("#agpxmsg").insertAdjacentHTML("beforeend",note(e.message,"bad"))}finally{$("#agpxsave").disabled=false}}catch(e){$("#agpxmsg").innerHTML=note(e.message,"bad")}};
   if(typeof storiesHTML=="function")storiesHTML();
 }
 

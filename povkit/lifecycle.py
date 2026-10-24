@@ -197,7 +197,32 @@ def make_now(pov, tenant_for, uc_id, seen_hash, by, log=lambda *a: None):
     return len(led.active())
 
 
-def apply(pov, tenant_for, log):
+def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
+    """Applies one product's part of the change list straight away, for a setting the SE just saved (SE sign-off POVs
+    only): the change list is made and signed off in the SE's name, then only that product's items are applied.
+    -> what was applied"""
+    if (pov.cfg.get("approval") or "se") != "se":
+        raise KitError("This POV needs the customer's approval of each change list, so the setting is saved but not "
+                       "applied: Setup › Sign-off, then Apply.")
+    last_by = (ChangeList(pov.dir).approval() or {}).get("by")   # making the list again clears the old approval
+    items, notes, h, checks = plan(pov, tenant_for)
+    bad = [c["label"] for c in checks if c["status"] == FAIL]
+    if bad:
+        raise KitError("Saved, but not applied: the checks found problems (" + "; ".join(bad[:3]) + "). Setup › Preflight.")
+    cl = ChangeList(pov.dir)
+    a = cl.approval()
+    if not (a and a["hash"] == h):
+        who = (by or "").strip() or last_by or "SE"
+        rec = cl.approve(who, f"Signed off by the SE when saving {why} (customer sign-off not required for this POV).")
+        pov.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']} ({why})")
+    led = ledger(pov)
+    before = {e["key"] for e in led.active()}
+    apply(pov, tenant_for, log, only=set(only))
+    made = [e["name"] for e in ledger(pov).active() if e["key"] not in before]
+    return {"made": made}
+
+
+def apply(pov, tenant_for, log, only=None):
     snaps, checks = discover(pov, tenant_for)
     failed = [c for c in checks if c["status"] == FAIL]
     if failed:
@@ -212,6 +237,8 @@ def apply(pov, tenant_for, log):
     from . import backup
     try:
         for p in products.selected(pov.products):
+            if only and p.name not in only:   # a quick apply of one product's setting (quick_apply)
+                continue
             if p.ready and p.name in snaps:   # a product waiting on something sits this apply out
                 p.apply(t, pov, items, log)
                 backup.save(pov)   # after each product, so an apply that stops halfway is still backed up

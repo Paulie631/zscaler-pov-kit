@@ -662,6 +662,9 @@ def api(method, path, body, q):
         for k, v in vals.items():
             settings.set_value(p, f"aiguard.{k}", v, save=False)
         p.save()
+        if body.get("apply"):   # straight into the tenant (SE sign-off POVs): only AI Guard's part of the list
+            return 200, {"ok": True, "job": start_job("apply", lambda log: lifecycle.quick_apply(
+                p, tf, ["aiguard"], "AI Guard proxy setup", body.get("by"), log))}
         on = any(v["use"] != "off" for v in agm.proxy_setup(p).values())
         return 200, {"ok": True, "note": "Run the checks again (Preflight) and approve the new change list: it adds a "
                      "proxy key per provider." if on else ""}
