@@ -74,6 +74,27 @@ SSL_ACTIONS = {   # from the demo kit, checked against a live tenant
 }
 
 
+# demo switches: the actions a POV rule may be switched to in front of a customer (its own rule; nothing else)
+SWITCHABLE = {"url_filtering": ["BLOCK", "CAUTION", "ISOLATE", "ALLOW"], "ssl": ["DECRYPT", "DO_NOT_DECRYPT"],
+              "dlp": ["BLOCK", "ALLOW"], "cloud_app_control": ["BLOCK", "CAUTION", "ALLOW"]}
+ACTION_LABEL = {("url_filtering", "BLOCK"): "Block", ("url_filtering", "CAUTION"): "Caution",
+                ("url_filtering", "ISOLATE"): "Isolate", ("url_filtering", "ALLOW"): "Allow",
+                ("ssl", "DECRYPT"): "Inspect", ("ssl", "DO_NOT_DECRYPT"): "Don't inspect",
+                ("dlp", "BLOCK"): "Block", ("dlp", "ALLOW"): "Allow (log only)",
+                ("cloud_app_control", "BLOCK"): "Block", ("cloud_app_control", "CAUTION"): "Caution",
+                ("cloud_app_control", "ALLOW"): "Allow"}
+
+
+def planned_action(it):
+    a = it["body"].get("action")
+    if it["kind"] == "ssl":
+        return (a or {}).get("type")
+    if it["kind"] == "cloud_app_control":
+        acts = it["body"].get("actions") or []
+        return str(acts[0]).split("_", 1)[0] if acts else "BLOCK"
+    return a
+
+
 def template():
     return json.loads((HERE / "zia_pov_template.json").read_text(encoding="utf-8"))
 
@@ -717,6 +738,11 @@ class ZIA(Product):
             out.append(check("zia-foreign", "POV objects still the POV's", WARN, "; ".join(foreign),
                              "Renamed or restamped by someone, so the kit no longer touches them. Rename them back, "
                              "or delete them in the console."))
+        sw = pov.cfg.get("switches") or {}
+        if sw:
+            out.append(check("zia-switched", "POV rules as planned (demo switches)", WARN,
+                             "; ".join(f"{v.get('name', k)}: {v['to']}" for k, v in sw.items()),
+                             "Switched for a demo. Device tests › Policy › Put everything back as planned."))
         try:
             st = activation_state(t)
             if st not in ("", "ACTIVE"):
@@ -756,6 +782,91 @@ class ZIA(Product):
         if changed:
             t.activate()
         return changed
+
+    # ---------------------------------------------------------------- demo switches (the POV's own rules only)
+    def switches(self, pov):
+        """The POV rules whose action the SE may switch in a demo, with the planned and the current action.
+        -> [{key, name, kind, criteria, planned, current, choices}]"""
+        from ..core.changelist import ChangeList
+        try:
+            plan = ChangeList(pov.dir).plan()
+        except Exception:   # noqa: BLE001
+            return []
+        led, now = ledger_of(pov), (pov.cfg.get("switches") or {})
+        out = []
+        for it in plan.get("items", []):
+            if it["product"] != "zia" or it["action"] != "create" or it["kind"] not in SWITCHABLE:
+                continue
+            if "IS-TEN-01" in it.get("criteria", []):   # the tenant check gates every device test: never switched
+                continue
+            if it["kind"] == "cloud_app_control" and it.get("rule_type") != "AI_ML":
+                continue
+            if not led.find(it["key"]):
+                continue
+            planned = planned_action(it)
+            choices = list(SWITCHABLE[it["kind"]])
+            if it["kind"] == "url_filtering" and not it["body"].get("cbi_profile"):
+                choices.remove("ISOLATE")
+            out.append({"key": it["key"], "name": it["name"], "kind": KIND_LABEL[it["kind"]],
+                        "criteria": it.get("criteria", []), "planned": planned,
+                        "current": (now.get(it["key"]) or {}).get("to") or planned,
+                        "choices": [{"id": c, "label": ACTION_LABEL[(it["kind"], c)]} for c in choices]})
+        return out
+
+    def switch(self, t, pov, ledger, key, to, log=lambda *a: None):
+        """Switches one POV rule to another action (to='planned' puts it back), then activates. Only rules the
+        ledger owns, and only their action changes. -> the action now in place"""
+        from ..core.changelist import ChangeList
+        it = next((i for i in ChangeList(pov.dir).plan().get("items", []) if i["key"] == key), None)
+        sw = {x["key"]: x for x in self.switches(pov)}
+        if not it or key not in sw:
+            raise KitError("That isn't one of the POV rules that can be switched.")
+        planned = sw[key]["planned"]
+        to = planned if to in (None, "", "planned") else to
+        if to not in [c["id"] for c in sw[key]["choices"]]:
+            raise KitError(f"'{it['name']}' can be: {', '.join(c['label'] for c in sw[key]['choices'])}.")
+        self.guard_activation(t, "switched")
+        e = ledger.find(key)
+        live = self.live_object(t, e)
+        if not live:
+            raise KitError(f"'{it['name']}' is gone from ZIA. Status > Fix drift recreates it.")
+        body = json.loads(json.dumps(it["body"]))
+        if to != planned:
+            body = self._switched_body(t, it, body, to)
+        k = KINDS[e["kind"]]
+        t.update(e, live, k["res"], k["upd"], *self._args(e), **dict(body, order=g(live, "order")))
+        t.activate()
+        st = pov.cfg.setdefault("switches", {})
+        if to == planned:
+            st.pop(key, None)
+        else:
+            st[key] = {"to": to, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "name": it["name"]}
+        pov.save()
+        label = ACTION_LABEL[(it["kind"], to)]
+        log("ok", f"{it['name']}: {label}{' (as planned)' if to == planned else ''}. ZIA changes activated; allow a "
+                  "minute for it to reach the cloud")
+        return to
+
+    def _switched_body(self, t, it, body, to):
+        kind = it["kind"]
+        if kind == "url_filtering":
+            body["action"] = to
+            if to != "ISOLATE":
+                body.pop("cbi_profile", None)
+                body.pop("user_agent_types", None)
+                body["protocols"] = ["ANY_RULE"]
+                body["request_methods"] = ["CONNECT", "GET", "HEAD"] if to == "CAUTION" else ALL_METHODS
+        elif kind == "ssl":
+            body["action"] = json.loads(json.dumps(SSL_ACTIONS[to]))
+        elif kind == "dlp":
+            body["action"] = to
+        elif kind == "cloud_app_control":
+            apps, acts, why = pick_actions(t, it["rule_type"], body.get("applications") or [],
+                                           [[f"{to}_AI_ML_WEB_USE", f"{to}_AI_ML_ACCESS"]])
+            if not acts:
+                raise KitError(f"This tenant offers no {ACTION_LABEL[(kind, to)]} action for these apps ({why}).")
+            body.update(applications=apps, actions=acts)
+        return body
 
     def teardown(self, t, pov, ledger, log):
         self.guard_activation(t, "deleted")

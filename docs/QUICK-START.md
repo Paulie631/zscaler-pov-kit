@@ -64,6 +64,10 @@ letting Claude Desktop make changes.
   device's default browser (Safari or Chrome, not an in-app browser) for the room, then the test runs and is recorded.
   Put the console and the browser side by side. Firewall and DNS steps give a Terminal command to copy instead.
   The Test runner has the same for any tests you pick: **Show them, step by step**.
+- **Device tests › Policy**: switch a POV rule (web categories, SSL inspection, DLP, GenAI apps) between Block,
+  Caution, Isolate or Allow in front of the customer, then **Check again** to show the page change. Each Show it step
+  has the switches for its test. Only the POV's own rules change; results aren't recorded while anything is switched.
+  **Put everything back as planned** when you're done (Status reminds you).
 - **Device tests › Demo helpers**: ZPA, ZDX and CASB talk tracks, and **Warm up the dashboards** the day before.
 
 ## Every customer session

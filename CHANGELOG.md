@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.61
+- Device tests › **Policy**: demo switches for the POV's own ZIA rules: web categories (Block, Caution, Isolate where the rule isolates, Allow), SSL inspection (Inspect, Don't inspect), DLP (Block, Allow and log) and GenAI apps (Block, Caution, Allow, as the tenant offers). Each switch changes only that rule's action, through the ledger guard, then activates. The tenant-check rule is never offered.
+- Show it steps carry the switches for their test, with **Check again** to reopen the page and rerun the test after a switch.
+- While anything is switched: a banner with **Put back as planned**, a Status warning, and test results aren't recorded as evidence.
+
 ## 0.9.60
 - Device tests › Test runner: **Show them, step by step** walks through the chosen POV tests the same way as a guided demo's Show it: each page opens in this computer's default browser with what to point at, the test runs alongside, and at the end all of them are recorded together and listed in Results.
 

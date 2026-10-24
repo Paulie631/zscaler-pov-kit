@@ -770,6 +770,17 @@ def api(method, path, body, q):
         p = current()
         if body.get("helpers"):
             return 200, devtests.helpers(p)
+        if body.get("policy"):   # demo switches: the POV's own rules, switched in front of the customer
+            return 200, devtests.policy(p)
+        if body.get("switch"):
+            out = []
+            now = devtests.switch(p, tf(p, "apply"), body["switch"], body.get("to"), lambda lv, m: out.append(m))
+            return 200, dict(devtests.policy(p), now=now, message=" ".join(out))
+        if body.get("putback"):
+            done = devtests.put_back(p, tf(p, "apply"))
+            return 200, dict(devtests.policy(p), message=("Put back as planned: " + ", ".join(done) + ". Allow a "
+                                                          "minute for it to reach the cloud.") if done else
+                             "Everything is already as planned.")
         if body.get("open"):   # the test's page in this computer's default browser
             return 200, {"url": devtests.open_here(p, body["open"])}
         if body.get("warmup"):

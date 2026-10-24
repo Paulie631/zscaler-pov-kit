@@ -1404,12 +1404,18 @@ $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
 $("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
 
 /* ---------------- Device tests: the pilot-device tests run from here, and guided demos ---------------- */
-let DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null;
+let DTP={switches:[],switched:false},DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null;
 async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
   try{DT=await api("/api/devtests",{})}catch(e){w.innerHTML=note(e.message,"bad");return}
+  try{DTP=await api("/api/devtests",{policy:true})}catch(_){DTP={switches:[],switched:false}}
   const all=DT.criteria.flatMap(x=>x.tests);
-  w.innerHTML=`<div class="seg" id="dtsub" style="align-self:flex-start">${[["runner","Test runner"],["demos","Guided demos"],["helpers","Demo helpers"]].map(([k,t])=>`<button data-s="${k}" class="${DTTAB==k?"on":""}">${t}</button>`).join("")}</div>
+  w.innerHTML=`<div class="seg" id="dtsub" style="align-self:flex-start">${[["runner","Test runner"],["demos","Guided demos"],["policy","Policy"],["helpers","Demo helpers"]].map(([k,t])=>`<button data-s="${k}" class="${DTTAB==k?"on":""}">${t}</button>`).join("")}</div>
   <div class="notice" style="margin:0">Runs on <b>this computer</b>: it must be a pilot device, signed in to Client Connector as the pilot user (never a work laptop). The tests stop at the start if it isn't in ${esc(c.customer)}’s tenant. A customer’s device: Setup › Finish setup › Set up a pilot device.</div>
+  <div id="dtbanner"></div>
+  <div class="dtview" data-v="policy"><div class="panel"><h2>Policy switches</h2>
+    <p class="muted" style="margin:4px 0 10px">Switch what a POV rule does, in front of the customer, then run its test again: the page the user sees changes. Only the POV’s own rules (pilot group only) change, then ZIA activates; allow about a minute for it to reach the cloud. While anything is switched, test results aren’t recorded as evidence. • marks the planned action.</p>
+    <div id="dtpolicy"></div>
+    <div class="row" style="gap:8px;margin-top:12px"><button id="dtputback">Put everything back as planned</button></div><div id="dtpolmsg"></div></div></div>
   <div class="dtview" data-v="helpers"><div id="dthelp"><div class="empty">Loading…</div></div></div>
   <div class="dtview" data-v="runner" style="display:grid;grid-template-columns:minmax(260px,360px) 1fr;gap:16px;align-items:start">
     <div class="panel"><h2>Tests</h2>
@@ -1455,11 +1461,27 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     DTres=[];draw();$("#dtrun").disabled=true;$("#dtstop").disabled=false;$("#dtmsg").innerHTML='<div class="notice">Checking this computer is in the tenant, then running…</div>';
     try{DTjob=(await api("/api/devtests",{run:true,ids:ids.length==all.length?null:ids})).job;
       const r=await follow(DTjob,x=>{DTres.push(x);draw()});
-      $("#dtmsg").innerHTML=note(`${r.stopped?"Stopped":"Done"}: ${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:" No criterion ran in full, so no evidence changed."}`,r.ok==r.total?"good":"warn");load()}
+      $("#dtmsg").innerHTML=note(`${r.stopped?"Stopped":"Done"}: ${r.ok} of ${r.total} as expected.${(r.switched||[]).length?" Not recorded: the policy is switched for the demo ("+r.switched.join(", ")+").":r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:" No criterion ran in full, so no evidence changed."}`,r.ok==r.total?"good":"warn");load()}
     catch(e){$("#dtmsg").innerHTML=note(e.message,"bad")}finally{DTjob=null;$("#dtrun").disabled=false;$("#dtstop").disabled=true;$("#dtstop").textContent="Stop"}};
   $("#dtstop").onclick=()=>{if(DTjob){api("/api/job/stop",{id:DTjob});$("#dtstop").disabled=true;$("#dtstop").textContent="Stopping…"}};
-  w.onclick=async e=>{const b=e.target.closest(".dtopen");if(!b)return;e.preventDefault();b.disabled=true;
+  w.onclick=async e=>{const sw=e.target.closest(".dtsw");if(sw){e.preventDefault();doSwitch(sw);return}
+    const b=e.target.closest(".dtopen");if(!b)return;e.preventDefault();b.disabled=true;
     try{await api("/api/devtests",{open:b.dataset.t})}catch(x){b.insertAdjacentHTML("afterend",note(x.message,"bad"))}finally{setTimeout(()=>b.disabled=false,1500)}};
+  const polRow=x=>`<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0"><span style="min-width:220px">${esc(x.name)} <span class="muted" style="font-size:12px">· ${esc(x.kind)} · ${x.criteria.map(esc).join(", ")}</span></span>
+      <div class="seg">${x.choices.map(c=>`<button class="dtsw ${c.id==x.current?"on":""}" data-k="${esc(x.key)}" data-to="${esc(c.id)}" title="${c.id==x.planned?"The planned action":"Switch to "+esc(c.label)}">${esc(c.label)}${c.id==x.planned?" •":""}</button>`).join("")}</div></div>`;
+  const drawPol=msg=>{const sw=DTP.switches||[],on=sw.filter(x=>x.current!=x.planned);
+    $("#dtpolicy").innerHTML=sw.length?sw.map(polRow).join(""):'<div class="empty">No POV rules to switch yet: apply the change list first (Internet Access).</div>';
+    $("#dtbanner").innerHTML=on.length?`<div class="notice warn" style="margin:0;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><span><b>Policy switched for the demo:</b> ${on.map(x=>esc(x.name)+" → "+esc((x.choices.find(c=>c.id==x.current)||{}).label||x.current)).join("; ")}. Test results aren’t recorded until it’s put back.</span><button class="dtputback2">Put back as planned</button></div>`:"";
+    $$(".dtputback2").forEach(b=>b.onclick=putBack);
+    $$(".dtpol[data-t]").forEach(el=>{const rel=sw.filter(x=>x.tests.includes(el.dataset.t));el.innerHTML=rel.length?`<div style="margin:6px 0 2px"><b>Policy for this test</b> <span class="muted" style="font-size:12px">(switch it, then Check again)</span></div>${rel.map(polRow).join("")}`:""});
+    if(msg)$$("#dtpolmsg,.dtpolmsg").forEach(el=>el.innerHTML=msg)};
+  async function doSwitch(b){const was=b.textContent;$$(".dtsw").forEach(x=>x.disabled=true);b.textContent="Switching…";
+    try{const r=await api("/api/devtests",{switch:b.dataset.k,to:b.dataset.to});DTP=r;drawPol(note(r.message,"good"))}
+    catch(x){b.textContent=was;drawPol(note(x.message,"bad"))}finally{$$(".dtsw").forEach(x=>x.disabled=false)}}
+  async function putBack(){$$("#dtputback,.dtputback2").forEach(x=>x.disabled=true);
+    try{const r=await api("/api/devtests",{putback:true});DTP=r;drawPol(note(r.message,"good"))}catch(x){drawPol(note(x.message,"bad"))}
+    finally{$$("#dtputback,.dtputback2").forEach(x=>x.disabled=false)}}
+  $("#dtputback").onclick=putBack;drawPol();
   const flat=DT.criteria.flatMap(c=>c.tests.map(t=>Object.assign({criterion:c.criterion},t)));
   const copy=async(txt,b)=>{try{await navigator.clipboard.writeText(txt);b.textContent="Copied"}catch(_){b.textContent="Copy failed: select it by hand"}};
   $$(".dtshow").forEach(b=>b.onclick=()=>{const st=DT.stories.find(x=>x.id==b.dataset.id);walk(st.tests,$(`.dtsout[data-id="${st.id}"]`))});
@@ -1476,22 +1498,25 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
         <div style="margin:4px 0"><b>Point at:</b> ${esc(sh.look||"")}</div>
         ${sh.terminal?`<div class="row" style="gap:8px;margin:6px 0;align-items:center"><code style="flex:1">${esc(sh.terminal)}</code><button class="dtcpt">Copy</button></div><div class="hint" style="margin:0">Paste it in Terminal on this computer.</div>`:""}
         ${sh.copy?`<div class="row" style="gap:8px;margin:6px 0"><button class="dtcpc">Copy the test card numbers</button></div>`:""}
-        <div class="dtsres" style="margin-top:6px"><div class="notice">${sh.open?"Opening the page in this computer’s browser, then checking…":"Checking…"}</div></div>
-        <div class="row" style="gap:8px;margin-top:8px">${sh.open?'<button class="dtagain">Open again</button>':""}<button class="primary dtnext" disabled>${i+1<tests.length?"Next ▸":"Finish and record ▸"}</button><button class="dtend">End</button></div></div>`;
+        <div class="dtsres" style="margin-top:6px"></div>
+        <div class="dtpol" data-t="${esc(t.id)}"></div><div class="dtpolmsg"></div>
+        <div class="row" style="gap:8px;margin-top:8px"><button class="dtagain">Check again</button><button class="primary dtnext" disabled>${i+1<tests.length?"Next ▸":"Finish and record ▸"}</button><button class="dtend">End</button></div></div>`;
       const q=k=>out.querySelector(k),res=q(".dtsres");
       q(".dtend").onclick=()=>{end();out.innerHTML=note("Ended. Nothing more was run.")};
       q(".dtcpt")&&(q(".dtcpt").onclick=e=>copy(sh.terminal,e.target));q(".dtcpc")&&(q(".dtcpc").onclick=e=>copy(sh.copy,e.target));
-      q(".dtagain")&&(q(".dtagain").onclick=()=>api("/api/devtests",{open:t.id}).catch(x=>res.insertAdjacentHTML("beforeend",note(x.message,"bad"))));
       q(".dtnext").onclick=()=>{i++;i<tests.length?step():finish()};
-      if(sh.open){try{await api("/api/devtests",{open:t.id})}catch(x){res.innerHTML=note(x.message+" Use “Open again”, or open "+sh.open+" by hand.","warn")}
-        await new Promise(r=>setTimeout(r,1500))}
-      if(ended)return;
-      try{const rs=[];await follow((await api("/api/devtests",{run:true,ids:[t.id]})).job,x=>rs.push(x));if(!ended)res.innerHTML=rs.map(card).join("").replace(/<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen"[^]*?<\/div>/,"")}
-      catch(x){if(!ended)res.innerHTML=note(x.message,"bad")}
-      q(".dtnext").disabled=false};
+      drawPol();
+      const check=async()=>{q(".dtagain").disabled=true;res.innerHTML=`<div class="notice">${sh.open?"Opening the page in this computer’s browser, then checking…":"Checking…"}</div>`;
+        if(sh.open){try{await api("/api/devtests",{open:t.id})}catch(x){res.innerHTML=note(x.message+" Open "+sh.open+" by hand.","warn")}
+          await new Promise(r=>setTimeout(r,1500))}
+        if(ended)return;
+        try{const rs=[];await follow((await api("/api/devtests",{run:true,ids:[t.id]})).job,x=>rs.push(x));if(!ended)res.innerHTML=rs.map(card).join("").replace(/<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen"[^]*?<\/div>/,"")}
+        catch(x){if(!ended)res.innerHTML=note(x.message,"bad")}
+        q(".dtagain").disabled=false;q(".dtnext").disabled=false};
+      q(".dtagain").onclick=check;await check()};
     const finish=async()=>{out.innerHTML=`<div class="notice" style="margin-top:8px">Recording all ${tests.length} tests together for the scorecard…</div>`;const rs=[];
       try{const r=await follow((await api("/api/devtests",{run:true,ids})).job,x=>rs.push(x));
-        const sum=note(`${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:""}`,r.ok==r.total?"good":"warn");
+        const sum=note(`${r.ok} of ${r.total} as expected.${r.evidence.length?` Evidence updated for ${r.evidence.join(", ")}.`:""}${(r.switched||[]).length?" Not recorded: the policy is switched for the demo ("+r.switched.join(", ")+"). Put it back as planned, then run again to record.":""}`,r.ok==r.total&&!(r.switched||[]).length?"good":"warn");
         if(onDone){onDone(rs);out.innerHTML=sum}else out.innerHTML=rs.map(card).join("")+sum;load()}
       catch(x){out.innerHTML=note(x.message,"bad")}finally{end()}};
     step()}

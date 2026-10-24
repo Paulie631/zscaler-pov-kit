@@ -205,6 +205,9 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
     rec = dict(res, results=[r for r in res["results"] if r["criterion"] in full],
                tests={k: v for k, v in (res.get("tests") or {}).items() if k in full})
     ev = []
+    switched = pov.cfg.get("switches") or {}
+    if switched:   # a demo switch changed what the policy does: these results don't prove the planned policy
+        rec["results"] = []
     if rec["results"]:
         path = pov.path(f"devtests-{res['run_id']}.json")
         probe.save(rec, path)
@@ -217,7 +220,43 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
     pov.log("probe", f"device tests on this computer: {ok} of {len(res['results'])} as expected"
             + (" (stopped)" if res.get("stopped") else ""))
     return {"run_id": res["run_id"], "ok": ok, "total": len(res["results"]), "stopped": bool(res.get("stopped")),
-            "evidence": ev, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+            "evidence": ev,
+            "switched": sorted(v.get("name", k) for k, v in switched.items()), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+
+
+# ---------------------------------------------------------------- demo switches
+def policy(pov):
+    """The POV rules that can be switched in a demo, each with the device tests it changes."""
+    from .products import get
+    if "zia" not in pov.products:
+        return {"switches": [], "switched": False}
+    sw = get("zia").switches(pov)
+    tests = {}
+    for cid, _, sid, _ in _specs(pov):
+        tests.setdefault(cid, []).append(sid)
+    for x in sw:
+        x["tests"] = [t for c in x["criteria"] for t in tests.get(c, [])]
+    return {"switches": sw, "switched": any(x["current"] != x["planned"] for x in sw)}
+
+
+def switch(pov, tenant, key, to, log=lambda *a: None):
+    from .core.guard import LedgerTenant
+    from .products import get
+    from . import lifecycle
+    led = lifecycle.ledger(pov)
+    t = LedgerTenant(tenant, led, [])
+    now = get("zia").switch(t, pov, led, key, to, log)
+    pov.log("policy", f"demo switch: {key} -> {now}")
+    return now
+
+
+def put_back(pov, tenant, log=lambda *a: None):
+    """Every switched POV rule back to its planned action. -> names put back"""
+    done = []
+    for key, v in list((pov.cfg.get("switches") or {}).items()):
+        switch(pov, tenant, key, "planned", log)
+        done.append(v.get("name", key))
+    return done
 
 
 # ---------------------------------------------------------------- demo helpers for the products a browser can't show
