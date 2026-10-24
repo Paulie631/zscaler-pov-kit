@@ -464,7 +464,7 @@ const W={step:0,checks:null,plan:null,role:null};
 function done(i){const c=S&&S.current;if(!c)return false;
   const clients=Object.values(c.clients);const s=c.settings;
   return [true, clients.length&&clients[0].saved,
-    !!(s.pilot_group||+s["identity.test_users"]>0||["create","test"].includes(s["identity.pilot"])), W.checks&&!W.checks.some(x=>x.status=="fail"),
+    !!(s.pilot_group||+s["identity.test_users"]>0||["create","test"].includes(s["identity.pilot"])), (W.checks?!W.checks.some(x=>x.status=="fail"):!!c.plan||(c.ledger.owned||0)+(c.ledger.adopted||0)>0),
     !!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), (c.ledger.owned||0)+(c.ledger.adopted||0)>0,
     (c.ledger.owned||0)+(c.ledger.adopted||0)>0&&!!(c.manual_open&&c.manual_open.stages&&c.manual_open.stages.finish.passed), false][i]}
 function firstOpen(){if(!S.current)return 0;for(let i=1;i<8;i++)if(!done(i))return i;return 8}

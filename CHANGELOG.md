@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.65
+- Setup no longer opens on Preflight every time the page loads. Preflight's results were kept only in the open page, so after a reload or an update the step looked undone; a POV with a change list (or applied objects) now counts it as done, and Setup opens on the first step really left.
+
 ## 0.9.64
 - AI Guard › Test runner: when LLM proxy is greyed out, a line says why (proxy mode isn't set up for this POV) and links to AI Guard › Setup.
 
