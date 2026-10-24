@@ -45,3 +45,14 @@ def test_ai_guard_only_pov_needs_no_api_proofs(home, tenant_for):
     from povkit.core import pov as povs
     p = povs.new("Phish", ["aiguard"])
     assert not lifecycle.proofs_due(p)
+
+
+def test_ai_guard_misses_explained_per_test():
+    rows = [{"test": "Data exfil", "expect": ["prompt_injection"], "detected": ["language", "prompt_tags"],
+             "action": "ALLOW", "pass": False},
+            {"test": "Odd", "expect": ["made_up"], "detected": [], "action": "ALLOW", "pass": False},
+            {"test": "Fine", "expect": ["secrets"], "detected": ["secrets"], "pass": True}]
+    ex = proof_explain.explain_ai_guard(rows, {"prompt_injection", "secrets"})
+    assert len(ex) == 2 and "is on in the POV's policy" in ex[0]["why"] and ex[0]["action"] == "runner"
+    assert "isn't on" in ex[1]["why"] and ex[1]["action"] == "policy"
+    assert "Data exfil: expected prompt_injection; AI Guard found language, prompt_tags (ALLOW)" == ex[0]["problem"]

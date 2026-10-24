@@ -72,6 +72,15 @@ def attest(pov, cid, note, by, file=None):
     return rec
 
 
+def _ag_enabled():
+    """Detectors on in the POV's AI Guard policy template (either side)."""
+    try:
+        from .products import aiguard as ag
+        return {d for side in ag.template_detectors().values() for d in side}
+    except Exception:   # noqa: BLE001
+        return None
+
+
 def evaluate(pov, ids=None):
     runs, atts = probe_runs(pov), pov.read_json("attestations.json", [])
     apis = pov.read_json("api_proofs.json", {}) or {}
@@ -103,8 +112,11 @@ def evaluate(pov, ids=None):
             if auto and auto["status"] in (PASS, FAIL_):
                 proofs["api"] = dict(auto, automated=True)
                 if auto["status"] == FAIL_:
-                    from .proof_explain import explain
-                    proofs["api"]["explain"] = explain(auto.get("detail"), auto["status"])
+                    from .proof_explain import explain, explain_ai_guard
+                    ag_rows = auto.get("results") if (c["product"] == "aiguard" or c.get("aiguard")) else None
+                    proofs["api"]["explain"] = (explain_ai_guard(ag_rows, _ag_enabled()) if ag_rows and any(
+                        isinstance(x, dict) and x.get("pass") is False for x in ag_rows) else []) or \
+                        explain(auto.get("detail"), auto["status"])
             elif mine:
                 proofs["api"] = {"status": PASS, "detail": "attested (no automated API proof for this one)",
                                  "attestation": mine[-1]}

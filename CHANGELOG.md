@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.37
+
+- An AI Guard criterion that doesn't pass explains each test that missed: what AI Guard found, and whether the
+  missed detector is on in the POV's policy (if not: turn it on; if it is: AI Guard judged that example differently,
+  so re-run it, swap in a clearer example, or attest it).
+
 ## 0.9.36
 
 - **The API proofs run on their own** (read-only): after Apply, after Finish setup's checks, with every Status check,

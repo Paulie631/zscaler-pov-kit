@@ -94,6 +94,41 @@ RULES = [
 ]
 
 
+def explain_ai_guard(rows, enabled=None):
+    """AI Guard test results that didn't go as expected, one explanation per test: what fired, and whether the
+    missed detector is even on in the POV's policy (if it is, AI Guard judged this example differently)."""
+    out = []
+    for r in rows or []:
+        if r.get("pass") is not False:
+            continue
+        want, got = list(r.get("expect") or []), list(r.get("detected") or [])
+        missed = [d for d in want if d not in got]
+        found = (f"{r.get('test')}: expected {', '.join(missed) or 'nothing harmful'}; AI Guard found "
+                 f"{', '.join(got) or 'nothing'} ({r.get('action') or 'no action'})")
+        if not want:
+            out.append({"problem": found, "why": "A test of normal use was flagged: the POV's policy is stricter than "
+                        "this prompt needs (or the detector over-matched).", "fix": [
+                        "AI Guard > Test runner: open the row to see which detector fired and why.",
+                        "If it's a fair catch, tell the customer; if not, loosen that detector in AI Guard > Policy "
+                        "(Custom) and run the test again."], "action": "runner"})
+            continue
+        off = [d for d in missed if enabled is not None and d not in enabled]
+        if off:
+            out.append({"problem": found, "why": f"The {', '.join(off)} detector isn't on in the POV's AI Guard "
+                        "policy, so it can't fire.", "fix": [
+                        "AI Guard > Policy: Block attacks + data leakage, or Custom with that detector on.",
+                        "Run the criterion's tests again (AI Guard > Test runner)."], "action": "policy"})
+        else:
+            out.append({"problem": found, "why": f"The {', '.join(missed)} detector is on in the POV's policy, but AI "
+                        "Guard didn't judge this example as that. Its detectors weigh each prompt, so a borderline "
+                        "test can fall either side.", "fix": [
+                        "AI Guard > Test runner: open the row to see AI Guard's full verdict, and run it again.",
+                        "If it keeps passing through, replace it with a clearer example (Draft more tests with "
+                        "Claude), or record an attestation that explains this one to the customer.",
+                        "Worth a note for the AI Guard team if a clear-cut example is missed."], "action": "runner"})
+    return out
+
+
 def explain(detail, status="fail"):
     """-> [{problem, why, fix: [...], action}] for a failing or incomplete proof's detail."""
     if status not in ("fail", "incomplete") or not detail:
