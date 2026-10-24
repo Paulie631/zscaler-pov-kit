@@ -18,7 +18,7 @@
 set -euo pipefail
 
 REPO="${ZPOV_KIT_REPO:-Paulie631/zscaler-pov-kit}"
-CLOUD="" DOMAIN="" ZUSER="" PKG="" APP="" PACK_B64="${ZPOV_PACK_B64:-}" POV="${ZPOV_POV:-pov}" WAIT=20 REPLACE=""
+CLOUD="" DOMAIN="" ZUSER="" PKG="" APP="" PACK_B64="${ZPOV_PACK_B64:-}" PACK_GZ="${ZPOV_PACK_GZ:-}" POV="${ZPOV_POV:-pov}" WAIT=20 REPLACE=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --cloud) CLOUD="$2"; shift 2 ;;
@@ -160,7 +160,10 @@ say "Installing the POV probe (tests and traffic only: no keys, nothing in the t
 PHOME="${ZPOV_PROBE_HOME:-$HOME/.zscaler-pov-probe}"
 mkdir -p "$PHOME"
 PACKF=""
-if [ -n "$PACK_B64" ]; then
+if [ -n "$PACK_GZ" ]; then
+  PACKF="$PHOME/pack-download-$POV.json"
+  printf '%s' "$PACK_GZ" | base64 -D | gunzip > "$PACKF" || fail "The POV's tests in the command are damaged: copy it again."
+elif [ -n "$PACK_B64" ]; then
   PACKF="$PHOME/pack-download-$POV.json"
   printf '%s' "$PACK_B64" | base64 -D > "$PACKF"
 fi
@@ -168,15 +171,26 @@ curl -fsSL "https://github.com/$REPO/releases/latest/download/install-probe.sh" 
   || fail "The POV probe didn't install; Client Connector is installed. Run the probe's one-line installer by hand."
 PROBE="$PHOME/app/pov-probe"
 if [ -n "$PACKF" ]; then
-  OUT="$HOME/Desktop/pov-probe-$POV-${ZUSER:-device}.json"
-  say "Once you're signed in, the POV's tests run (waiting up to $WAIT minutes for Zscaler)..."
-  "$PROBE" test --wait "$WAIT" --out "$OUT" </dev/null || true
-  say "Results: $OUT. Send them to the SE."
+  OUT="$HOME/Desktop/pov-probe-results-$POV-${ZUSER:-device}.json"
+  say ""
+  say "NEXT: sign in to Client Connector as ${ZUSER:-the pilot user}${ZUSER:+@$DOMAIN} (the window that just opened)."
+  say "The POV's tests then run by themselves (waiting up to $WAIT minutes for you to sign in)..."
+  if "$PROBE" test --wait "$WAIT" --out "$OUT" </dev/null; then
+    say ""
+    say "Results: $OUT"
+    say "Last step: in the POV console, Set up a pilot device > 3. Import the results, and pick that file."
+    say "(On a customer's device: send the file to the SE.)"
+  else
+    say ""
+    say "The tests didn't run. Once Client Connector is signed in (Internet Security: On), run them again:"
+    say "  $PROBE test --wait $WAIT"
+  fi
 else
-  say "Next: once signed in, install the probe pack the SE sends and run the POV's tests:"
-  say "  $PROBE pack install <the pack file>"
-  say "  $PROBE test --wait $WAIT"
+  say ""
+  say "NEXT: sign in to Client Connector as ${ZUSER:-the pilot user}${ZUSER:+@$DOMAIN}."
+  say "Then run the POV's tests: in the POV console, Set up a pilot device > 2. Run the tests > copy the command,"
+  say "and paste it here."
 fi
 echo
-if [ -n "$APP" ]; then say "Done. After the POV: uninstall Client Connector (Zscaler > Uninstall, or the SE's teardown notes)."
-else say "Done. After the POV: remove the settings profile (System Settings > Device Management)."; fi
+if [ -n "$APP" ]; then say "After the POV: uninstall Client Connector (Zscaler > Uninstall, or the SE's teardown notes)."
+else say "After the POV: remove the settings profile (System Settings > Device Management)."; fi

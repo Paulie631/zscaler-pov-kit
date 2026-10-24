@@ -35,13 +35,29 @@ class DeviceError(Exception):
 
 
 # ---------------------------------------------------------------- the probe pack on this device
+def from_code(code) -> dict:
+    """The probe pack as the console's commands carry it: gzip, then base64."""
+    import base64
+    import gzip
+    try:
+        return json.loads(gzip.decompress(base64.b64decode(str(code).strip())).decode("utf-8"))
+    except Exception as e:   # noqa: BLE001
+        raise DeviceError("That pack code is damaged: copy the command from the POV console again.") from e
+
+
+def desktop() -> Path:
+    d = Path.home() / "Desktop"
+    return d if d.is_dir() else HOME / "results"
+
+
 def read_pack(src) -> dict:
     try:
         data = json.loads(Path(src).read_text(encoding="utf-8")) if not isinstance(src, dict) else src
     except (OSError, ValueError) as e:
         raise DeviceError(f"Couldn't read the probe pack {src}: {e}") from e
     if not isinstance(data, dict) or not isinstance(data.get("criteria"), list):
-        raise DeviceError(f"{src} isn't a POV probe pack (the SE's console: Next steps > Download probe pack).")
+        raise DeviceError(f"{src} isn't a POV probe pack. In the POV console, Set up a pilot device gives a command "
+                          "with the POV's tests in it.")
     return data
 
 
@@ -78,15 +94,18 @@ def base_criteria():
     try:
         from .products import base
     except ImportError as e:
-        raise DeviceError("No probe pack on this device: `pov-probe pack install FILE` first.") from e
+        raise DeviceError("This device doesn't have the POV's tests yet. In the POV console: Setup > Finish setup > "
+                          "Set up a pilot device > 2. Run the tests: copy that command and paste it here.") from e
     crit = [c for c in base.load_catalog() if c.get("probe")]
     crit = [dict(c, probe=[s for s in c["probe"] if not any("{" in str(v) and "{b64}" not in str(v) for v in s.values())])
             for c in crit]
     return [c for c in crit if c["probe"]]
 
 
-def test(pack=None, wait=0, out=None, only=None, say=print):
+def test(pack=None, wait=0, out=None, only=None, say=print, code=None):
     """-> (results, file written)"""
+    if code:
+        install_pack(from_code(code))
     p = read_pack(pack) if pack else current_pack()
     crit = p["criteria"] if p else base_criteria()
     if only:
@@ -96,7 +115,7 @@ def test(pack=None, wait=0, out=None, only=None, say=print):
         raise DeviceError(f"Traffic still doesn't go through Zscaler after {wait} minutes, so the tests would mean "
                           "nothing. Check Client Connector is signed in with Internet Security On, then run this again.")
     res = probe.run(crit, pack=p)
-    path = Path(out or (HOME / "results" / f"pov-probe-{(p or {}).get('pov', 'device')}-{res['run_id']}.json"))
+    path = Path(out or (desktop() / f"pov-probe-results-{(p or {}).get('pov', 'device')}-{res['run_id']}.json"))
     path.parent.mkdir(parents=True, exist_ok=True)
     probe.save(res, path)
     return res, path
@@ -112,11 +131,19 @@ def _say(level, msg):
 
 
 def c_test(a):
-    res, path = test(a.pack, a.wait, a.out, [x for x in (a.criteria or "").split(",") if x] or None)
+    a.code = getattr(a, "code", None)   # the full kit's `pov-kit probe` has no --code
+    if a.code or current_pack():
+        print(describe(from_code(a.code) if a.code else current_pack()))
+    if a.wait:
+        print(f"Waiting for this device's traffic to go through Zscaler (up to {a.wait} minutes): sign in to Client "
+              "Connector as the pilot user if you haven't.")
+    res, path = test(a.pack, a.wait, a.out, [x for x in (a.criteria or "").split(",") if x] or None, code=a.code)
     ok = sum(r["pass"] for r in res["results"])
     for r in res["results"]:
         _say("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['outcome']} (expected {r['expect']}) {r['detail']}")
-    print(f"\n{ok} of {len(res['results'])} as expected. Send this file to the SE: {path}")
+    print(f"\n{ok} of {len(res['results'])} as expected. The results are in:\n  {path}\n"
+          "Next: in the POV console, Set up a pilot device > 3. Import the results, and pick that file (on another "
+          "computer than the SE's, send it to the SE first).")
     if any(r["spec"]["type"] == "ai_artifacts" for r in res["results"]):
         print("Endpoint AI test files stay for the console's inventory; remove them afterwards: `cleanup`.")
     return 0
@@ -220,6 +247,7 @@ def add_test_args(s):
     s.add_argument("--wait", type=int, default=0, help="minutes to wait for traffic to go through Zscaler first")
     s.add_argument("--out", help="the results file to write")
     s.add_argument("--criteria", help="only these criterion IDs, comma-separated")
+    s.add_argument("--code", help="the POV's tests as the console's command carries them (installs them first)")
 
 
 def add_traffic_args(s):

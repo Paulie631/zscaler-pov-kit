@@ -21,6 +21,7 @@ param(
   [int]$Wait = 20,
   [switch]$Replace,
   [string]$PackB64 = $env:ZPOV_PACK_B64,
+  [string]$PackGz = $env:ZPOV_PACK_GZ,
   [string]$Pov = $(if ($env:ZPOV_POV) { $env:ZPOV_POV } else { "pov" })
 )
 $ErrorActionPreference = "Stop"
@@ -79,22 +80,38 @@ try {
   Say "Installing the POV probe (tests and traffic only: no keys, nothing in the tenant)..."
   $home_ = if ($env:ZPOV_PROBE_HOME) { $env:ZPOV_PROBE_HOME } else { Join-Path $env:USERPROFILE ".zscaler-pov-probe" }
   New-Item -ItemType Directory -Force -Path $home_ | Out-Null
-  if ($PackB64) {
+  $packf = $null
+  if ($PackGz) {   # the POV's tests, as the console's command carries them: gzip, then base64
+    $packf = Join-Path $home_ "pack-download-$Pov.json"
+    $in = New-Object IO.MemoryStream(,[Convert]::FromBase64String($PackGz))
+    $gz = New-Object IO.Compression.GzipStream($in, [IO.Compression.CompressionMode]::Decompress)
+    $fs = [IO.File]::Create($packf); $gz.CopyTo($fs); $fs.Close(); $gz.Close()
+  } elseif ($PackB64) {
     $packf = Join-Path $home_ "pack-download-$Pov.json"
     [IO.File]::WriteAllBytes($packf, [Convert]::FromBase64String($PackB64))
-    $env:ZPOV_PACK_FILE = $packf
   }
+  if ($packf) { $env:ZPOV_PACK_FILE = $packf }
   & ([scriptblock]::Create((Invoke-RestMethod "https://github.com/$Repo/releases/latest/download/install-probe.ps1")))
   $probe = Join-Path $home_ "app\pov-probe.cmd"
-  if ($PackB64) {
-    $out = Join-Path ([Environment]::GetFolderPath("Desktop")) "pov-probe-$Pov-$(if ($User) { $User } else { 'device' }).json"
-    Say "Once you're signed in, the POV's tests run (waiting up to $Wait minutes for Zscaler)..."
+  $who = if ($User) { "$User@$Domain" } else { "the pilot user" }
+  if ($packf) {
+    $out = Join-Path ([Environment]::GetFolderPath("Desktop")) "pov-probe-results-$Pov-$(if ($User) { $User } else { 'device' }).json"
+    Say ""
+    Say "NEXT: sign in to Client Connector as $who (the window that just opened)."
+    Say "The POV's tests then run by themselves (waiting up to $Wait minutes for you to sign in)..."
     & $probe test --wait $Wait --out $out
-    Say "Results: $out. Send them to the SE."
+    if ($LASTEXITCODE -eq 0) {
+      Say ""; Say "Results: $out"
+      Say "Last step: in the POV console, Set up a pilot device > 3. Import the results, and pick that file."
+      Say "(On a customer's device: send the file to the SE.)"
+    } else {
+      Say ""; Say "The tests didn't run. Once Client Connector is signed in (Internet Security: On), run them again:"
+      Say "  & `"$probe`" test --wait $Wait"
+    }
   } else {
-    Say "Next: once signed in, install the probe pack the SE sends and run the POV's tests:"
-    Say "  $probe pack install <the pack file>"
-    Say "  $probe test --wait $Wait"
+    Say ""; Say "NEXT: sign in to Client Connector as $who."
+    Say "Then run the POV's tests: in the POV console, Set up a pilot device > 2. Run the tests > copy the command,"
+    Say "and paste it here."
   }
 } finally {
   Remove-Item -Recurse -Force $Tmp -ErrorAction SilentlyContinue

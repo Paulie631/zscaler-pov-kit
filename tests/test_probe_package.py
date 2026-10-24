@@ -176,3 +176,19 @@ def test_root_ca_pinned_and_trust_commands(tmp_path, monkeypatch):
         seen = []
         device.trust_ca(run=lambda cmd, seen=seen: seen.append(cmd) or type("R", (), {"returncode": 0})(), system=osname)
         assert word in " ".join(seen[0])
+
+
+def test_pack_travels_in_the_commands(pov, tmp_path, monkeypatch):
+    from povkit import device, device_setup
+    pack = {"pov": pov.id, "customer": "Acme", "criteria": [{"id": "X-1", "probe": [{"type": "web"}]}]}
+    code = device_setup.pack_code(pack)
+    assert device.from_code(code) == pack and len(code) < 400
+    monkeypatch.setattr(device_setup, "cloud", lambda p: "zscalertwo")
+    mac = device_setup.one_liner(pov, "macos", "jane@acme.com", pack)
+    assert f"ZPOV_PACK_GZ='{code}'" in mac and "--user jane" in mac
+    win = device_setup.one_liner(pov, "windows", "jane@acme.com", pack)
+    assert "$env:ZPOV_PACK_GZ=" in win
+    assert f"--code '{code}'" in device_setup.test_command(pov, "macos", pack)
+    monkeypatch.setattr(device, "HOME", tmp_path)
+    monkeypatch.setattr(device, "PACK", tmp_path / "pack.json")
+    assert device.install_pack(device.from_code(code))["pov"] == pov.id

@@ -774,7 +774,11 @@ def api(method, path, body, q):
             name, text = device_setup.script(p, os_, email, pack)
             p.log("device", f"device setup script for {email} ({os_})")
             return 200, {"name": name, "text": text}
-        return 200, {"line": device_setup.one_liner(p, os_, email)}
+        pack = evidence.probe_pack(p)
+        if body.get("what") == "test":
+            p.log("device", f"device test command ({os_})")
+            return 200, {"line": device_setup.test_command(p, os_, pack)}
+        return 200, {"line": device_setup.one_liner(p, os_, email, pack)}
     if path == "/api/traffic/aws":
         from . import traffic_aws
         p = current()

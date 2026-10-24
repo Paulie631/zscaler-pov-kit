@@ -133,14 +133,34 @@ def _need_cloud(pov):
     return c
 
 
-def one_liner(pov, os_, email):
+def pack_code(pack):
+    """The probe pack, small enough for a pasted command: gzip, then base64 (about 1.5 KB for a typical POV)."""
+    import gzip
+    return base64.b64encode(gzip.compress(json.dumps(pack, separators=(",", ":")).encode(), mtime=0)).decode()
+
+
+def one_liner(pov, os_, email, pack=None):
+    """Installs Client Connector and the probe, with the POV's tests (they run once the pilot user signs in)."""
     c = _need_cloud(pov)
     name, domain = split(email)
+    code = pack_code(pack) if pack else ""
     if os_ == "macos":
-        return (f"curl -fsSL {base_url()}/zcc-setup.sh | bash -s -- --cloud {c} --domain {domain} --user {name}")
+        env = f"ZPOV_POV={pov.id} ZPOV_PACK_GZ='{code}' " if code else ""
+        return (f"curl -fsSL {base_url()}/zcc-setup.sh | {env}bash -s -- --cloud {c} --domain {domain} --user {name}")
     if os_ == "windows":
-        return (f"& ([scriptblock]::Create((irm {base_url()}/zcc-setup.ps1))) -Cloud {c} -Domain {domain} "
+        env = f"$env:ZPOV_POV='{pov.id}'; $env:ZPOV_PACK_GZ='{code}'; " if code else ""
+        return (f"{env}& ([scriptblock]::Create((irm {base_url()}/zcc-setup.ps1))) -Cloud {c} -Domain {domain} "
                 f"-User {name}")
+    raise KitError("The OS is macos or windows.")
+
+
+def test_command(pov, os_, pack, wait=20):
+    """For a device that's already set up: installs (or refreshes) the POV's tests and runs them."""
+    code = pack_code(pack)
+    if os_ == "macos":
+        return f"~/.zscaler-pov-probe/app/pov-probe test --wait {wait} --code '{code}'"
+    if os_ == "windows":
+        return f"& \"$env:USERPROFILE\\.zscaler-pov-probe\\app\\pov-probe.cmd\" test --wait {wait} --code '{code}'"
     raise KitError("The OS is macos or windows.")
 
 

@@ -29,6 +29,7 @@ It installs into `~/.zscaler-pov-probe/app` (`%USERPROFILE%\.zscaler-pov-probe\a
 ## Use
 
 ```
+pov-probe test --wait 20 --code '<from the console>'   # the POV's tests, as the SE's command carries them
 pov-probe pack install pov-probe-pack-<pov>.json   # the POV's tests, from the SE
 pov-probe pack show                                # which POV and which tests the device has
 pov-probe test --wait 30                           # run them (waits up to 30 minutes for Client Connector)
@@ -45,8 +46,9 @@ criteria the customer chose. It also tells the traffic generator which kinds of 
 
 **When the criteria change,** the SE sends a new pack. Install it with `pack install`, and run `test` again.
 
-**Results:** each test writes a file to `~/.zscaler-pov-probe/results`. Send it to the SE; it holds test outcomes,
-the device name and OS, and nothing else.
+**Results:** each test writes a file to the Desktop (`pov-probe-results-<pov>-….json`). Send it to the SE, who
+imports it (Set up a pilot device > 3. Import the results); it holds test outcomes, the device name and OS, and
+nothing else.
 
 ## Remove
 

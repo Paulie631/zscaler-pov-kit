@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.50
+
+- **Pilot-device testing, made plain.** *Set up a pilot device* is three numbered steps:
+  1. **Install:** the install command now carries the POV's tests, so they run by themselves once the pilot user
+     signs in to Client Connector (no separate probe pack to send or install).
+  2. **Run the tests:** one command for a device that's already set up, or after the POV's criteria change.
+  3. **Import the results:** pick the results file from the device's Desktop, right on the same card.
+- The device scripts and `pov-probe` end with what to do next, in words: sign in as whom, where the results file is,
+  and how to run the tests again if they didn't.
+
 ## 0.9.49
 
 - **Set a test user's password from the console** (Set up a pilot device > Show password > Set new password):
