@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.63
+- Policy switches: a switched rule's tests now expect what the switch does (Caution social switched to Block: facebook.com expects the block page and shows as expected, marked "Demo switch"). The Point at line follows too. Each switch is tied to the tests it decides, so switching Block anonymizers no longer shows up under the gambling tests.
+
 ## 0.9.62
 - Policy switches: the sign-in bypass (the customer's IdP and MFA sites) is never offered, so a switch can't lock users out; GenAI rules whose tenant names the action DENY show as Block, and put back correctly.
 

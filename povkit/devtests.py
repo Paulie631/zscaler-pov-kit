@@ -183,7 +183,11 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
     except device.DeviceError as e:
         raise KitError(str(e)) from e
     crit, sid_of = [], {}
+    sw = switched_expect(pov)
     for cid, title, sid, sp in chosen:
+        hit = next(((name, exp) for key, (name, exp) in sw.items() if rule_matches(key, sp)), None)
+        if hit:   # the policy is switched for the demo: the test expects what the switch does
+            sp = dict(sp, expect=hit[1], switched=hit[0])
         if not crit or crit[-1]["id"] != cid:
             h = next((c.get("hash") for c in pack["criteria"] if c["id"] == cid), None)
             crit.append({"id": cid, "title": title, "probe": [], "hash": h})
@@ -195,6 +199,8 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
         r["text"] = evidence.describe_spec(r["spec"])
         r["open"] = open_url(r["spec"])
         r["show"] = show(r["spec"])
+        if r["spec"].get("switched"):
+            r["switched"] = r["spec"]["switched"]
         log("ok" if r["pass"] else "warn", f"{r['criterion']}: {r['text']}: got {r['outcome']}")
         if on_result:
             on_result(r)
@@ -225,6 +231,39 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None):
 
 
 # ---------------------------------------------------------------- demo switches
+# which device tests each of the template's rules decides (a switch changes what those tests should see)
+RULE_TESTS = {
+    "zia.url_filtering.block-gambling": ("http", ["bet365", "pokerstars"]),
+    "zia.url_filtering.block-anonymizers": ("http", []),
+    "zia.url_filtering.caution-social": ("http", ["facebook"]),
+    "zia.url_filtering.isolate-games": ("http", ["steampowered"]),
+    "zia.ssl.bypass-finance-and-health": ("tls_issuer", ["chase.com"]),
+    "zia.ssl.inspect-pilot-group": ("tls_issuer", ["wikipedia"]),
+    "zia.cloud_app_control.block-risky-genai": ("http", ["poe.com"]),
+    "zia.cloud_app_control.allow-genai": ("http", ["chatgpt.com"]),
+    "zia.dlp.block-card-numbers": ("dlp_post", [""]),
+}
+EXPECT_FOR = {"BLOCK": "block", "CAUTION": "caution", "ISOLATE": "isolate", "ALLOW": "allow",
+              "DECRYPT": "Zscaler", "DO_NOT_DECRYPT": "not-Zscaler"}
+
+
+def rule_matches(key, sp):
+    kind, needles = RULE_TESTS.get(key, (None, []))
+    where = str(sp.get("url") or sp.get("host") or "")
+    return sp.get("type") == kind and any(n in where for n in needles)
+
+
+def switched_expect(pov):
+    """{rule key: (label, expected outcome)} for the rules switched away from the plan."""
+    from .products.zia import ACTION_LABEL
+    out = {}
+    for key, v in (pov.cfg.get("switches") or {}).items():
+        kind = key.split(".")[1] if key.count(".") >= 2 else ""
+        label = ACTION_LABEL.get((kind, v["to"]), v["to"].title())
+        out[key] = (f"{v.get('name', key)} switched to {label}", EXPECT_FOR.get(v["to"], v["to"].lower()))
+    return out
+
+
 def policy(pov):
     """The POV rules that can be switched in a demo, each with the device tests it changes."""
     from .products import get
@@ -234,8 +273,12 @@ def policy(pov):
     tests = {}
     for cid, _, sid, _ in _specs(pov):
         tests.setdefault(cid, []).append(sid)
+    specs = _specs(pov)
     for x in sw:
-        x["tests"] = [t for c in x["criteria"] for t in tests.get(c, [])]
+        if x["key"] in RULE_TESTS:
+            x["tests"] = [sid for _, _, sid, sp in specs if rule_matches(x["key"], sp)]
+        else:   # a use case's rule: the tests of its criteria
+            x["tests"] = [t for c in x["criteria"] for t in tests.get(c, [])]
     return {"switches": sw, "switched": any(x["current"] != x["planned"] for x in sw)}
 
 

@@ -51,3 +51,18 @@ def test_switch_bodies(pov):
 def test_planned_action_names():
     assert zia.planned_action({"kind": "cloud_app_control", "body": {"actions": ["DENY_AI_ML_WEB_USE"]}}) == "BLOCK"
     assert zia.planned_action({"kind": "ssl", "body": {"action": {"type": "DECRYPT"}}}) == "DECRYPT"
+
+
+def test_switched_tests_expect_the_switch(pov, tenant, tenant_for, monkeypatch):
+    from povkit import device, probe
+    applied(pov, tenant_for)
+    pol = {x["key"]: x for x in devtests.policy(pov)["switches"]}
+    social = pol["zia.url_filtering.caution-social"]
+    assert len(social["tests"]) == 1 and pol["zia.url_filtering.block-anonymizers"]["tests"] == []
+    devtests.switch(pov, tenant, social["key"], "BLOCK")
+    monkeypatch.setattr(device, "gate", lambda c: None)
+    monkeypatch.setattr(probe, "run_spec", lambda sp, rid, s: {"spec": sp, "outcome": "block", "expect": sp["expect"],
+                                                               "pass": sp["expect"] == "block", "detail": ""})
+    seen = []
+    out = devtests.run(pov, social["tests"], on_result=seen.append)
+    assert out["ok"] == 1 and "switched to Block" in seen[0]["switched"] and out["evidence"] == []
