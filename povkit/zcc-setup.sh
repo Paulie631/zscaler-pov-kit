@@ -79,7 +79,10 @@ fi
 case "$PKG" in
   *.zip) mkdir -p "$TMP/app"; unzip -q "$PKG" -d "$TMP/app" || fail "Couldn't unzip $PKG."
          APP="$(find "$TMP/app" -maxdepth 2 -name '*.app' -type d | head -1)"
-         [ -n "$APP" ] || fail "There's no installer app in $PKG." ;;
+         [ -n "$APP" ] || fail "There's no installer app in $PKG."
+         # a zip made without Unix permissions (a browser or Windows zipped it) loses the execute bit; the code
+         # signature doesn't cover permissions, so restoring it leaves the signature intact
+         chmod -R u+rwX "$APP"; chmod +x "$APP"/Contents/MacOS/* "$APP"/Contents/Resources/installbuilder 2>/dev/null || true ;;
   *.app|*.app/) APP="${PKG%/}" ;;
   *.pkg) ;;
   *) fail "Give the installer from Platform Releases > macOS: the .pkg, or the installer .app (zipped is fine)." ;;

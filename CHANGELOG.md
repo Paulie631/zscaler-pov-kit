@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.46
+
+- **Fixed: the macOS installer failed with 'Permission denied'.** The pinned zip carries no Unix permissions, so
+  the installer's programs weren't executable after unzipping; the setup now restores them (the signature still
+  checks out: it doesn't cover permissions).
+
 ## 0.9.45
 
 - A console page left open across a restart (after an update, say) reloads itself instead of saying "bad token".
