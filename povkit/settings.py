@@ -6,7 +6,8 @@ from .core import KitError
 
 SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_emails", "placement", "criteria", "products",
             "zpa.app_name", "zpa.domains", "zpa.tcp_ports", "zpa.group", "zpa.location", "zpa.latitude", "zpa.longitude",
-            "zpa.scope", "zpa.saml_attribute", "zpa.saml_value", "zdx.app", "casb.tenant", "aiguard.competitor",
+            "zpa.scope", "zpa.saml_attribute", "zpa.pra_server", "zpa.pra_protocol", "zpa.pra_port", "zpa.pra_portal",
+            "zpa.certificate", "zpa.saml_value", "zdx.app", "casb.tenant", "aiguard.competitor",
             "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain",
             "identity.pilot", "identity.create_users", "identity.users_in", "ai.model", "ai.share", "ends", "lab",
             "customer_id", "mcp.version", "zcc.cloud", "aiguard.proxy", "aiguard.provider",
@@ -16,7 +17,8 @@ CHOICES = {"lab": ("yes", "no"), "manual.mode": ("live", "async"), "approval": (
            "aiguard.proxy": ("none", "customer", "se"), "aiguard.provider": ("anthropic", "openai"),
            "identity.pilot": ("existing", "create", "test"),
            "identity.users_in": ("auto", "zia", "zidentity"), "identity.create_users": ("yes", "no"), "ai.share": ("full", "names_only"),
-           "placement": ("top", "bottom"), "client_mode": ("single", "separate"), "zpa.scope": ("scim", "saml")}
+           "placement": ("top", "bottom"), "client_mode": ("single", "separate"), "zpa.scope": ("scim", "saml"),
+           "zpa.pra_protocol": ("RDP", "SSH")}
 
 
 def parse(key, raw):
@@ -49,6 +51,8 @@ def parse(key, raw):
         raise KitError("zcc.cloud is the Zscaler cloud's name, such as zscalertwo or zscaler.")
     if key == "prefix" and not __import__("re").fullmatch(r"[A-Za-z][A-Za-z0-9-]{1,11}", v or ""):
         raise KitError("The prefix is 2 to 12 letters, digits or dashes, starting with a letter.")
+    if key == "zpa.pra_port" and v and not (v.isdigit() and 0 < int(v) < 65536):
+        raise KitError("zpa.pra_port is a TCP port, such as 3389 (RDP) or 22 (SSH).")
     if key == "pilot_emails":
         bad = [x for x in v if "@" not in x]
         if bad:

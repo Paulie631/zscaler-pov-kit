@@ -114,6 +114,18 @@
       "path": "Administration > Role Management > Internet & SaaS",
       "verified": "2026-10",
       "source": "live console, pyite lab"
+    },
+    "zpa.certificates": {
+      "page": "ZPA Certificate Management",
+      "path": null,
+      "verified": null,
+      "search": "ZPA certificates"
+    },
+    "zpa.pra_portals": {
+      "page": "Privileged Remote Access portals",
+      "path": null,
+      "verified": null,
+      "search": "PRA portals"
     }
   }
 }

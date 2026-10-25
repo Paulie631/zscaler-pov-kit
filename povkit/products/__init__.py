@@ -2,16 +2,18 @@
 from .aiguard import AIGuard
 from .casb import CASB
 from .eai import EAI
+from .readonly import EASM, BusinessInsights, CloudConnector, Microsegmentation
 from .zcc import ZCC
 from .zdx import ZDX
 from .zia import ZIA
 from .zid import ZID
 from .zpa import ZPA
 
-REGISTRY = {p.name: p for p in (ZID(), ZIA(), ZCC(), ZPA(), AIGuard(), ZDX(), CASB(), EAI())}
+REGISTRY = {p.name: p for p in (ZID(), ZIA(), ZCC(), ZPA(), AIGuard(), ZDX(), CASB(), EAI(), EASM(),
+                                    BusinessInsights(), Microsegmentation(), CloudConnector())}
 # zid first: the POV's own pilot group (when it makes one) scopes everything; then zia, whose pilot group scopes zcc
 # and casb. zid isn't chosen like the others: the POV adds it when the Pilot users step asks for a new group.
-ORDER = ["zid", "zia", "zcc", "zpa", "aiguard", "zdx", "casb", "eai"]
+ORDER = ["zid", "zia", "zcc", "zpa", "aiguard", "zdx", "casb", "eai", "easm", "zbi", "zms", "ztw"]
 CHOOSABLE = [n for n in ORDER if n != "zid"]
 
 

@@ -574,7 +574,10 @@ class ZIA(Product):
             if types_:
                 rule("file_type", r, dict(filtering_action=r["filtering_action"], operation=r["operation"],
                                           file_types=types_, protocols=["FOHTTP_RULE", "FTP_RULE", "HTTPS_RULE", "HTTP_RULE"]))
+        from .base import chosen
         for r in tpl.get("sandbox", []):
+            if not any(chosen(pov, c) for c in r["criteria"]):
+                continue
             if not snap.get("sandbox_ok"):
                 notes.append(f"'{naming.name(P, r['name'])}' left out: Cloud Sandbox rules aren't available in this "
                              "tenant (Advanced Cloud Sandbox)")

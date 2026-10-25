@@ -48,7 +48,8 @@ class Tenant:
 
     def call(self, resource, method, *a, **kw):
         prefix, _, area = resource.partition(".") if "." in resource else ("zia", "", resource)
-        svc = getattr(self.c, prefix if prefix in ("zid", "zcc", "zpa", "zdx", "zins", "aiguard", "zwa") else "zia")
+        svc = getattr(self.c, prefix if prefix in ("zid", "zcc", "zpa", "zdx", "zins", "aiguard", "zwa", "zeasm", "zbi", "zms",
+                                                "ztw", "ztb") else "zia")
         api = getattr(svc, area or resource)
         if resource == "zpa.policies" and "conditions" in kw:
             kw = dict(kw, conditions=tuplify(kw["conditions"]))   # the SDK reads rule conditions as tuples

@@ -61,6 +61,8 @@ class FakeTenant:
             "aiguard.llm_providers": [{"id": 701, "name": "Anthropic", "type": "anthropic"}],
             "aiguard.llm_provider_credentials": [{"id": 702, "name": "Acme Anthropic key", "providerId": 701}],
             "aiguard.policy_match_rules": [{"id": 503, "name": "Corp chatbot rule", "ruleOrder": 1}],
+            "zpa.certificates": [{"id": "c1", "name": "acme-wildcard", "cname": "*.acme.com"}],
+            "zpa.pra_portal": [], "zpa.pra_console": [], "zpa.app_protection": [],
             "zdx.troubleshooting": [], "casb_dlp_rules": [{"id": 601, "name": "Corp SaaS DLP", "order": 1}],
         }
         self.idps = [{"id": "idp1", "name": "Okta"}]
@@ -200,6 +202,10 @@ class FakeTenant:
             return self._crud("label", method, a, kw)
         if resource == "sandbox_rules" and not getattr(self, "sandbox", True):
             raise KitError("403 Advanced Cloud Sandbox not subscribed")
+        if resource.split(".")[0] in ("zeasm", "zbi", "zms", "ztw"):   # read-only products: canned rows
+            if resource.split(".")[0] in getattr(self, "denied", ()):
+                raise KitError("403 not entitled")
+            return copy.deepcopy((getattr(self, "ro", {}) or {}).get(resource, {"results": []}))
         if resource == "zwa.dlp_incidents":
             if not getattr(self, "zwa", True):
                 raise KitError("403 Workflow Automation not subscribed")
@@ -258,7 +264,7 @@ class FakeTenant:
             return [{"userName": "jane@acme.com", "registrationState": "Registered"}]
         if resource == "saas_security_api":
             return copy.deepcopy(self.saas_tenants) if method == "list_casb_tenant_lite" else [{"tenantId": 55}]
-        if resource in self.store:
+        if resource in self.store or resource in ("zpa.app_segments_pra", "zpa.app_segments_inspection"):
             return self._generic(resource, method, a, kw)
         raise AssertionError(f"fake tenant has no {resource}.{method}")
 
@@ -295,6 +301,8 @@ class FakeTenant:
         return copy.deepcopy(hit)
 
     def _generic(self, res, method, a, kw):
+        if res in ("zpa.app_segments_pra", "zpa.app_segments_inspection"):   # the same /application API in ZPA
+            res = "zpa.application_segment"
         rows = self.store[res]
         zpa = res.startswith("zpa.")
         ids = {str(r["id"]) for r in rows}
@@ -309,7 +317,9 @@ class FakeTenant:
             return copy.deepcopy(rows)
         if method.startswith(("add", "start")):
             o = dict(kw)
-            if method == "add_access_rule_v2":   # positional name and action; conditions as the API returns them
+            if method == "add_segment_pra":
+                o["praApps"] = [{"id": str(self._id()), "name": kw["domain_names"][0]}]
+            if method in ("add_access_rule_v2", "add_app_protection_rule_v2"):   # positional name and action; conditions as the API returns them
                 o.update(name=a[0], action=a[1].upper(), conditions=[
                     {"operands": [{"objectType": c[0].upper(), "rhs": v[1] if isinstance(v, (list, tuple)) else v}
                                   for v in c[1]]} for c in kw.get("conditions", [])])

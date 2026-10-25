@@ -15,7 +15,8 @@ from .core.guard import LedgerTenant, ReadOnlyTenant
 from .core.ledger import Ledger
 
 
-SHORT = {"zid": "ZIdentity", "zia": "ZIA", "zcc": "ZCC", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB", "eai": "Endpoint AI"}
+SHORT = {"zid": "ZIdentity", "zia": "ZIA", "zcc": "ZCC", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB", "eai": "Endpoint AI",
+         "easm": "EASM", "zbi": "Business Insights", "zms": "Microsegmentation", "ztw": "Cloud Connector"}
 
 
 def ledger(pov):

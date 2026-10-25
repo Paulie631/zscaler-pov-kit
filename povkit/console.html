@@ -636,7 +636,12 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         <span class="lbl">TCP ports</span><input type="text" id="s_zpa.tcp_ports" value="${esc((s["zpa.tcp_ports"]||["443"]).join(", "))}">
         <span class="lbl">Pilot users in ZPA</span><div><label class="chk"><input type="radio" name="s_zpa.scope" value="scim" ${scope!="saml"?"checked":""}>A SCIM group</label> <label class="chk"><input type="radio" name="s_zpa.scope" value="saml" ${scope=="saml"?"checked":""}>A SAML attribute</label></div>
         <span class="lbl">SCIM group <span class="muted">(if not the pilot group)</span></span><input type="text" id="s_zpa.group" value="${esc(s["zpa.group"]||"")}">
-        <span class="lbl">SAML attribute and value</span><div class="row" style="gap:8px"><input type="text" id="s_zpa.saml_attribute" value="${esc(s["zpa.saml_attribute"]||"")}" placeholder="memberOf" style="flex:1"><input type="text" id="s_zpa.saml_value" value="${esc(s["zpa.saml_value"]||"")}" placeholder="pov-pilots" style="flex:1"></div></div>`:""}
+        <span class="lbl">SAML attribute and value</span><div class="row" style="gap:8px"><input type="text" id="s_zpa.saml_attribute" value="${esc(s["zpa.saml_attribute"]||"")}" placeholder="memberOf" style="flex:1"><input type="text" id="s_zpa.saml_value" value="${esc(s["zpa.saml_value"]||"")}" placeholder="pov-pilots" style="flex:1"></div></div>
+        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Privileged Remote Access and App Protection (used when PA-PRA-01 or PA-APP-03 is chosen in Success criteria)</summary><div class="form" style="margin-top:8px">
+        <span class="lbl">PRA server <span class="muted">(what admins reach)</span></span><div class="row" style="gap:8px"><input type="text" id="s_zpa.pra_server" value="${esc(s["zpa.pra_server"]||"")}" placeholder="jump1.acme.internal" style="flex:2"><select id="s_zpa.pra_protocol">${["RDP","SSH"].map(x=>`<option ${(s["zpa.pra_protocol"]||"RDP")==x?"selected":""}>${x}</option>`).join("")}</select><input type="text" id="s_zpa.pra_port" value="${esc(s["zpa.pra_port"]||"")}" placeholder="3389 or 22" style="width:90px"></div>
+        <span class="lbl">PRA portal domain</span><input type="text" id="s_zpa.pra_portal" value="${esc(s["zpa.pra_portal"]||"")}" placeholder="pra.acme.com (the customer adds its CNAME after Apply)">
+        <span class="lbl">ZPA certificate <span class="muted">(name)</span></span><input type="text" id="s_zpa.certificate" value="${esc(s["zpa.certificate"]||"")}" placeholder="empty: one that covers the portal's domain; App Protection on an HTTPS app needs one too">
+        </div></details>`:""}
       ${has("casb")?`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`:""}
       <div id="wmsg"></div>`+nav(true,true,"Save ›");
     pilotPicker(s);
@@ -1322,7 +1327,7 @@ const UC_EX=["Marketing can use ChatGPT but can't upload files to it","Block a l
   "Report credit card numbers in files shared in our Microsoft 365"];
 const KNAME={url_filtering:"ZIA · URL filtering rule",ssl:"ZIA · SSL inspection rule",cloud_app_control:"ZIA · Cloud App Control rule",file_type:"ZIA · file type control rule",dlp:"ZIA · DLP rule",dns:"ZIA · DNS control rule",
   zpa_app:"ZPA · app segment and its own access rule",aiguard_block:"AI Guard · its own app, key and blocking policy",zdx_deeptrace:"ZDX · deep trace on each pilot device",casb_dlp:"CASB · DLP rule, report only"};
-const PSHORT={zid:"ZIdentity",zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard:"AI Guard",zdx:"ZDX",casb:"CASB",eai:"Endpoint AI"};
+const PSHORT={zid:"ZIdentity",zia:"ZIA",zcc:"Client Connector",zpa:"ZPA",aiguard:"AI Guard",zdx:"ZDX",casb:"CASB",eai:"Endpoint AI",easm:"EASM",zbi:"Business Insights",zms:"Microsegmentation",ztw:"Cloud Connector"};
 let UC=null;
 async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a POV in Setup first.","bad");return}
   UC=await api("/api/usecases");const c=S.current;

@@ -246,9 +246,11 @@ def _pack_specs(pov, c, values, with_skipped=False):
 
 
 def _values(pov):
-    from .products.zpa import app_of
-    app = app_of(pov.cfg)
-    return {"{zpa.domain}": app["domains"][0], "{zpa.port}": str(app["tcp_ports"][0]).split("-")[0]}
+    from .products.zpa import ATTACK_QUERY, app_of, app_url, pra_of
+    app, pra = app_of(pov.cfg), pra_of(pov.cfg)
+    return {"{zpa.domain}": app["domains"][0], "{zpa.port}": str(app["tcp_ports"][0]).split("-")[0],
+            "{zpa.attack_url}": app_url(pov.cfg) + ATTACK_QUERY,
+            "{zpa.pra_portal_url}": f"https://{pra['portal']}/" if pra["portal"] else ""}
 
 
 def test_hash(pov, c):

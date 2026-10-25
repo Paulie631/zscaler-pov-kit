@@ -352,6 +352,27 @@ local Ollama model if one is installed. A person records what the admin console 
 `pov-probe cleanup`. Replace the draft criteria with Zscaler's internal POV plan for the product when you have
 it.
 
+### More Zscaler products in a POV
+
+Some criteria are **opt-in**: they count only when chosen (Success criteria › Pick from the catalog, or when the
+customer's own list maps to them), so a POV without them is unchanged.
+
+| Product | Criteria | What the kit does |
+|---|---|---|
+| Cloud Sandbox (ZIA) | IS-SBX-01 | A POV sandbox rule for the pilot group; the device test downloads a never-seen PDF and expects quarantine. |
+| Workflow Automation | IS-DLP-02 | Reads the pilot users' DLP incidents (last 7 days). Read-only. |
+| ZPA Privileged Remote Access | PA-PRA-01 | A PRA segment (RDP or SSH to one server), a pilot-only access rule, a portal and a console. Set the server, the portal's domain and a ZPA certificate that covers it (Setup › ZPA › Privileged Remote Access); after Apply the customer adds the portal's CNAME to DNS. The device test opens the portal. |
+| ZPA App Protection | PA-APP-03 | Makes the POV app segment an inspected one, with an App Protection profile (OWASP and ThreatLabZ controls, blocking) and an inspection rule for the pilot group. An HTTPS app needs a ZPA certificate for its domain. The device test sends a cross-site scripting request and expects it stopped (a 403). Choose it before Apply: an app segment made earlier isn't inspected. |
+| External Attack Surface (EASM) | EA-FND-01, EA-LKA-01 | Read-only: findings by severity and lookalike domains for the customer's EASM organization. |
+| Business Insights | BI-RPT-01 | Read-only: the reports available. |
+| Microsegmentation | MS-AGT-01, MS-POL-01 | Read-only: agents installed and connected, and policy rules. The customer installs the agents. Needs the ZPA customer ID. |
+| Cloud & Branch Connector | CC-GRP-01, CC-FWD-01 | Read-only: connector groups and their VMs, and forwarding rules. The customer deploys the connector from a provisioning template. |
+
+The read-only products are chosen on Start a POV like the others. They put the customer's steps on the list of
+steps for people, create nothing, and have nothing to tear down. Their API client needs view access to each one.
+PRA and App Protection bodies follow the SDK's documentation and are confirmed in the lab test plan, like the rest
+of ZPA.
+
 ### A POV lab on CloudShare
 
 No cloud account for the connectors? [CLOUDSHARE.md](CLOUDSHARE.md) builds a CloudShare blueprint once (two App

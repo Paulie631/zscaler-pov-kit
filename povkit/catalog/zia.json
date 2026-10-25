@@ -142,7 +142,8 @@
      "url": "https://httpbin.org/base64/{b64}",
      "expect": "quarantine"
     }
-   ]
+   ],
+   "optional": true
   },
   {
    "id": "IS-CAC-01",
@@ -186,7 +187,8 @@
    "statement": "A DLP block for a pilot user becomes an incident in Workflow Automation, with the user, the engine and the evidence, ready for triage.",
    "proofs": [
     "api"
-   ]
+   ],
+   "optional": true
   },
   {
    "id": "AI-GEN-01",

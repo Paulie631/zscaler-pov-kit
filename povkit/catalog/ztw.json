@@ -1,0 +1,23 @@
+{
+ "product": "ztw",
+ "criteria": [
+  {
+   "id": "CC-GRP-01",
+   "phase": "v3",
+   "title": "A Cloud or Branch Connector is deployed and running",
+   "statement": "A connector deployed from a provisioning template in the customer's cloud account (or branch) comes up and registers with Zscaler.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "CC-FWD-01",
+   "phase": "v3",
+   "title": "Workload traffic is forwarded through Zscaler",
+   "statement": "Forwarding rules send the workloads' internet traffic to ZIA (and private app traffic to ZPA), with no agent on the workloads.",
+   "proofs": [
+    "api"
+   ]
+  }
+ ]
+}

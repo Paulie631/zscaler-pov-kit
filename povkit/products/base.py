@@ -19,6 +19,11 @@ def load_catalog() -> list[dict]:
     return out
 
 
+def chosen(pov, cid):
+    """Whether the POV proves this criterion (optional criteria are proved only when listed in the POV)."""
+    return cid in ((getattr(pov, "cfg", None) or {}).get("criteria") or [])
+
+
 class Product:
     name = ""          # 'zia'
     title = ""         # 'Internet Access (ZIA)'

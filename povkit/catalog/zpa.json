@@ -38,6 +38,45 @@
    "proofs": [
     "api"
    ]
+  },
+  {
+   "id": "PA-PRA-01",
+   "phase": "v2",
+   "optional": true,
+   "title": "Admins reach a server through the PRA portal, with no VPN or client",
+   "statement": "Pilot admins open an RDP or SSH session to a private server from a browser, through Privileged Remote Access, and only they can.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "{zpa.pra_portal_url}",
+     "expect": "allow"
+    }
+   ]
+  },
+  {
+   "id": "PA-APP-03",
+   "phase": "v2",
+   "optional": true,
+   "title": "Attacks on the POV app are stopped (App Protection)",
+   "statement": "App Protection inspects the pilot group's traffic to the private app and blocks web attacks such as cross-site scripting before they reach it.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "{zpa.attack_url}",
+     "expect": "block",
+     "block_status": [
+      403
+     ]
+    }
+   ]
   }
  ]
 }

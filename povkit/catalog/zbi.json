@@ -1,0 +1,14 @@
+{
+ "product": "zbi",
+ "criteria": [
+  {
+   "id": "BI-RPT-01",
+   "phase": "v3",
+   "title": "Business Insights reports on SaaS use and spend",
+   "statement": "Business Insights reports how the organization uses its applications (adoption, overlap, unused licenses) from the traffic Zscaler already sees.",
+   "proofs": [
+    "api"
+   ]
+  }
+ ]
+}

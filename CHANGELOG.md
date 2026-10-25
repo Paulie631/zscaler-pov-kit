@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.80
+- **ZPA Privileged Remote Access** (opt-in criterion PA-PRA-01): a PRA segment for one server (RDP or SSH), a pilot-only access rule, a PRA portal and a console. New ZPA settings: PRA server, protocol, port, portal domain and certificate (a ZPA certificate that covers the portal's domain is found by itself). The device test opens the portal.
+- **ZPA App Protection** (opt-in criterion PA-APP-03): the POV app segment becomes an inspected one, with an App Protection profile (OWASP and ThreatLabZ controls, blocking) and an inspection rule for the pilot group. The device test sends a cross-site scripting request and expects it stopped; a test can now count an HTTP status (ZPA's 403) as a block.
+- **New products, read-only:** External Attack Surface (EA-FND-01 findings by severity, EA-LKA-01 lookalike domains), Business Insights (BI-RPT-01), Microsegmentation (MS-AGT-01 agents connected, MS-POL-01 policy rules) and Cloud & Branch Connector (CC-GRP-01 connector running, CC-FWD-01 forwarding rules). The kit reads them and proves their criteria from what the tenant has; the customer's steps (add domains, install agents, deploy the connector) go on the list of steps for people. Nothing is created or torn down.
+- Cloud Sandbox (IS-SBX-01) and Workflow Automation (IS-DLP-02) are opt-in too, so POVs that don't choose them are unchanged.
+- Deployment guide: "More Zscaler products in a POV".
+
 ## 0.9.79
 - **Cloud Sandbox** (new criterion IS-SBX-01, "Never-seen files are held for Cloud Sandbox analysis"): a POV sandbox rule for the pilot group (first-time action Quarantine for PDF, Office, executables and ZIP; blocks malicious verdicts; AI Instant Verdict on). The device test downloads a PDF made fresh for each run, so its hash is new, and expects Zscaler's quarantine page; the result shows the file's MD5 to look up the sandbox report. Tenants without Advanced Cloud Sandbox: preflight says so and the rule is left out. New guided demo: "A file no one has seen before".
 - **Workflow Automation** (new criterion IS-DLP-02, "DLP incidents reach Workflow Automation"): an API check, read-only, for DLP incidents of the pilot users in the last 7 days; new demo helper to walk the incident in the Zscaler console. It needs the Workflow Automation subscription and view access for the API client.

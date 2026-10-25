@@ -1,0 +1,23 @@
+{
+ "product": "easm",
+ "criteria": [
+  {
+   "id": "EA-FND-01",
+   "phase": "v3",
+   "title": "The customer's exposed assets and their risks are found",
+   "statement": "External Attack Surface Management finds the customer's internet-facing assets and rates each finding, with no agent and nothing installed.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "EA-LKA-01",
+   "phase": "v3",
+   "title": "Lookalike domains are tracked",
+   "statement": "Domains registered to look like the customer's (for phishing) are found and listed.",
+   "proofs": [
+    "api"
+   ]
+  }
+ ]
+}

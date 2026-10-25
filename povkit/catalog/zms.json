@@ -1,0 +1,23 @@
+{
+ "product": "zms",
+ "criteria": [
+  {
+   "id": "MS-AGT-01",
+   "phase": "v3",
+   "title": "Microsegmentation agents report from the customer's servers",
+   "statement": "The Microsegmentation agent installs on the customer's test servers and connects, and their traffic flows show up with no network changes.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "MS-POL-01",
+   "phase": "v3",
+   "title": "A segmentation policy is set between the customer's workloads",
+   "statement": "A policy rule allows only the flows an application needs between its servers, built from what the agents saw.",
+   "proofs": [
+    "api"
+   ]
+  }
+ ]
+}

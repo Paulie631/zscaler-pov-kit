@@ -343,6 +343,9 @@ def run_spec(spec, run_id, s):
                 r = s.get(tag(spec["url"], run_id), timeout=TIMEOUT)
                 got = classify(r)
                 detail = f"HTTP {r.status_code}" + page_note(r)
+                if got == "allow" and r.status_code in (spec.get("block_status") or []):
+                    got = "block"   # a block that isn't a ZIA page: ZPA App Protection answers 403 itself
+                    detail += " (the app's traffic was stopped before it reached the server)"
             except Exception as e:   # noqa: BLE001
                 if "SSL" not in type(e).__name__ and "certificate" not in str(e).lower():
                     raise
