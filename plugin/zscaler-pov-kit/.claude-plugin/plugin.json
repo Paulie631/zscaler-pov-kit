@@ -1,6 +1,6 @@
 {
   "name": "zscaler-pov-kit",
-  "version": "0.9.77",
+  "version": "0.9.78",
   "description": "Run Zscaler proofs of value in customer tenants with the Zscaler POV Kit: preflight, change lists, status, evidence, use cases and handover, with every change gated by the customer's approval.",
   "author": {
     "name": "Zscaler Solutions Engineering"

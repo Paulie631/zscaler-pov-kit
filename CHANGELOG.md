@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.78
+- Opened results: **Show it in the browser** sits with Check again, and "open it in the browser when it changes" (on by default) opens the page as soon as a switch changes the result, so the room sees the new block, caution or allowed page. The page details now follow the latest run (they showed the first run's page). Earlier runs are no longer listed.
+
 ## 0.9.77
 - Device tests › Test runner: **open a result** (Details, policy and Check again). It shows the POV rule that decides the test, with its switches (Block, Caution, Isolate, Allow), who it applies to and the planned action; switch it and the test re-runs every 15 seconds for up to 2 minutes until the result changes ("Changed: caution → block"). **Check again** and **Check until it changes** work without a switch too.
 - Also in an opened result: Zscaler's category for the site (the tenant's URL lookup, read-only), the block page's status and text, time taken, the Zscaler data centre and public IP (ip.zscaler.com), the certificate's issuer, expiry and TLS version, where to find the event in the Zscaler console (user, URL, time, and the run tag to search, with Copy), the tenant's log line when the log feed is on, and earlier recorded runs of the test.
