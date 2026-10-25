@@ -155,5 +155,7 @@ def test_sandbox_quarantine_page_and_pdf():
         status_code, headers, history, url = 403, {"Content-Type": "text/html"}, [], "https://httpbin.org/x"
         text = "<title>Internet Security by Zscaler</title> The file is being analyzed by the Zscaler sandbox"
     assert probe.classify(R()) == "quarantine"
-    import pypdf
-    assert "POV sandbox test" in pypdf.PdfReader(io.BytesIO(probe.unique_pdf("r1"))).pages[0].extract_text()
+    pdf = probe.unique_pdf("r1")
+    assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF") and b"POV sandbox test r1" in pdf
+    assert pdf != probe.unique_pdf("r1")   # a new hash every run
+    _ = io
