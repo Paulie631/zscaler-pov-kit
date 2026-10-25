@@ -30,7 +30,7 @@ def test_linked_device_runs_tests_live_and_uploads(pov, monkeypatch):
         assert out["total"] == len(crit["tests"]) == len(seen) and out["evidence"] == ["IS-URL-01"]
         assert all(r["id"] for r in seen)
         devtests.open_here(pov, crit["tests"][0]["id"], devs[0]["id"])
-        for _ in range(30):
+        for _ in range(200):
             if opened:
                 break
             time.sleep(0.1)

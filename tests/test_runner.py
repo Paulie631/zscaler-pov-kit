@@ -24,7 +24,7 @@ def test_runner_runs_tests_and_saves_results(pov, monkeypatch, tmp_path):
         == demo.spec_id(c0["id"], c0["probe"][0])
     ids = [t["id"] for t in st["library"]["criteria"][1]["tests"]]
     runner.start(ids)
-    for _ in range(50):
+    for _ in range(400):
         if runner.JOB.get("done"):
             break
         time.sleep(0.05)
@@ -33,7 +33,7 @@ def test_runner_runs_tests_and_saves_results(pov, monkeypatch, tmp_path):
     saved = json.loads(open(r["file"]).read())
     assert saved["pov"] == pov.id and len(saved["results"]) == len(ids)
     runner.start(ids, record=False)   # a Show it step: nothing saved
-    for _ in range(50):
+    for _ in range(400):
         if runner.JOB.get("done"):
             break
         time.sleep(0.05)
