@@ -278,7 +278,8 @@ def _ping(product):
 
 def _check_signin(t, pov, led):
     from . import products
-    first = next((n for n in products.ORDER if n in pov.products and n != "eai"), None)
+    from .gui import PING
+    first = next((n for n in products.ORDER if n in pov.products and n in PING), None)
     if not first:
         return None, "no product with an API in this POV"
     t.call(*_ping(first))

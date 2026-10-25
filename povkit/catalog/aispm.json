@@ -1,0 +1,49 @@
+{
+ "product": "aispm",
+ "criteria": [
+  {
+   "id": "AS-INV-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Shadow AI is inventoried",
+   "statement": "The GenAI apps the pilot users reach (approved or not) show in the AI asset inventory, with who uses them and how much.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "In the AI asset inventory, the GenAI apps the pilot devices used (the traffic generator sends GenAI traffic) are listed with their users. Screenshot the inventory."
+  },
+  {
+   "id": "AS-MOD-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Models, AI services and MCP servers in the customer's cloud are found",
+   "statement": "With the customer's test cloud account connected, AI-SPM finds the models, AI services, data stores, agents and MCP servers in it.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "The connected cloud account's AI assets are listed (models, AI services, MCP servers or agents). Screenshot the list with the account named."
+  },
+  {
+   "id": "AS-RSK-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Risky AI exposures are flagged with a fix",
+   "statement": "Misconfigurations such as a publicly reachable model endpoint, an over-permissioned agent or sensitive data in a training store are flagged, rated, and come with remediation steps.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "At least one AI risk finding is shown with its severity and remediation. Screenshot it."
+  },
+  {
+   "id": "AS-GOV-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "AI governance is reported against a framework",
+   "statement": "Posture is mapped to an AI framework the customer cares about (NIST AI RMF, EU AI Act or ISO 42001), with a report usable as audit evidence.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "A compliance view or report for the customer's chosen framework is produced. Attach it or a screenshot."
+  }
+ ]
+}

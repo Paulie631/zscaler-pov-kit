@@ -43,7 +43,8 @@ class FakeTenant:
                         {"id": 63, "name": None, "predefinedEngineName": "PCI", "customDlpEngine": False},
                         {"id": 62, "name": "Acme Project Falcon", "customDlpEngine": True}]
         self.actions = {"FILE_SHARE": ["BLOCK_FILE_SHARE_UPLOAD", "ALLOW_FILE_SHARE_UPLOAD"],
-                        "AI_ML": ["BLOCK_AI_ML_WEB_USE", "ALLOW_AI_ML_WEB_USE"]}
+                        "AI_ML": ["BLOCK_AI_ML_WEB_USE", "ALLOW_AI_ML_WEB_USE", "ISOLATE_AI_ML_WEB_USE",
+                                  "CAUTION_AI_ML_WEB_USE"]}
         self.fwds = [{"id": 5, "name": "Default", "forwardingProfileActions": [{"networkType": 0, "actionType": 2}]}]
         self.apps = [{"id": 9, "name": "Default Windows", "forwardingProfileId": 5, "ruleOrder": 1}]
         self.mac_apps = [{"id": 19, "name": "Default macOS", "forwardingProfileId": 5, "ruleOrder": 1,

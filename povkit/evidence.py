@@ -269,7 +269,7 @@ def stale(run, cid, now):
 TRAFFIC = {"IS-URL-01": ["web"], "IS-URL-02": ["web"], "IS-TEN-01": ["web"], "IS-SSL-01": ["web"], "IS-SSL-02": ["web"],
            "IS-CBI-01": ["web"], "IS-THR-01": ["threats"], "IS-THR-02": ["threats"], "IS-CAC-01": ["saas", "files"],
            "IS-DLP-01": ["dlp"], "AI-GEN-01": ["genai"], "AI-GEN-02": ["genai", "dlp"], "IS-FTC-01": ["files"],
-           "IS-FW-01": ["ports"], "IS-DNS-01": ["dns"]}
+           "IS-FW-01": ["ports"], "IS-DNS-01": ["dns"], "AS-INV-01": ["genai"], "AI-GEN-03": ["genai"]}
 TRAFFIC_ORDER = ("web", "saas", "genai", "threats", "dlp", "files", "dns", "ports")
 UC_EXPECT = {"BLOCK": "block", "CAUTION": "caution", "ISOLATE": "isolate", "ALLOW": "allow"}
 

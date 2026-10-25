@@ -141,6 +141,7 @@ RULE_TESTS = {
     "zia.ssl.inspect-pilot-group": ("tls_issuer", ["wikipedia"]),
     "zia.cloud_app_control.block-risky-genai": ("http", ["poe.com"]),
     "zia.cloud_app_control.allow-genai": ("http", ["chatgpt.com"]),
+    "zia.cloud_app_control.isolate-genai": ("http", ["perplexity.ai"]),
     "zia.dlp.block-card-numbers": ("dlp_post", [""]),
 }
 EXPECT_FOR = {"BLOCK": "block", "CAUTION": "caution", "ISOLATE": "isolate", "ALLOW": "allow",

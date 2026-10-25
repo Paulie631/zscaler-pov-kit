@@ -231,6 +231,24 @@
    "attest": "Paste the probe's fake card numbers into ChatGPT on a pilot device and confirm the DLP block."
   },
   {
+   "id": "AI-GEN-03",
+   "phase": "v1",
+   "optional": true,
+   "title": "GenAI: an unvetted assistant opens in browser isolation",
+   "statement": "An assistant that isn't approved or blocked (Perplexity) opens in Cloud Browser Isolation: users can read answers, but can't paste, upload or download, so no data leaves.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://www.perplexity.ai/",
+     "expect": "isolate"
+    }
+   ]
+  },
+  {
    "id": "IS-CBI-01",
    "phase": "v1",
    "title": "Risky categories open in browser isolation",

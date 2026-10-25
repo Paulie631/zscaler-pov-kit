@@ -38,6 +38,7 @@ KIND = {"label": "rule label", "url_category": "custom URL category", "network_s
         "members": "group members", "user_group": "user group", "department": "department"}
 PRODUCT = {"zid": "ZIdentity", "zia": "Internet Access", "zcc": "Client Connector", "zpa": "Private Access", "aiguard": "AI Guard",
            "zdx": "Digital Experience", "casb": "SaaS security", "eai": "AI Endpoint Security",
+           "aispm": "AI Asset Management", "airt": "AI Red Teaming",
            "easm": "External Attack Surface", "zbi": "Business Insights", "zms": "Microsegmentation",
            "ztw": "Cloud & Branch Connector"}
 PROOF = {"probe": "Probe", "api": "API", "attested": "Demonstrated"}

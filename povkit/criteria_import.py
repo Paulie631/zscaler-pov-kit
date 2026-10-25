@@ -120,7 +120,7 @@ def words(s):
 
 AI_WORDS = {"prompt", "chatbot", "llm", "genai", "model", "agent", "copilot", "chatgpt", "claude", "gemini", "mcp",
             "openai", "anthropic", "assistant", "inference", "jailbreak"}
-AI_PRODUCTS = {"aiguard", "eai"}
+AI_PRODUCTS = {"aiguard", "eai", "aispm", "airt"}
 
 
 def catalog(pov=None):

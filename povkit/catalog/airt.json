@@ -1,0 +1,49 @@
+{
+ "product": "airt",
+ "criteria": [
+  {
+   "id": "RT-SCN-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "A red-team scan runs against the customer's AI app",
+   "statement": "An automated scan with the predefined attack probes (prompt injection, jailbreak, data leakage, harmful content and more) runs against the customer's chatbot or a test AI app, with no code changes.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "A completed scan of the named AI app, with the probes it ran. Attach the scan report or a screenshot."
+  },
+  {
+   "id": "RT-FND-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Findings are rated with remediation",
+   "statement": "Each finding shows the attack, the app's reply, a severity, and how to fix it (prompt hardening, guardrails).",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "The scan's findings list with severities and at least one remediation. Screenshot it."
+  },
+  {
+   "id": "RT-GRD-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "AI Guard stops what the red team found",
+   "statement": "Re-running the scan's successful attacks with AI Guard in front of the app blocks them (with AI Guard in the POV, its proxy or detection mode).",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "The same attacks re-run with AI Guard in front, now blocked (AI Guard's logs or the second scan's report). Screenshot both."
+  },
+  {
+   "id": "RT-CON-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Scans repeat on a schedule",
+   "statement": "Scans re-run on a schedule or after the app changes, so new weaknesses are found without asking.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "A scheduled or recurring scan is set for the app. Screenshot its schedule."
+  }
+ ]
+}

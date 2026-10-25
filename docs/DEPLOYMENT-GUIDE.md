@@ -363,12 +363,15 @@ customer's own list maps to them), so a POV without them is unchanged.
 | Workflow Automation | IS-DLP-02 | Reads the pilot users' DLP incidents (last 7 days). Read-only. |
 | ZPA Privileged Remote Access | PA-PRA-01 | A PRA segment (RDP or SSH to one server), a pilot-only access rule, a portal and a console. Set the server, the portal's domain and a ZPA certificate that covers it (Setup › ZPA › Privileged Remote Access); after Apply the customer adds the portal's CNAME to DNS. The device test opens the portal. |
 | ZPA App Protection | PA-APP-03 | Makes the POV app segment an inspected one, with an App Protection profile (OWASP and ThreatLabZ controls, blocking) and an inspection rule for the pilot group. An HTTPS app needs a ZPA certificate for its domain. The device test sends a cross-site scripting request and expects it stopped (a 403). Choose it before Apply: an app segment made earlier isn't inspected. |
+| GenAI in browser isolation (AI Access Security) | AI-GEN-03 | A Cloud App Control rule opens Perplexity (an assistant neither approved nor blocked) in browser isolation for the pilot group. Needs an isolation profile. The device test expects isolation; the rule has a demo switch. |
+| AI Asset Management / AI-SPM (draft) | AS-INV-01, AS-MOD-01, AS-RSK-01, AS-GOV-01 | No API yet: a person shows and records the inventory, the cloud AI assets, a risk finding and a governance report. With ZIA in the POV, the traffic generator sends GenAI traffic so the inventory has something to show. |
+| AI Red Teaming (draft) | RT-SCN-01, RT-FND-01, RT-GRD-01, RT-CON-01 | No API yet: the scan's report is the evidence. RT-GRD-01 re-runs the successful attacks with AI Guard in front. |
 | External Attack Surface (EASM) | EA-FND-01, EA-LKA-01 | Read-only: findings by severity and lookalike domains for the customer's EASM organization. |
 | Business Insights | BI-RPT-01 | Read-only: the reports available. |
 | Microsegmentation | MS-AGT-01, MS-POL-01 | Read-only: agents installed and connected, and policy rules. The customer installs the agents. Needs the ZPA customer ID. |
 | Cloud & Branch Connector | CC-GRP-01, CC-FWD-01 | Read-only: connector groups and their VMs, and forwarding rules. The customer deploys the connector from a provisioning template. |
 
-The read-only products are chosen on Start a POV like the others. They put the customer's steps on the list of
+The read-only and draft products (AI-SPM, AI Red Teaming) are chosen on Start a POV like the others; draft criteria are replaced by Zscaler's internal POV plans, and by API proofs when the SDK has them. They put the customer's steps on the list of
 steps for people, create nothing, and have nothing to tear down. Their API client needs view access to each one.
 PRA and App Protection bodies follow the SDK's documentation and are confirmed in the lab test plan, like the rest
 of ZPA.

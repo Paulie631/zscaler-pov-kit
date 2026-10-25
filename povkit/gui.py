@@ -105,7 +105,8 @@ def current():
 PING = {"zia": ("activate", "status"), "zcc": ("zcc.forwarding_profile", "list_by_company"),
         "zpa": ("zpa.idp", "list_idps"), "aiguard": ("aiguard.policies", "list_policies"),
         "zdx": ("zdx.apps", "list_apps"), "casb": ("saas_security_api", "list_casb_tenant_lite"),
-        "zid": ("zid.users", "list_users")}
+        "zid": ("zid.users", "list_users"), "easm": ("zeasm.organizations", "list_organizations"),
+        "zbi": ("zbi.reports", "list_reports"), "ztw": ("ztw.ec_groups", "list_ec_groups")}
 
 
 def sign_in_check(p, which):

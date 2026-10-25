@@ -88,7 +88,7 @@ ACTION_LABEL = {("url_filtering", "BLOCK"): "Block", ("url_filtering", "CAUTION"
                 ("ssl", "DECRYPT"): "Inspect", ("ssl", "DO_NOT_DECRYPT"): "Don't inspect",
                 ("dlp", "BLOCK"): "Block", ("dlp", "ALLOW"): "Allow (log only)",
                 ("cloud_app_control", "BLOCK"): "Block", ("cloud_app_control", "CAUTION"): "Caution",
-                ("cloud_app_control", "ALLOW"): "Allow"}
+                ("cloud_app_control", "ISOLATE"): "Isolate", ("cloud_app_control", "ALLOW"): "Allow"}
 
 
 def planned_action(it):
@@ -555,15 +555,25 @@ class ZIA(Product):
                 if not body["url_categories"]:
                     continue
             rule("ssl", r, body)
+        from .base import chosen
         for r in tpl["cloud_app_control"]:
             n = naming.name(P, r["name"])
+            if r.get("optional") and not any(chosen(pov, c) for c in r["criteria"]):
+                continue
+            if r.get("isolate") and not snap.get("cbi"):
+                notes.append(f"'{n}' left out: no Cloud Browser Isolation profile in this tenant")
+                continue
             got = (snap.get("cac") or {}).get(r["name"]) or {}
             if not got.get("actions"):
                 notes.append(f"'{n}' left out: {got.get('why') or 'actions not checked'}")
                 continue
             if got.get("why"):
                 notes.append(f"'{n}': {got['why']}")
-            rule("cloud_app_control", r, dict(applications=got["apps"], actions=got["actions"]), rule_type=r["rule_type"])
+            body = dict(applications=got["apps"], actions=got["actions"])
+            if r.get("isolate"):
+                body["cbi_profile"] = snap["cbi"]
+            rule("cloud_app_control", r, body, rule_type=r["rule_type"],
+                 **({"why": f"Opens them in the isolation profile '{snap['cbi']['name']}'."} if r.get("isolate") else {}))
         for r in tpl["file_type"]:
             types_ = r["file_types"]
             if snap.get("file_types"):
@@ -869,6 +879,8 @@ class ZIA(Product):
             choices = list(SWITCHABLE[it["kind"]])
             if it["kind"] == "url_filtering" and not it["body"].get("cbi_profile"):
                 choices.remove("ISOLATE")
+            if it["kind"] == "cloud_app_control" and it["body"].get("cbi_profile"):
+                choices.insert(2, "ISOLATE")
             out.append({"key": it["key"], "name": it["name"], "kind": KIND_LABEL[it["kind"]], "affects": it.get("affects", ""),
                         "criteria": it.get("criteria", []), "planned": planned,
                         "current": (now.get(it["key"]) or {}).get("to") or planned,
@@ -923,11 +935,13 @@ class ZIA(Product):
         elif kind == "dlp":
             body["action"] = to
         elif kind == "cloud_app_control":
-            apps, acts, why = pick_actions(t, it["rule_type"], body.get("applications") or [],
-                                           [[f"{to}_AI_ML_WEB_USE", f"{to}_AI_ML_ACCESS"]])
+            want = [[f"{to}_AI_ML_WEB_USE"]] if to == "ISOLATE" else [[f"{to}_AI_ML_WEB_USE", f"{to}_AI_ML_ACCESS"]]
+            apps, acts, why = pick_actions(t, it["rule_type"], body.get("applications") or [], want)
             if not acts:
                 raise KitError(f"This tenant offers no {ACTION_LABEL[(kind, to)]} action for these apps ({why}).")
             body.update(applications=apps, actions=acts)
+            if to != "ISOLATE":
+                body.pop("cbi_profile", None)
         return body
 
     def teardown(self, t, pov, ledger, log):

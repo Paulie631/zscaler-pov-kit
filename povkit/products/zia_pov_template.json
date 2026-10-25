@@ -164,6 +164,24 @@
    "criteria": [
     "AI-GEN-01"
    ]
+  },
+  {
+   "name": "Isolate GenAI",
+   "rule_type": "AI_ML",
+   "applications": [
+    "PERPLEXITY",
+    "PERPLEXITY_AI"
+   ],
+   "actions": [
+    [
+     "ISOLATE_AI_ML_WEB_USE"
+    ]
+   ],
+   "criteria": [
+    "AI-GEN-03"
+   ],
+   "isolate": true,
+   "optional": true
   }
  ],
  "file_type": [

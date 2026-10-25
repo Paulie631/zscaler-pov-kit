@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.81
+- **GenAI in browser isolation** (opt-in criterion AI-GEN-03, part of AI Access Security): a POV Cloud App Control rule opens an assistant that's neither approved nor blocked (Perplexity) in Cloud Browser Isolation for the pilot group, so users read answers but can't paste, upload or download. The device test expects isolation, and the rule's demo switch offers Block, Caution, Isolate and Allow. Tenants without an isolation profile: the rule is left out, with a note.
+- **AI Asset Management / AI-SPM (draft)**: a new product with four criteria, each shown and recorded by a person (no API in the Zscaler SDK yet): shadow AI inventoried (the traffic generator sends GenAI traffic so there's something to find), AI assets in a connected cloud account found, risky AI exposures flagged with a fix, and governance reported against NIST AI RMF, the EU AI Act or ISO 42001.
+- **AI Red Teaming (draft)**: a new product with four criteria, proved by the scan's report: a scan runs against the customer's AI app, findings are rated with fixes, AI Guard stops what the red team found, and scans repeat on a schedule.
+- The API sign-in check and its manual step work for POVs whose first product is read-only or draft.
+
 ## 0.9.80
 - **ZPA Privileged Remote Access** (opt-in criterion PA-PRA-01): a PRA segment for one server (RDP or SSH), a pilot-only access rule, a PRA portal and a console. New ZPA settings: PRA server, protocol, port, portal domain and certificate (a ZPA certificate that covers the portal's domain is found by itself). The device test opens the portal.
 - **ZPA App Protection** (opt-in criterion PA-APP-03): the POV app segment becomes an inspected one, with an App Protection profile (OWASP and ThreatLabZ controls, blocking) and an inspection rule for the pilot group. The device test sends a cross-site scripting request and expects it stopped; a test can now count an HTTP status (ZPA's 403) as a block.
