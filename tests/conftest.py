@@ -14,7 +14,7 @@ from povkit.core import pov as povs  # noqa: E402
 
 RULE_RES = {"url_filtering": "url_filtering", "ssl_inspection_rules": "ssl", "dlp_web_rules": "dlp",
             "cloudappcontrol": "cloud_app_control", "file_type_control_rule": "file_type",
-            "cloud_firewall_rules": "firewall", "cloud_firewall_dns": "dns"}
+            "cloud_firewall_rules": "firewall", "cloud_firewall_dns": "dns", "sandbox_rules": "sandbox"}
 
 
 class FakeTenant:
@@ -33,7 +33,7 @@ class FakeTenant:
         self.rules = {"url_filtering": [{"id": 1, "name": "Corp: Block adult", "order": 1, "state": "ENABLED",
                                          "groups": [{"id": 78}], "description": "customer rule"}],
                       "ssl": [{"id": 2, "name": "Corp: Inspect all", "order": 1, "state": "ENABLED"}],
-                      "dlp": [], "cloud_app_control": [], "label": [], "file_type": [], "firewall": [], "dns": [],
+                      "dlp": [], "cloud_app_control": [], "label": [], "file_type": [], "firewall": [], "dns": [], "sandbox": [],
                       "url_category": [], "network_service": []}
         self.file_types = ["FTCATEGORY_WINDOWS_EXECUTABLES", "FTCATEGORY_MSI"]
         self.cbi = [{"id": "cbi-1", "name": "Default isolation", "url": "https://cbi.example", "defaultProfile": True}]
@@ -198,6 +198,12 @@ class FakeTenant:
             return self.actions.get(a[0], [])
         if resource == "rule_labels":
             return self._crud("label", method, a, kw)
+        if resource == "sandbox_rules" and not getattr(self, "sandbox", True):
+            raise KitError("403 Advanced Cloud Sandbox not subscribed")
+        if resource == "zwa.dlp_incidents":
+            if not getattr(self, "zwa", True):
+                raise KitError("403 Workflow Automation not subscribed")
+            return {"content": copy.deepcopy(getattr(self, "incidents", []))}
         if resource in RULE_RES:
             if resource == "cloudappcontrol":
                 a = a[1:]   # rule type first

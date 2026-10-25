@@ -128,6 +128,23 @@
    ]
   },
   {
+   "id": "IS-SBX-01",
+   "phase": "v1",
+   "title": "Never-seen files are held for Cloud Sandbox analysis",
+   "statement": "A file no one has seen before is held (quarantined) for pilot users while Cloud Sandbox analyses it, and the verdict is reported.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "sandbox_file",
+     "url": "https://httpbin.org/base64/{b64}",
+     "expect": "quarantine"
+    }
+   ]
+  },
+  {
    "id": "IS-CAC-01",
    "phase": "v1",
    "title": "Cloud app control blocks unsanctioned file sharing",
@@ -160,6 +177,15 @@
      "url": "https://dlptest.com/http-post/",
      "expect": "block"
     }
+   ]
+  },
+  {
+   "id": "IS-DLP-02",
+   "phase": "v1",
+   "title": "DLP incidents reach Workflow Automation",
+   "statement": "A DLP block for a pilot user becomes an incident in Workflow Automation, with the user, the engine and the evidence, ready for triage.",
+   "proofs": [
+    "api"
    ]
   },
   {

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.79
+- **Cloud Sandbox** (new criterion IS-SBX-01, "Never-seen files are held for Cloud Sandbox analysis"): a POV sandbox rule for the pilot group (first-time action Quarantine for PDF, Office, executables and ZIP; blocks malicious verdicts; AI Instant Verdict on). The device test downloads a PDF made fresh for each run, so its hash is new, and expects Zscaler's quarantine page; the result shows the file's MD5 to look up the sandbox report. Tenants without Advanced Cloud Sandbox: preflight says so and the rule is left out. New guided demo: "A file no one has seen before".
+- **Workflow Automation** (new criterion IS-DLP-02, "DLP incidents reach Workflow Automation"): an API check, read-only, for DLP incidents of the pilot users in the last 7 days; new demo helper to walk the incident in the Zscaler console. It needs the Workflow Automation subscription and view access for the API client.
+- The read-only guard accepts the incident search (a POST that only reads).
+
 ## 0.9.78
 - Opened results: **Show it in the browser** sits with Check again, and "open it in the browser when it changes" (on by default) opens the page as soon as a switch changes the result, so the room sees the new block, caution or allowed page. The page details now follow the latest run (they showed the first run's page). Earlier runs are no longer listed.
 

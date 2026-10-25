@@ -12,11 +12,11 @@ import re
 from . import GuardError
 from .changelist import resolve_refs
 
-READ = re.compile(r"^(list|get|search|status|lookup)")
+READ = re.compile(r"^(list|get|search|status|lookup)|_search$")   # dlp_incident_search: a POST that only reads
 
 
 def is_read(method: str) -> bool:
-    return bool(READ.match(method))
+    return bool(READ.search(method))
 
 
 # Products whose API takes integer IDs in request bodies (Client Connector too, as the demo kit sends them).

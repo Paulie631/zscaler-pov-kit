@@ -21,9 +21,10 @@ def describe_spec(sp):
     t, e = sp.get("type"), sp.get("expect")
     word = {"block": "blocked", "allow": "allowed", "caution": "a caution page", "isolate": "isolated",
             "open": "open", "resolved": "resolves", "Zscaler": "inspected by Zscaler",
-            "not-Zscaler": "not inspected"}.get(e, e or "")
+            "not-Zscaler": "not inspected", "quarantine": "held for sandbox analysis"}.get(e, e or "")
     return {"http": f"Open {sp.get('url')} → expect {word}",
             "eicar": "Download the EICAR antivirus test file → expect blocked",
+            "sandbox_file": "Download a PDF no one has seen before → expect held for sandbox analysis",
             "dlp_post": "Post 6 fake card numbers → expect blocked",
             "tls_issuer": f"HTTPS to {sp.get('host')} → expect {word}",
             "tcp": f"Connect to {sp.get('host')} on TCP {sp.get('port')} → expect {word}",
@@ -63,6 +64,10 @@ STORIES = [
      "say": "A user clicks a phishing link from an email.",
      "point": "The known phishing and malware pages never load.",
      "after": "Threat intelligence updated continuously, applied inline."},
+    {"id": "sandbox", "title": "A file no one has seen before", "criteria": ["IS-SBX-01"], "for": "Security",
+     "say": "Attackers send files no antivirus has seen yet. Watch what happens to a brand-new file.",
+     "point": "Zscaler holds the file while Cloud Sandbox detonates it; the user gets it only if it's clean.",
+     "after": "Open the sandbox report in the Zscaler console: the verdict, the behaviour, the file's hash."},
     {"id": "dlp", "title": "Card numbers leave the company", "criteria": ["IS-DLP-01"], "for": "Security, CISO",
      "say": "Someone uploads a list of card numbers to a website.",
      "point": "The DLP block, even though the upload is over HTTPS.",
@@ -123,6 +128,9 @@ def show(sp):
                        if e == "Zscaler" else
                        "Click the padlock › certificate: issued by the site’s own authority, so it isn’t inspected "
                        "(privacy bypass).")
+    elif t == "sandbox_file":
+        out["look"] = ("Zscaler holds the never-seen file while Cloud Sandbox analyses it (its quarantine page); "
+                       "the verdict and report follow in the Zscaler console.")
     elif t == "eicar":
         out["look"] = "The EICAR test file over HTTPS: Zscaler stops it with its virus page."
     elif t == "dlp_post":

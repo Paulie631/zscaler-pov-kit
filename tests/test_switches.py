@@ -117,3 +117,43 @@ def test_opened_result_detail(pov, tenant, tenant_for, monkeypatch):
     assert d["page"]["title"] == "Internet Security by Zscaler" and "Social Networking" in d["page"]["text"]
     assert d["console"]["tag"] == "zpov_run=abcd1234" and d["host"] == "www.facebook.com"
     assert "category" in d and isinstance(d["history"], list)
+
+
+def test_cloud_sandbox_rule_and_workflow_automation(pov, tenant, tenant_for):
+    from povkit import evidence, lifecycle as lc
+    from povkit.core import KitError as KE
+    from povkit.core.guard import ReadOnlyTenant
+    pov.cfg["criteria"] = ["IS-TEN-01", "IS-SBX-01", "IS-DLP-01", "IS-DLP-02"]
+    pov.save()
+    applied(pov, tenant_for)
+    rule = tenant.by_name("sandbox", "ZPOV: Sandbox never-seen files")
+    assert rule and rule["first_time_operation"] == "QUARANTINE" and rule["groups"] == [77]
+    spec = next(c for c in evidence.probe_pack(pov)["criteria"] if c["id"] == "IS-SBX-01")["probe"][0]
+    assert spec["type"] == "sandbox_file" and "{b64}" in spec["url"]
+    # Workflow Automation: read-only search, pass once a pilot user's incident is there
+    ReadOnlyTenant(tenant).call("zwa.dlp_incidents", "dlp_incident_search", fields=[], time_range={})
+    lc.api_proofs(pov, tenant_for, ids=["IS-DLP-02"])
+    assert pov.read_json("api_proofs.json")["IS-DLP-02"]["status"] == "incomplete"
+    pov.cfg["pilot_emails"] = ["jane@acme.com"]
+    pov.save()
+    tenant.incidents = [{"id": "1-1", "user": {"email": "jane@acme.com"}, "engine": "PCI"}]
+    lc.api_proofs(pov, tenant_for, ids=["IS-DLP-02"])
+    assert pov.read_json("api_proofs.json")["IS-DLP-02"]["status"] == "pass"
+    # a tenant without Advanced Cloud Sandbox: the rule is left out, discovery doesn't fail
+    tenant.sandbox = False
+    items, notes, h, checks = lc.plan(pov, tenant_for)
+    assert any("Cloud Sandbox rules aren't available" in n for n in notes)
+    assert not any(c["status"] == "fail" for c in checks if "sandbox" in c["id"])
+    _ = KE
+
+
+def test_sandbox_quarantine_page_and_pdf():
+    import io
+    from povkit import probe
+
+    class R:
+        status_code, headers, history, url = 403, {"Content-Type": "text/html"}, [], "https://httpbin.org/x"
+        text = "<title>Internet Security by Zscaler</title> The file is being analyzed by the Zscaler sandbox"
+    assert probe.classify(R()) == "quarantine"
+    import pypdf
+    assert "POV sandbox test" in pypdf.PdfReader(io.BytesIO(probe.unique_pdf("r1"))).pages[0].extract_text()

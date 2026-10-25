@@ -289,6 +289,14 @@ def detail(pov, test_id, tenant=None, result=None):
 
 # ---------------------------------------------------------------- demo helpers for the products a browser can't show
 HELPERS = {
+    "workflow": {"title": "DLP incidents (Workflow Automation)", "product": "zia", "criteria": ["IS-DLP-02"],
+                 "say": "A DLP block isn't the end: the incident lands in a queue with the user, the data and the "
+                        "evidence, ready for the security team.",
+                 "steps": ["Run Card numbers leave the company (or the IS-DLP-01 test) from the pilot device.",
+                           "Zscaler console: Workflow Automation > Incidents: the new incident for the pilot user, "
+                           "with the engine that matched.",
+                           "Open it: the evidence, the severity, and assign or close it to show the workflow.",
+                           "Success criteria › IS-DLP-02 checks for it through the API."]},
     "zpa": {"title": "Private Access (ZPA)", "criteria": ["PA-APP-01", "PA-APP-02", "PA-CON-01"],
             "say": "The private app is reachable for the pilot group only, and it is never exposed to the internet.",
             "steps": ["On this pilot device, open {app}: it opens, through ZPA.",
@@ -324,12 +332,12 @@ def helpers(pov):
         vals["app"] = "the POV app"
     out = []
     for prod, h in HELPERS.items():
-        if prod not in pov.products:
+        if h.get("product", prod) not in pov.products:
             continue
         crit = [{"id": c, "title": rows[c]["criterion"]["title"], "status": rows[c]["status"],
                  "detail": "; ".join(str(p.get("detail") or "") for p in rows[c]["proofs"].values() if p.get("detail"))}
                 for c in h["criteria"] if c in rows]
-        out.append({"product": prod, "title": h["title"], "say": h["say"],
+        out.append({"product": h.get("product", prod), "title": h["title"], "say": h["say"],
                     "steps": [s.format(**vals) for s in h["steps"]], "criteria": crit})
     traffic = "zia" in pov.products
     return {"helpers": out, "traffic": traffic}

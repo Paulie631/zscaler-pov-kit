@@ -1,52 +1,260 @@
 {
-  "about": "The Internet Security POV policy. Every rule gets the POV prefix, the POV rule label and the zpov:<pov-id> stamp, and applies only to the customer's pilot group. Categories, file types, DLP engines, isolation profiles and Cloud App Control actions are checked against the tenant during discovery; anything the tenant lacks is left out with a note in the change list. Names stay within ZIA's 31 characters including the prefix. Starting values come from the AI Guard SE Demo Kit's ZIA template (checked against a live tenant, Oct 2026).",
-  "label": {"name": "POV rules"},
-  "url_category": {"key": "tenant-check", "name": "tenant check", "urls": ["www.example.com", "example.com"],
-                   "description": "Blocked only for the POV pilot group. If the probe sees this blocked, the device is in the customer's tenant.",
-                   "criteria": ["IS-TEN-01"]},
-  "network_service": {"key": "pov-ports", "name": "POV ports", "dest_tcp": [23, 2222, 4444, 8888],
-                      "description": "Unusual ports the POV probe tries.", "criteria": ["IS-FW-01"]},
-  "url_filtering": [
-    {"name": "Block tenant check", "action": "BLOCK", "url_categories": ["@tenant-check"], "criteria": ["IS-TEN-01"]},
-    {"name": "Block gambling", "action": "BLOCK", "url_categories": ["GAMBLING"], "criteria": ["IS-URL-01"]},
-    {"name": "Block anonymizers", "action": "BLOCK", "url_categories": ["ANONYMIZER"], "criteria": ["IS-URL-01"]},
-    {"name": "Caution social", "action": "CAUTION", "url_categories": ["SOCIAL_NETWORKING"], "criteria": ["IS-URL-02"]}
+ "about": "The Internet Security POV policy. Every rule gets the POV prefix, the POV rule label and the zpov:<pov-id> stamp, and applies only to the customer's pilot group. Categories, file types, DLP engines, isolation profiles and Cloud App Control actions are checked against the tenant during discovery; anything the tenant lacks is left out with a note in the change list. Names stay within ZIA's 31 characters including the prefix. Starting values come from the AI Guard SE Demo Kit's ZIA template (checked against a live tenant, Oct 2026).",
+ "label": {
+  "name": "POV rules"
+ },
+ "url_category": {
+  "key": "tenant-check",
+  "name": "tenant check",
+  "urls": [
+   "www.example.com",
+   "example.com"
   ],
-  "isolation": [
-    {"name": "Isolate games", "url_categories": ["OTHER_GAMES"], "criteria": ["IS-CBI-01"]}
-  ],
-  "ssl_inspection": [
-    {"name": "Bypass finance and health", "action": "DO_NOT_DECRYPT", "url_categories": ["FINANCE", "HEALTH"],
-     "criteria": ["IS-SSL-02"], "why": "Listed first so it sits above the inspect rule."},
-    {"name": "Inspect pilot group", "action": "DECRYPT", "criteria": ["IS-SSL-01", "IS-THR-01", "IS-DLP-01", "IS-CAC-01", "AI-GEN-02", "IS-FTC-01"],
-     "why": "EICAR over HTTPS, DLP, file type control and Cloud App Control only work on decrypted traffic."}
-  ],
-  "cloud_app_control": [
-    {"name": "Block file uploads", "rule_type": "FILE_SHARE", "applications": ["WETRANSFER", "MEGA", "SENDSPACE", "FILE_IO"],
-     "actions": [["BLOCK_FILE_SHARE_UPLOAD"]], "criteria": ["IS-CAC-01"]},
-    {"name": "Block risky GenAI", "rule_type": "AI_ML", "applications": ["DEEPSEEK", "CHARACTER_AI", "POE_AI"],
-     "actions": [["BLOCK_AI_ML_WEB_USE", "BLOCK_AI_ML_ACCESS"]], "criteria": ["AI-GEN-01"]},
-    {"name": "Allow GenAI", "rule_type": "AI_ML", "applications": ["CHATGPT_AI", "GOOGLE_GEMINI", "MICROSOFT_COPILOT", "CLAUDE_AI"],
-     "actions": [["ALLOW_AI_ML_WEB_USE", "ALLOW_AI_ML_ACCESS"]], "criteria": ["AI-GEN-01"]}
-  ],
-  "file_type": [
-    {"name": "Block EXE downloads", "filtering_action": "BLOCK", "operation": "DOWNLOAD",
-     "file_types": ["FTCATEGORY_WINDOWS_EXECUTABLES", "FTCATEGORY_MSI"], "criteria": ["IS-FTC-01"]}
-  ],
-  "dlp": [
-    {"name": "Block card numbers", "action": "BLOCK", "engines": ["5 or more Credit Card Numbers"], "criteria": ["IS-DLP-01", "AI-GEN-02"]}
-  ],
-  "firewall": [
-    {"name": "Block POV ports", "action": "BLOCK_RESET", "nw_services": ["@pov-ports"], "criteria": ["IS-FW-01"],
-     "why": "Firewall and DNS rules see traffic only from devices on Z-Tunnel 2.0 (the Client Connector module sets that)."}
-  ],
-  "dns": [
-    {"name": "Block marijuana DNS", "action": "BLOCK", "res_categories": ["MARIJUANA"], "criteria": ["IS-DNS-01"],
-     "why": "A category the web tests don't visit, so DNS blocks never hide the URL filtering results."}
-  ],
-  "customer_actions": [
-    {"key": "zia.ca.malware", "name": "Malware Protection blocks viruses and unwanted apps",
-     "why": "Malware and Advanced Threat Protection are tenant-wide policies the customer owns, so the kit never changes them.",
-     "console": "zia.malware_protection", "criteria": ["IS-THR-01", "IS-THR-02"]}
+  "description": "Blocked only for the POV pilot group. If the probe sees this blocked, the device is in the customer's tenant.",
+  "criteria": [
+   "IS-TEN-01"
   ]
+ },
+ "network_service": {
+  "key": "pov-ports",
+  "name": "POV ports",
+  "dest_tcp": [
+   23,
+   2222,
+   4444,
+   8888
+  ],
+  "description": "Unusual ports the POV probe tries.",
+  "criteria": [
+   "IS-FW-01"
+  ]
+ },
+ "url_filtering": [
+  {
+   "name": "Block tenant check",
+   "action": "BLOCK",
+   "url_categories": [
+    "@tenant-check"
+   ],
+   "criteria": [
+    "IS-TEN-01"
+   ]
+  },
+  {
+   "name": "Block gambling",
+   "action": "BLOCK",
+   "url_categories": [
+    "GAMBLING"
+   ],
+   "criteria": [
+    "IS-URL-01"
+   ]
+  },
+  {
+   "name": "Block anonymizers",
+   "action": "BLOCK",
+   "url_categories": [
+    "ANONYMIZER"
+   ],
+   "criteria": [
+    "IS-URL-01"
+   ]
+  },
+  {
+   "name": "Caution social",
+   "action": "CAUTION",
+   "url_categories": [
+    "SOCIAL_NETWORKING"
+   ],
+   "criteria": [
+    "IS-URL-02"
+   ]
+  }
+ ],
+ "isolation": [
+  {
+   "name": "Isolate games",
+   "url_categories": [
+    "OTHER_GAMES"
+   ],
+   "criteria": [
+    "IS-CBI-01"
+   ]
+  }
+ ],
+ "ssl_inspection": [
+  {
+   "name": "Bypass finance and health",
+   "action": "DO_NOT_DECRYPT",
+   "url_categories": [
+    "FINANCE",
+    "HEALTH"
+   ],
+   "criteria": [
+    "IS-SSL-02"
+   ],
+   "why": "Listed first so it sits above the inspect rule."
+  },
+  {
+   "name": "Inspect pilot group",
+   "action": "DECRYPT",
+   "criteria": [
+    "IS-SSL-01",
+    "IS-THR-01",
+    "IS-DLP-01",
+    "IS-CAC-01",
+    "AI-GEN-02",
+    "IS-FTC-01"
+   ],
+   "why": "EICAR over HTTPS, DLP, file type control and Cloud App Control only work on decrypted traffic."
+  }
+ ],
+ "cloud_app_control": [
+  {
+   "name": "Block file uploads",
+   "rule_type": "FILE_SHARE",
+   "applications": [
+    "WETRANSFER",
+    "MEGA",
+    "SENDSPACE",
+    "FILE_IO"
+   ],
+   "actions": [
+    [
+     "BLOCK_FILE_SHARE_UPLOAD"
+    ]
+   ],
+   "criteria": [
+    "IS-CAC-01"
+   ]
+  },
+  {
+   "name": "Block risky GenAI",
+   "rule_type": "AI_ML",
+   "applications": [
+    "DEEPSEEK",
+    "CHARACTER_AI",
+    "POE_AI"
+   ],
+   "actions": [
+    [
+     "BLOCK_AI_ML_WEB_USE",
+     "BLOCK_AI_ML_ACCESS"
+    ]
+   ],
+   "criteria": [
+    "AI-GEN-01"
+   ]
+  },
+  {
+   "name": "Allow GenAI",
+   "rule_type": "AI_ML",
+   "applications": [
+    "CHATGPT_AI",
+    "GOOGLE_GEMINI",
+    "MICROSOFT_COPILOT",
+    "CLAUDE_AI"
+   ],
+   "actions": [
+    [
+     "ALLOW_AI_ML_WEB_USE",
+     "ALLOW_AI_ML_ACCESS"
+    ]
+   ],
+   "criteria": [
+    "AI-GEN-01"
+   ]
+  }
+ ],
+ "file_type": [
+  {
+   "name": "Block EXE downloads",
+   "filtering_action": "BLOCK",
+   "operation": "DOWNLOAD",
+   "file_types": [
+    "FTCATEGORY_WINDOWS_EXECUTABLES",
+    "FTCATEGORY_MSI"
+   ],
+   "criteria": [
+    "IS-FTC-01"
+   ]
+  }
+ ],
+ "sandbox": [
+  {
+   "name": "Sandbox never-seen files",
+   "ba_rule_action": "BLOCK",
+   "first_time_operation": "QUARANTINE",
+   "ba_policy_categories": [
+    "ADWARE_BLOCK",
+    "BOTMAL_BLOCK",
+    "ANONYP2P_BLOCK",
+    "RANSOMWARE_BLOCK",
+    "OFFSEC_TOOLS_BLOCK",
+    "SUSPICIOUS_BLOCK"
+   ],
+   "file_types": [
+    "FTCATEGORY_PDF_DOCUMENT",
+    "FTCATEGORY_WINDOWS_EXECUTABLES",
+    "FTCATEGORY_MS_WORD",
+    "FTCATEGORY_MS_EXCEL",
+    "FTCATEGORY_ZIP"
+   ],
+   "criteria": [
+    "IS-SBX-01"
+   ],
+   "why": "Holds files no one has seen before (PDF, Office, executables, ZIP) while Cloud Sandbox analyses them; blocks what it finds malicious."
+  }
+ ],
+ "dlp": [
+  {
+   "name": "Block card numbers",
+   "action": "BLOCK",
+   "engines": [
+    "5 or more Credit Card Numbers"
+   ],
+   "criteria": [
+    "IS-DLP-01",
+    "AI-GEN-02"
+   ]
+  }
+ ],
+ "firewall": [
+  {
+   "name": "Block POV ports",
+   "action": "BLOCK_RESET",
+   "nw_services": [
+    "@pov-ports"
+   ],
+   "criteria": [
+    "IS-FW-01"
+   ],
+   "why": "Firewall and DNS rules see traffic only from devices on Z-Tunnel 2.0 (the Client Connector module sets that)."
+  }
+ ],
+ "dns": [
+  {
+   "name": "Block marijuana DNS",
+   "action": "BLOCK",
+   "res_categories": [
+    "MARIJUANA"
+   ],
+   "criteria": [
+    "IS-DNS-01"
+   ],
+   "why": "A category the web tests don't visit, so DNS blocks never hide the URL filtering results."
+  }
+ ],
+ "customer_actions": [
+  {
+   "key": "zia.ca.malware",
+   "name": "Malware Protection blocks viruses and unwanted apps",
+   "why": "Malware and Advanced Threat Protection are tenant-wide policies the customer owns, so the kit never changes them.",
+   "console": "zia.malware_protection",
+   "criteria": [
+    "IS-THR-01",
+    "IS-THR-02"
+   ]
+  }
+ ]
 }

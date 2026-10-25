@@ -48,7 +48,7 @@ class Tenant:
 
     def call(self, resource, method, *a, **kw):
         prefix, _, area = resource.partition(".") if "." in resource else ("zia", "", resource)
-        svc = getattr(self.c, prefix if prefix in ("zid", "zcc", "zpa", "zdx", "zins", "aiguard") else "zia")
+        svc = getattr(self.c, prefix if prefix in ("zid", "zcc", "zpa", "zdx", "zins", "aiguard", "zwa") else "zia")
         api = getattr(svc, area or resource)
         if resource == "zpa.policies" and "conditions" in kw:
             kw = dict(kw, conditions=tuplify(kw["conditions"]))   # the SDK reads rule conditions as tuples
@@ -67,7 +67,7 @@ class Tenant:
                 recorder.write(self.pov, resource, method, a, kw, _plain(out))
             return _plain(out)
         result, resp, err = out
-        write = not re.match(r"(list|get|search|status|lookup)", method)
+        write = not re.match(r"(list|get|search|status|lookup)", method) and not method.endswith("_search")
         if err or write:
             self.pov.log("api", f"{self.which} {resource}.{method}", "error" if err else "ok",
                          ms=int((time.time() - t0) * 1000), **({"error": str(err)[:500]} if err else {}))

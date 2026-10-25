@@ -53,6 +53,8 @@ KINDS = {
                               tf=("zia_cloud_app_control_rule", False)),
     "file_type": dict(res="file_type_control_rule", rule=True, title="File type control",
                       tf=("zia_file_type_control_rules", True)),
+    "sandbox": dict(res="sandbox_rules", rule=True, title="Cloud Sandbox", tf=("zia_sandbox_rules", False),
+                    optional_read=True),   # Advanced Cloud Sandbox: tenants without it can't list sandbox rules
     "dlp": dict(res="dlp_web_rules", rule=True, title="DLP", tf=("zia_dlp_web_rules", False)),
     "firewall": dict(res="cloud_firewall_rules", rule=True, title="Firewall", tf=("zia_firewall_filtering_rule", True)),
     "dns": dict(res="cloud_firewall_dns", rule=True, title="DNS control", tf=("zia_firewall_dns_rule", False)),
@@ -265,10 +267,12 @@ class ZIA(Product):
         from .zid import test_mode, users_in_zidentity
         users = bool(pov and test_mode(pov.cfg) and not users_in_zidentity(pov.cfg)
                      and (pov.cfg.get("identity") or {}).get("pilot") != "create")
-        return {"discovery": [("ZIA: all policy and administration areas", "view only")],
+        return {"discovery": [("ZIA: all policy and administration areas", "view only"),
+                              ("Workflow Automation: DLP incidents", "view only")],
                 "apply": [("ZIA policy: URL filtering, SSL inspection, Cloud App Control, file type control, DLP web "
                            "rules, firewall and DNS control, rule labels, custom URL categories, network services",
                            "full"),
+                          ("ZIA Cloud Sandbox policy (when the tenant has Advanced Cloud Sandbox)", "full"),
                           ("ZIA: activation", "allowed")]
                 + ([("ZIA user management (for the POV's Hosted DB test users only)", "full")] if users else [])
                 + ([("ZIA Nanolog Streaming Service (the POV's Cloud NSS web-log feed)", "full")]
@@ -417,7 +421,15 @@ class ZIA(Product):
             for rt in types_:
                 try:
                     rows += list_kind(t, kind, rt, pov.prefix)
+                    if KINDS[kind].get("optional_read"):
+                        snap[f"{kind}_ok"] = True
                 except KitError as e:
+                    if KINDS[kind].get("optional_read"):   # a subscription the tenant may not have
+                        snap[f"{kind}_ok"] = False
+                        checks.append(check(f"zia-read-{kind}", f"{KIND_LABEL[kind]} available", INFO,
+                                            str(e)[:160], f"Without it, the POV leaves its {KIND_LABEL[kind]} rule "
+                                            "out; the criterion can still be demonstrated."))
+                        continue
                     checks.append(check(f"zia-read-{kind}", f"{KIND_LABEL[kind]} readable", FAIL, str(e)[:160],
                                         "Give the discovery client view access to this ZIA area."))
             snap["kinds"][kind] = {"count": len(rows)}
@@ -562,6 +574,18 @@ class ZIA(Product):
             if types_:
                 rule("file_type", r, dict(filtering_action=r["filtering_action"], operation=r["operation"],
                                           file_types=types_, protocols=["FOHTTP_RULE", "FTP_RULE", "HTTPS_RULE", "HTTP_RULE"]))
+        for r in tpl.get("sandbox", []):
+            if not snap.get("sandbox_ok"):
+                notes.append(f"'{naming.name(P, r['name'])}' left out: Cloud Sandbox rules aren't available in this "
+                             "tenant (Advanced Cloud Sandbox)")
+                continue
+            types_ = list(r["file_types"])
+            if snap.get("file_types"):
+                types_ = [x for x in types_ if x in snap["file_types"]] or types_
+            rule("sandbox", r, dict(ba_rule_action=r["ba_rule_action"], first_time_enable=True,
+                                    first_time_operation=r["first_time_operation"], ml_action_enabled=True,
+                                    ba_policy_categories=r["ba_policy_categories"], file_types=types_,
+                                    by_threat_score=40, protocols=["FOHTTP_RULE", "FTP_RULE", "HTTPS_RULE", "HTTP_RULE"]))
         for r in tpl["dlp"]:
             ids = [snap["dlp_engines"][e] for e in r["engines"] if e in (snap.get("dlp_engines") or {})]
             missing = [e for e in r["engines"] if e not in (snap.get("dlp_engines") or {})]
@@ -944,6 +968,8 @@ class ZIA(Product):
             plan_items = ChangeList(pov.dir).plan()["items"]
         except KitError:
             return {"status": "incomplete", "detail": "no change list yet"}
+        if criterion["id"] == "IS-DLP-02":
+            return self._workflow_proof(t, pov)
         rules = [i for i in plan_items if i["product"] == "zia" and i["action"] == "create"
                  and i["kind"] in RULE_KINDS and criterion["id"] in (i.get("criteria") or [])]
         if not rules:
@@ -984,6 +1010,35 @@ class ZIA(Product):
         if activity:
             detail += f". {activity}"
         return {"status": "fail" if problems else "pass", "detail": detail, "rules": checked}
+
+    def _workflow_proof(self, t, pov):
+        """IS-DLP-02: DLP incidents for the pilot users in Workflow Automation over the last 7 days (read-only)."""
+        import datetime as dt
+        now = dt.datetime.now(dt.timezone.utc)
+        rng = {"startTime": (now - dt.timedelta(days=7)).strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+               "endTime": now.strftime("%Y-%m-%dT%H:%M:%S.000Z")}
+        try:
+            res = t.call("zwa.dlp_incidents", "dlp_incident_search", fields=[], time_range=rng)
+        except KitError as e:
+            return {"status": "incomplete", "detail": "Workflow Automation isn't readable with this API client "
+                    f"({str(e)[:100]}). It needs the Workflow Automation subscription and view access to DLP incidents."}
+        rows = items(res)
+        pilots = [x.lower() for x in (pov.cfg.get("pilot_emails") or [])]
+        try:
+            from ..core.changelist import ChangeList
+            pilots += [str(i["body"].get("email") or "").lower() for i in ChangeList(pov.dir).plan().get("items", [])
+                       if i["kind"] == "user" and i["body"].get("email")]
+        except KitError:
+            pass
+        pilots = [p for p in pilots if p]
+        mine = [r for r in rows if any(p in json.dumps(r, default=str).lower() for p in pilots)] if pilots else []
+        if mine:
+            return {"status": "pass", "detail": f"{len(mine)} DLP incident(s) for the pilot users in Workflow Automation "
+                    f"in the last 7 days ({len(rows)} in all)"}
+        return {"status": "incomplete", "detail": (f"{len(rows)} DLP incident(s) in the last 7 days, none for the pilot "
+                "users yet" if rows else "no DLP incidents in the last 7 days") + ". Run the card-number test "
+                "(IS-DLP-01) from a pilot device, and check the POV's DLP rule sends incidents to Workflow Automation "
+                "(Zscaler console: the rule's incident receiver / Workflow Automation integration)."}
 
     def _activity(self, t, pov):
         """Tenant-wide Insights context: blocked transactions in the 7 days to yesterday. Insights only answers

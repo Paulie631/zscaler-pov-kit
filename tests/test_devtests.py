@@ -45,7 +45,7 @@ def test_gate_and_stop(pov, monkeypatch):
 def test_helpers_and_warm_up(pov_all, monkeypatch):
     h = devtests.helpers(pov_all)
     prods = {x["product"] for x in h["helpers"]}
-    assert prods == {"zpa", "zdx", "casb"} & set(pov_all.products) and h["traffic"]
+    assert prods == {"zia", "zpa", "zdx", "casb"} & set(pov_all.products) and h["traffic"]
     zpa = next(x for x in h["helpers"] if x["product"] == "zpa")
     assert "{app}" not in zpa["steps"][0] and zpa["criteria"]
     from povkit import traffic

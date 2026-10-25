@@ -8,6 +8,7 @@ numbers from the card networks' published test ranges.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import platform
 import random
@@ -72,6 +73,8 @@ def classify(resp=None, error=None):
             return "isolate"
         if re.search(r"cautioned for category|proceeding to visit the site", text, re.I):
             return "caution"
+        if re.search(r"quarantin|being analy[sz]ed|sandbox", text, re.I):   # held for Cloud Sandbox analysis
+            return "quarantine"
     if zs and re.search(r"caution|\bcontinue\b|proceed|acknowledge", text, re.I) and \
             not re.search(r"virus|malware|data loss|website blocked|permission to visit", text, re.I):
         return "caution"
@@ -166,6 +169,27 @@ def zscaler_facts(s=None):
     cloud = re.search(r"\b(zscaler[a-z]*\.net)\b", low)
     return {"through": through, "datacenter": dc.group(1).upper() if dc else None, "ip": ip.group(1) if ip else None,
             "cloud": cloud.group(1) if cloud else None}
+
+
+def unique_pdf(run_id):
+    """A small valid PDF whose hash no one has seen: one page that says it's a POV sandbox test."""
+    nonce = secrets.token_hex(16)
+    text = f"Zscaler POV sandbox test {run_id} {nonce}"
+    stream = f"BT /F1 12 Tf 72 720 Td ({text}) Tj ET".encode()
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R "
+            b"/Resources << /Font << /F1 5 0 R >> >> >>",
+            b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]
+    out, offs = b"%PDF-1.4\n", []
+    for i, o in enumerate(objs, 1):
+        offs.append(len(out))
+        out += f"{i} 0 obj\n".encode() + o + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    out += b"".join(f"{o:010d} 00000 n \n".encode() for o in offs)
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return out
 
 
 def tls_issuer(host, port=443):
@@ -323,6 +347,15 @@ def run_spec(spec, run_id, s):
                 if "SSL" not in type(e).__name__ and "certificate" not in str(e).lower():
                     raise
                 got, detail = tls_refused(spec["url"], run_id, s, e)
+        elif kind == "sandbox_file":
+            # a PDF no one has seen before (its bytes carry this run and a random tag): Cloud Sandbox's first-time
+            # action holds it while the sandbox analyses it
+            pdf = unique_pdf(run_id)
+            md5 = hashlib.md5(pdf).hexdigest()
+            b64 = base64.urlsafe_b64encode(pdf).decode()
+            r = s.get(tag(spec["url"].format(b64=b64), run_id), timeout=TIMEOUT)
+            got = classify(r)
+            detail = f"HTTP {r.status_code}, a never-seen PDF (MD5 {md5})" + page_note(r)
         elif kind == "eicar":
             b64 = base64.urlsafe_b64encode(eicar().encode()).decode()
             r = s.get(tag(spec["url"].format(b64=b64), run_id), timeout=TIMEOUT)
