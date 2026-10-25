@@ -100,3 +100,20 @@ def test_se_applies_directly(pov, tenant, tenant_for):
     from povkit import coach
     ids = [x["id"] for x in coach.steps(pov)]
     assert "signoff" not in ids and "plan" not in ids and "apply" in ids
+
+
+def test_opened_result_detail(pov, tenant, tenant_for, monkeypatch):
+    from povkit import probe
+    applied(pov, tenant_for)
+    monkeypatch.setattr(probe, "zscaler_facts", lambda s=None: {"through": True, "datacenter": "NYC4", "ip": "1.2.3.4"})
+    monkeypatch.setattr(probe, "cert_facts", lambda h, port=443: {"issuer": "CN=Zscaler", "expires": "2027-01-01"})
+    pol = {x["key"]: x for x in devtests.policy(pov)["switches"]}
+    tid = pol["zia.url_filtering.caution-social"]["tests"][0]
+    res = {"detail": "HTTP 403: Internet Security by Zscaler · cautioned for category Social Networking",
+           "run_id": "abcd1234", "at": "2026-10-24T20:00:00Z"}
+    d = devtests.detail(pov, tid, tenant, res)
+    assert d["rules"][0]["name"].endswith("Caution social") and d["rules"][0]["affects"]
+    assert d["connection"]["datacenter"] == "NYC4" and d["connection"]["cert"]["issuer"] == "CN=Zscaler"
+    assert d["page"]["title"] == "Internet Security by Zscaler" and "Social Networking" in d["page"]["text"]
+    assert d["console"]["tag"] == "zpov_run=abcd1234" and d["host"] == "www.facebook.com"
+    assert "category" in d and isinstance(d["history"], list)

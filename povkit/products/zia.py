@@ -842,7 +842,7 @@ class ZIA(Product):
             choices = list(SWITCHABLE[it["kind"]])
             if it["kind"] == "url_filtering" and not it["body"].get("cbi_profile"):
                 choices.remove("ISOLATE")
-            out.append({"key": it["key"], "name": it["name"], "kind": KIND_LABEL[it["kind"]],
+            out.append({"key": it["key"], "name": it["name"], "kind": KIND_LABEL[it["kind"]], "affects": it.get("affects", ""),
                         "criteria": it.get("criteria", []), "planned": planned,
                         "current": (now.get(it["key"]) or {}).get("to") or planned,
                         "choices": [{"id": c, "label": ACTION_LABEL[(it["kind"], c)]} for c in choices]})

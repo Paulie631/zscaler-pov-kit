@@ -133,6 +133,41 @@ def tls_refused(url, run_id, s, err):
     return "error:" + type(err).__name__, str(err)[:120]
 
 
+def cert_facts(host, port=443):
+    """The certificate this host presents on this device: issuer, subject and expiry (no trust check)."""
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    with socket.create_connection((host, port), timeout=TIMEOUT) as raw:
+        with ctx.wrap_socket(raw, server_hostname=host) as tls:
+            der = tls.getpeercert(binary_form=True) or b""
+            version = tls.version()
+    out = {"tls": version, "zscaler": b"Zscaler" in der}
+    try:
+        from cryptography import x509
+        c = x509.load_der_x509_certificate(der)
+        out.update(issuer=c.issuer.rfc4514_string(), subject=c.subject.rfc4514_string(),
+                   expires=c.not_valid_after_utc.strftime("%Y-%m-%d"))
+    except Exception:   # noqa: BLE001 - the probe package may not have cryptography: the Zscaler mark still tells
+        pass
+    return out
+
+
+def zscaler_facts(s=None):
+    """What ip.zscaler.com says about this device's traffic: through Zscaler or not, the data centre, the public IP."""
+    import requests
+    s = s or requests.Session()
+    s.headers.update(BROWSER)
+    through, low = via_zscaler(s)
+    dc = re.search(r"\bzs\d?-([a-z]{3}\d{1,2})-", low) or re.search(r"\b([a-z]{3}\d{1,2})(?:-\w+)?\.[a-z0-9.-]*zscaler[a-z]*\.net", low)
+    ip = re.search(r"gateway ip address is (?:most likely )?(\d{1,3}(?:\.\d{1,3}){3})", low) or \
+        re.search(r"from the ip address (\d{1,3}(?:\.\d{1,3}){3})", low)
+    cloud = re.search(r"\b(zscaler[a-z]*\.net)\b", low)
+    return {"through": through, "datacenter": dc.group(1).upper() if dc else None, "ip": ip.group(1) if ip else None,
+            "cloud": cloud.group(1) if cloud else None}
+
+
 def tls_issuer(host, port=443):
     """'Zscaler' if the certificate this host presents on this device was issued by Zscaler, else 'other'."""
     import ssl
@@ -399,7 +434,8 @@ def run(criteria, session=None, pack=None, on_result=None, stop=None):
             if stop and stop():
                 out["stopped"] = True
                 return out
-            r = dict(run_spec(spec, run_id, s), criterion=c["id"])
+            r = dict(run_spec(spec, run_id, s), criterion=c["id"], run_id=run_id,
+                     at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
             out["results"].append(r)
             if on_result:
                 on_result(r)

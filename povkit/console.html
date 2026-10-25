@@ -1462,7 +1462,7 @@ $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
 $("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
 
 /* ---------------- Device tests: the pilot-device tests run from here, and guided demos ---------------- */
-let DTdev="",DTL=null,DTLtimer=null,DTP={switches:[],switched:false},DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null;
+let DTopenRes=new Set(),DTdet={},DTrecheck={},DTdev="",DTL=null,DTLtimer=null,DTP={switches:[],switched:false},DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null;
 async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
   try{DT=await api("/api/devtests",{})}catch(e){w.innerHTML=note(e.message,"bad");return}
   try{DTP=await api("/api/devtests",{policy:true})}catch(_){DTP={switches:[],switched:false}}
@@ -1511,10 +1511,43 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       ${r.switched?`<div class="hint" style="margin:4px 0 0"><b>Demo switch:</b> ${esc(r.switched)}, so this run expects ${esc(r.spec&&r.spec.expect||"")}.</div>`:""}
       ${r.detail?`<div class="hint" style="margin:4px 0 0">${esc(r.detail)}</div>`:""}
       ${r.open&&r.id?`<div class="row" style="gap:8px;margin-top:6px"><button class="dtopen" data-t="${esc(r.id)}">${DTdev?"Show it on the linked device ↗":"Show it in this computer’s browser ↗"}</button>${r.show&&r.show.look?`<span class="hint" style="margin:0">${esc(r.show.look)}</span>`:""}</div>`:""}</div>`;
-  const draw=()=>{$("#dtresults").innerHTML=DTres.length?DTres.map(card).join(""):'<div class="empty">Nothing run yet.</div>';
+  const resCard=(r,i)=>card(r).replace(/<\/div>$/,`${r.id?`<div class="row" style="margin-top:6px"><button class="dtdetbtn" data-i="${i}">${DTopenRes.has(r.id)?"Hide details ▴":"Details, policy and Check again ▾"}</button></div>`:""}${r.id&&DTopenRes.has(r.id)?`<div class="dtdet" data-i="${i}">${detHTML(r,i)}</div>`:""}</div>`);
+  const kv=(k,v)=>v?`<tr><td class="muted" style="width:170px">${esc(k)}</td><td>${v}</td></tr>`:"";
+  function detHTML(r,i){const d=DTdet[r.id];if(!d)return '<div class="notice" style="margin-top:8px">Looking it up (the tenant’s URL lookup, ip.zscaler.com, the certificate)…</div>';
+    if(d.error)return note(d.error,"bad");
+    const c=d.connection||{},cert=c.cert||{},cat=d.category||{},pg=d.page,con=d.console||{},lg=d.log,rc=DTrecheck[r.id];
+    return `<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
+      ${(d.rules||[]).length?`<div class="lbl">The POV rule that decides it</div>${d.rules.map(x=>polRow(x)+`<div class="hint" style="margin:0 0 6px">Applies to ${esc(x.affects||"the pilot group")} · planned: ${esc((x.choices.find(c=>c.id==x.planned)||{}).label||x.planned)}. Switch it and the test re-runs every 15 seconds for up to 2 minutes until the result changes.</div>`).join("")}`:'<div class="hint">No POV rule switch for this test (it isn’t one of the template’s rules).</div>'}
+      <div class="row" style="gap:8px;margin:6px 0"><button class="dtre" data-i="${i}">Check again</button><button class="dtreu" data-i="${i}">Check until it changes</button><span class="dtrestat muted" data-i="${i}" style="font-size:13px">${rc?esc(rc):""}</span></div>
+      <table style="width:100%;font-size:13px;margin-top:6px">
+        ${kv("Zscaler’s category",cat.error?`<span class="muted">${esc(cat.error)}</span>`:(cat.categories||[]).map(esc).join(", ")+((cat.security||[]).length?` · <b>security:</b> ${cat.security.map(esc).join(", ")}`:""))}
+        ${kv("Block page",pg?`HTTP ${esc(pg.status)} · ${esc(pg.title)}${pg.text?` · ${esc(pg.text)}`:""}`:"")}
+        ${kv("Time taken",r.ms!=null?`${esc(r.ms)} ms`:"")}
+        ${kv("Zscaler data centre",c.datacenter?`${esc(c.datacenter)}${c.cloud?` · ${esc(c.cloud)}`:""}`:c.error?`<span class="muted">${esc(c.error)}</span>`:(c.through===false?"not through Zscaler (from this computer)":""))}
+        ${kv("Public IP Zscaler sees",c.ip?esc(c.ip):"")}
+        ${kv("Certificate",cert.error?`<span class="muted">${esc(cert.error)}</span>`:cert.issuer||cert.zscaler!=null?`${esc(cert.issuer||(cert.zscaler?"issued by Zscaler":"not Zscaler"))}${cert.expires?` · expires ${esc(cert.expires)}`:""}${cert.tls?` · ${esc(cert.tls)}`:""}`:"")}
+        ${kv("In the Zscaler console",`${esc(con.where||"")}<br>user <code>${esc(con.user||"")}</code> · URL <code>${esc(con.url||"")}</code>${con.at?` · around ${esc(String(con.at).slice(11,16))} UTC`:""}${con.tag?` · search <code>${esc(con.tag)}</code> <button class="dtcptag" data-t="${esc(con.tag)}">Copy</button>`:""}`)}
+        ${kv("Tenant log line",lg?`${esc(lg.action)} · ${esc(lg.reason)} · ${esc(lg.category)} · ${esc(lg.user)}${lg.rule?` · rule ${esc(lg.rule)}`:""}`:"")}
+      </table>
+      <div class="hint" style="margin:4px 0 0">Data centre, IP and certificate are as seen from this computer${DTdev?" (the tests ran on the linked device)":""}.</div>
+      ${(d.history||[]).length?`<div class="lbl" style="margin-top:8px">Earlier runs (recorded)</div><table style="width:100%;font-size:12.5px">${d.history.map(h=>`<tr><td class="muted">${esc(String(h.at||"").slice(0,16).replace("T"," "))}</td><td><span class="badge b-${h.pass?"ok":"warn"}">${esc(h.outcome)}</span></td><td class="muted">${esc(h.device||"")}</td></tr>`).join("")}</table>`:'<div class="hint">No recorded runs of this test yet.</div>'}
+    </div>`}
+  const loadDet=async(r,i)=>{try{DTdet[r.id]=await api("/api/devtests",{detail:r.id,result:{detail:r.detail,run_id:r.run_id,at:r.at}})}catch(e){DTdet[r.id]={error:e.message}}draw()};
+  async function recheck(i,until){const r0=DTres[i];if(!r0)return;const id=r0.id,before=r0.outcome,end=Date.now()+120000;let n=0;
+    for(;;){n++;DTrecheck[id]=until?`Checking (try ${n})…`:"Checking…";draw();
+      let r;try{const rs=[];await follow((await api("/api/devtests",{device:DTdev,run:true,ids:[id]})).job,x=>rs.push(x));r=rs[0]}catch(e){DTrecheck[id]=e.message;draw();return}
+      if(r){const k=DTres.findIndex(x=>x.id==id);if(k>=0)DTres[k]=r}
+      const changed=r&&r.outcome!=before;
+      if(!until||changed||Date.now()>end){DTrecheck[id]=r?(changed?`Changed: ${before} → ${r.outcome}`:until?`Still ${r.outcome} after 2 minutes: ZIA may need longer, or Client Connector › Update Policy`:`Now: ${r.outcome}`):"";draw();return}
+      for(let t=15;t>0;t--){DTrecheck[id]=`Still ${r.outcome}; checking again in ${t}s (try ${n})…`;const el=$(`.dtrestat[data-i="${DTres.findIndex(x=>x.id==id)}"]`);if(el)el.textContent=DTrecheck[id];await new Promise(x=>setTimeout(x,1000))}}}
+  $("#dtresults").addEventListener("click",e=>{const b=e.target.closest(".dtdetbtn,.dtre,.dtreu,.dtcptag");if(!b)return;const i=+b.dataset.i,r=DTres[i];
+    if(b.classList.contains("dtcptag")){copy(b.dataset.t,b);return}
+    if(b.classList.contains("dtdetbtn")){if(DTopenRes.has(r.id))DTopenRes.delete(r.id);else{DTopenRes.add(r.id);if(!DTdet[r.id])loadDet(r,i)}draw();return}
+    if(b.classList.contains("dtre"))recheck(i,false);else recheck(i,true)});
+  const draw=()=>{$("#dtresults").innerHTML=DTres.length?DTres.map(resCard).join(""):'<div class="empty">Nothing run yet.</div>';
     $("#dts-run").textContent=DTres.length;$("#dts-ok").textContent=DTres.filter(r=>r.pass).length;
     $("#dts-bad").textContent=DTres.filter(r=>!r.pass&&!String(r.outcome).startsWith("error")).length;$("#dts-err").textContent=DTres.filter(r=>String(r.outcome).startsWith("error")).length};
-  draw();
+  setTimeout(draw,0);   // after the helpers below (an opened result uses the policy rows)
   async function follow(jid,onItem,msgEl){DTpolling=jid;let got=0;
     try{for(;;){const j=await api(`/api/job?id=${jid}&isince=${got}&since=99999`);got+=j.items.length;j.items.forEach(onItem);
         if(j.total&&$("#dtbar"))$("#dtbar").style.width=Math.round(100*got/j.total)+"%";
@@ -1540,7 +1573,9 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     $$(".dtpol[data-t]").forEach(el=>{const rel=sw.filter(x=>x.tests.includes(el.dataset.t));el.innerHTML=rel.length?`<div style="margin:6px 0 2px"><b>Policy for this test</b> <span class="muted" style="font-size:12px">(switch it, then Check again)</span></div>${rel.map(polRow).join("")}`:""});
     if(msg)$$("#dtpolmsg,.dtpolmsg").forEach(el=>el.innerHTML=msg)};
   async function doSwitch(b){const was=b.textContent;$$(".dtsw").forEach(x=>x.disabled=true);b.textContent="Switching…";
-    try{const r=await api("/api/devtests",{switch:b.dataset.k,to:b.dataset.to});DTP=r;drawPol(note(r.message,"good"))}
+    const inRes=b.closest(".dtdet");const ri=inRes?+inRes.dataset.i:-1;
+    try{const r=await api("/api/devtests",{switch:b.dataset.k,to:b.dataset.to});DTP=r;drawPol(note(r.message,"good"));
+      if(ri>=0){Object.keys(DTdet).forEach(k=>DTdet[k]&&DTdet[k].rules&&(DTdet[k].rules=DTdet[k].rules.map(x=>(DTP.switches||[]).find(y=>y.key==x.key)||x)));recheck(ri,true)}}
     catch(x){b.textContent=was;drawPol(note(x.message,"bad"))}finally{$$(".dtsw").forEach(x=>x.disabled=false)}}
   async function putBack(){$$("#dtputback,.dtputback2").forEach(x=>x.disabled=true);
     try{const r=await api("/api/devtests",{putback:true});DTP=r;drawPol(note(r.message,"good"))}catch(x){drawPol(note(x.message,"bad"))}

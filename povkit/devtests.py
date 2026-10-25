@@ -202,6 +202,91 @@ def put_back(pov, tenant, log=lambda *a: None):
     return done
 
 
+# ---------------------------------------------------------------- a result, opened
+def detail(pov, test_id, tenant=None, result=None):
+    """Everything about one test for the opened result: the POV rule that decides it (with its switches), Zscaler's
+    category for the site, connection facts from this computer, earlier runs, the block page text, where to find it
+    in the Zscaler console, and the tenant log line when the log feed is on. Read-only."""
+    import re as _re
+    from urllib.parse import urlsplit
+    sp = next((x for _, _, sid, x in _specs(pov) if sid == test_id), None)
+    if not sp:
+        raise KitError("That test isn't in this POV.")
+    cid = next(c for c, _, sid, _ in _specs(pov) if sid == test_id)
+    host = sp.get("host") or (urlsplit(sp.get("url") or "").hostname or "")
+    out = {"id": test_id, "criterion": cid, "text": evidence.describe_spec(sp), "host": host, "type": sp.get("type")}
+    # the POV rule(s) that decide it
+    out["rules"] = [x for x in policy(pov)["switches"] if test_id in x["tests"]]
+    # Zscaler's own view of the site (read-only URL lookup)
+    if tenant is not None and host and sp.get("type") in ("http", "tls_issuer", "eicar", "dlp_post"):
+        try:
+            from .core.guard import ReadOnlyTenant
+            from .tenant import g, items
+            res = ReadOnlyTenant(tenant).call("url_categories", "lookup", urls=[host])
+            res = res[0] if isinstance(res, tuple) else res
+            rows = res if isinstance(res, list) else items(res)
+            cats = sorted({str(c) for r in rows for c in (g(r, "url_classifications") or [])})
+            sec = sorted({str(c) for r in rows for c in (g(r, "url_classifications_with_security_alert") or [])})
+            out["category"] = {"categories": [c.replace("_", " ").title() for c in cats],
+                               "security": [c.replace("_", " ").title() for c in sec]}
+        except Exception as e:   # noqa: BLE001
+            out["category"] = {"error": str(e)[:160]}
+    # connection facts, from this computer
+    facts = {}
+    try:
+        facts.update(probe.zscaler_facts())
+    except Exception as e:   # noqa: BLE001
+        facts["error"] = f"ip.zscaler.com: {type(e).__name__}"
+    if host and sp.get("type") in ("http", "tls_issuer", "dlp_post", "eicar") and (sp.get("url") or "https").startswith("https"):
+        try:
+            facts["cert"] = probe.cert_facts(host)
+        except Exception as e:   # noqa: BLE001
+            facts["cert"] = {"error": f"{type(e).__name__}: {str(e)[:80]}"}
+    out["connection"] = facts
+    # earlier runs of this test
+    hist = []
+    for run in evidence.probe_runs(pov):
+        for r in run.get("results") or []:
+            spec = {k: v for k, v in (r.get("spec") or {}).items() if k != "switched"}
+            if r.get("criterion") == cid and evidence.spec_id(cid, spec) == test_id:
+                hist.append({"at": run.get("at"), "outcome": r.get("outcome"), "pass": r.get("pass"),
+                             "device": run.get("device"), "run": run.get("run_id"), "detail": r.get("detail")})
+    out["history"] = sorted(hist, key=lambda h: h["at"] or "", reverse=True)[:10]
+    # the block page, as the result recorded it
+    d = str((result or {}).get("detail") or "")
+    m = _re.match(r"HTTP (\d+)(?::\s*(.*))?$", d)
+    if m and m.group(2):
+        parts = [x.strip() for x in m.group(2).split("·")]
+        out["page"] = {"status": m.group(1), "title": parts[0], "text": " · ".join(parts[1:])}
+    # where to see it in the Zscaler console
+    run_id = (result or {}).get("run_id")
+    users = list(pov.cfg.get("pilot_emails") or [])
+    if not users:   # the POV's own test users
+        try:
+            from .core.changelist import ChangeList
+            users = [i["body"].get("email") for i in ChangeList(pov.dir).plan().get("items", [])
+                     if i["kind"] == "user" and i["body"].get("email")]
+        except Exception:   # noqa: BLE001
+            pass
+    out["console"] = {"where": LOGS, "user": users[0] if users else "the pilot user", "url": host,
+                      "tag": f"zpov_run={run_id}" if run_id else None, "at": (result or {}).get("at")}
+    # the tenant's log line, when the log feed is on
+    try:
+        from . import logfeed
+        if logfeed.mode(pov) == "console":
+            evs = [e for e in logfeed.events(pov, 500) if logfeed.matches(e, sp, logfeed._host(sp.get("url") or host))]
+            if run_id:
+                evs = [e for e in evs if e.get("_run") in (run_id, None)] or evs
+            if evs:
+                e = evs[-1]
+                out["log"] = {k: logfeed.field(e, *n) for k, n in (("action", ("action",)), ("reason", ("reason",)),
+                              ("category", ("urlcategory", "urlcat")), ("user", ("user", "login")),
+                              ("rule", ("rulelabel", "rule")), ("threat", ("threatname",)), ("url", ("url",)))}
+    except Exception:   # noqa: BLE001
+        pass
+    return out
+
+
 # ---------------------------------------------------------------- demo helpers for the products a browser can't show
 HELPERS = {
     "zpa": {"title": "Private Access (ZPA)", "criteria": ["PA-APP-01", "PA-APP-02", "PA-CON-01"],

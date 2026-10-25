@@ -236,3 +236,16 @@ def test_classify_zia_caution_and_isolation_pages():
                          "Social Networking Proceeding to visit the site may violate your company policy")
     iso = _Resp(200, "<title>Browser Isolation &middot; Zscaler</title><div>loading</div>")
     assert probe.classify(caution) == "caution" and probe.classify(iso) == "isolate"
+
+
+def test_zscaler_facts_from_ip_zscaler_com():
+    class S:
+        headers = {}
+
+        def get(self, u, timeout=None):
+            class R:
+                text = ("You are accessing this host via a Zscaler proxy hostname. The Zscaler hostname for this proxy "
+                        "appears to be zs2-nyc4-1d3-sme. Your Gateway IP Address is most likely 98.11.22.33. zscalertwo.net")
+            return R()
+    f = probe.zscaler_facts(S())
+    assert f == {"through": True, "datacenter": "NYC4", "ip": "98.11.22.33", "cloud": "zscalertwo.net"}
