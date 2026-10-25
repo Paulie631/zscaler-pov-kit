@@ -465,12 +465,14 @@ function done(i){const c=S&&S.current;if(!c)return false;
   const clients=Object.values(c.clients);const s=c.settings;
   return [true, clients.length&&clients[0].saved,
     !!(s.pilot_group||+s["identity.test_users"]>0||["create","test"].includes(s["identity.pilot"])), (W.checks?!W.checks.some(x=>x.status=="fail"):!!c.plan||(c.ledger.owned||0)+(c.ledger.adopted||0)>0),
-    !!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), (c.ledger.owned||0)+(c.ledger.adopted||0)>0,
+    ...(seMode()?[(c.ledger.owned||0)+(c.ledger.adopted||0)>0,(c.ledger.owned||0)+(c.ledger.adopted||0)>0]:[!!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash)]), (c.ledger.owned||0)+(c.ledger.adopted||0)>0,
     (c.ledger.owned||0)+(c.ledger.adopted||0)>0&&!!(c.manual_open&&c.manual_open.stages&&c.manual_open.stages.finish.passed), false][i]}
+function seMode(){const c=S&&S.current;return !!c&&((c.settings||{}).approval||"se")=="se"}
 function firstOpen(){if(!S.current)return 0;for(let i=1;i<8;i++)if(!done(i))return i;return 8}
-function wsteps(){$("#wsteps").innerHTML=STEPS.map((t,i)=>`<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":i+1}</span><span>${esc(t)}</span></li>`).join("");
+function wsteps(){const se=seMode();let n=0;$("#wsteps").innerHTML=STEPS.map((t,i)=>{if(se&&(i==5||i==6))return "";n++;const lab=se&&i==4?"Apply":t;
+    return `<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":n}</span><span>${esc(lab)}</span></li>`}).join("");
   $$("#wsteps li").forEach(li=>li.onclick=()=>{const i=+li.dataset.i;if(i>0&&!S.current)return;W.step=i;wizard()})}
-function head(i,title,desc){return `<div class="kicker">STEP ${i+1} OF ${STEPS.length}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
+function head(i,title,desc){const se=seMode(),n=se&&i>=7?i-1:i+1,tot=se?STEPS.length-2:STEPS.length;return `<div class="kicker">STEP ${n} OF ${tot}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
 function nav(back,next,nextLabel,disabled){return `<div class="row wnav" style="margin-top:20px">${back?'<button id="wback">‹ Back</button>':""}${next?`<button class="primary" id="wnext" ${disabled?"disabled":""}>${esc(nextLabel||"Continue ›")}</button>`:""}</div>`}
 function bindNav(onNext){$("#wback")&&($("#wback").onclick=()=>{W.step--;wizard()});$("#wnext")&&($("#wnext").onclick=onNext||(()=>{W.step++;wizard()}))}
 const has=n=>S.current&&S.current.products.includes(n);
@@ -663,6 +665,32 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         draw()}catch(e){$("#wchecks").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}};
     W.checks?draw():run();
   }
+  else if(W.step==4&&seMode()){
+    st.innerHTML=head(4,"Apply to the tenant","What the kit will make in "+esc(c.customer)+"’s tenant, for the pilot users only, then you apply it. Your sign-off is recorded as it applies; each object goes in the ledger, so teardown removes exactly them. (Need the customer to approve first? <a href=\"#\" id=\"wtocust2\">Switch to customer approval</a>.)")+'<div id="wplan"><div class="notice">Reading the tenant (read-only) and working out what to make…</div></div>';
+    $("#wtocust2").onclick=async e=>{e.preventDefault();await api("/api/settings",{values:{approval:"customer"}});await load();wizard()};
+    try{const r=await api("/api/plan",{});W.plan=r;const ch=await api("/api/changes",{});await load();wsteps();
+      const acts=r.items.filter(i=>i.action=="customer_action"),pend=ch.pending,made=ch.made.filter(m=>m.state!="deleted");
+      const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
+      const kindOf=i=>esc(KIND[i.kind]||i.kind.replace(/_/g," "));
+      let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
+      $("#wplan").innerHTML=`${r.checks.some(x=>x.status=="fail")?note("The checks found problems; nothing can be applied until they're fixed. See Preflight.","bad"):""}
+        <div class="group-h">${pend.length?`To make now · ${pend.length}`:"Nothing new to make"}</div>
+        ${pend.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th></tr>${pend.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(title(i.product))} · ${kindOf(i)}</div></td><td>${esc(i.affects)}</td></tr>`).join("")}</table></div>`:`<p class="muted">Everything in the plan is already in the tenant.</p>`}
+        ${pend.length&&!r.checks.some(x=>x.status=="fail")?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="wby2" placeholder="Your name (recorded as the sign-off)" value="${esc(by)}" style="width:260px"><button class="primary" id="wapply2">Apply ${pend.length} change${pend.length==1?"":"s"} ›</button></div>`:""}
+        <div class="log" id="wlog2" style="display:none"></div><div id="wafter2"></div>
+        ${acts.length?`<div class="group-h">Changes only the customer makes</div><ul>${acts.map(a=>`<li><b>${esc(a.name)}</b><div class="muted" style="font-size:12.5px">${esc(a.why)}</div></li>`).join("")}</ul>`:""}
+        ${r.notes.length?`<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Notes (${r.notes.length})</summary><ul class="muted">${r.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></details>`:""}
+        <div class="group-h">Changes made · ${made.length}</div>
+        ${made.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th><th>Made</th></tr>${made.map(m=>`<tr><td><b>${esc(m.name)}</b><div class="muted" style="font-size:12px">${esc(title(m.product))} · ${kindOf(m)}${m.state=="adopted"?" · built by hand, adopted":""}</div>${m.why?`<div style="font-size:12.5px">${esc(m.why)}</div>`:""}</td><td>${esc(m.affects)}</td><td class="muted" style="font-size:12px">${esc(String(m.at||"").slice(0,16).replace("T"," "))}</td></tr>`).join("")}</table></div><p class="hint">Teardown (Handover) removes all of them.</p>`:'<p class="muted">Nothing yet.</p>'}
+        <div class="row" style="margin-top:12px"><button id="wopen">Open the printable list ↗</button></div>`+nav(true,!!made.length,"Finish setup ›");
+      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");
+      bindNav(()=>{W.step=7;wizard()});
+      $("#wapply2")&&($("#wapply2").onclick=async()=>{const b=$("#wapply2");b.disabled=true;$("#wlog2").style.display="block";const nm=$("#wby2").value.trim();try{if(nm)localStorage.setItem("pov.exby",nm)}catch(_){}
+        try{const res=await runJob((await api("/api/apply-direct",{by:nm})).job,$("#wlog2"));await load();
+          $("#wafter2").innerHTML=note(`Applied: ${res.made.length} object${res.made.length==1?"":"s"} made.`,"good");setTimeout(()=>wizard(),1200)}
+        catch(e){$("#wafter2").innerHTML=note(e.message,"bad");b.disabled=false}});
+    }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
+  }
   else if(W.step==4){
     st.innerHTML=head(4,"The change list","Everything the kit will create, who it affects, and the changes only the customer makes. Walk the customer's admin through it; any change after approval needs a new approval.")+'<div id="wplan"><div class="notice">Making the change list from the tenant (read-only)…</div></div>';
     try{const r=await api("/api/plan",{});W.plan=r;await load();wsteps();
@@ -678,6 +706,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindNav();
     }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
   }
+  else if((W.step==5||W.step==6)&&seMode()){W.step=4;return wizard()}
   else if(W.step==5){
     const sep=c.settings.client_mode=="separate", ap=c.clients.apply||{};
     const ok=c.approval&&c.plan&&c.approval.hash==c.plan.hash;
@@ -1331,7 +1360,9 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $$(".ucact").forEach(b=>b.onclick=async()=>{try{await api("/api/usecase/status",{id:b.dataset.id,status:b.dataset.s});await load();usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
   $$(".ucdl").forEach(b=>b.onclick=async()=>{const r=await api(`/api/usecase/directions?id=${encodeURIComponent(b.dataset.id)}`);download(`${b.dataset.id}-directions.md`,r.text,"text/markdown")});
   $$(".ucplan").forEach(b=>b.onclick=()=>{W.step=4;$$("#tabs button").find(x=>x.dataset.t=="setup").click()});
-  $$(".ucmake").forEach(b=>b.onclick=()=>ucMake(b.dataset.id,$(`.ucmk[data-id="${b.dataset.id}"]`)))}
+  $$(".ucmake").forEach(b=>b.onclick=()=>ucMake(b.dataset.id,$(`.ucmk[data-id="${b.dataset.id}"]`)));
+  $$(".ucaccmake").forEach(b=>b.onclick=async()=>{b.disabled=true;const el=$(`.ucmk[data-id="${b.dataset.id}"]`);
+    try{await api("/api/usecase/status",{id:b.dataset.id,status:"accepted"});ucMake(b.dataset.id,el,true)}catch(e){el.innerHTML=note(e.message,"bad");b.disabled=false}})}
 function ucDetail(ch){const skip=new Set(["kind","name","why"]);return Object.entries(ch).filter(([k])=>!skip.has(k)).map(([k,v])=>`<span class="muted">${esc(k.replace(/_/g," "))}:</span> ${esc(Array.isArray(v)?v.join(", "):v)}`).join(" · ")}
 function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",directions:"warn",discarded:"fail"}[u.status];
   return `<div class="panel"><div class="row" style="justify-content:space-between"><div><span class="chip">${esc(u.id)}</span> <span class="badge b-${st}">${esc(u.status)}</span> <span class="muted" style="font-size:12px">${esc(u.at.slice(0,16).replace("T"," "))} UTC · ${esc(u.by)}</span></div></div>
@@ -1348,12 +1379,12 @@ function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",dir
     ${u.status=="proposed"||u.status=="accepted"?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="ucrf${esc(u.id)}" placeholder="Refine: e.g. make it Caution, not Block; only the Sales group's sites" style="flex:1;min-width:240px"><button class="ucref" data-id="${esc(u.id)}">Refine</button></div><div class="log" id="ucrl${esc(u.id)}" style="display:none"></div>`:""}
     <div class="row" style="margin-top:14px">
       ${u.status=="accepted"||u.status=="directions"?`<button class="ucsave" data-id="${esc(u.id)}">Save to library</button>`:""}
-      ${u.status=="proposed"?`${s.changes.length?`<button class="primary ucact" data-id="${esc(u.id)}" data-s="accepted">Add to the change list</button>`:""}<button class="ucact" data-id="${esc(u.id)}" data-s="directions">Keep as directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="discarded">Discard</button>`:""}
+      ${u.status=="proposed"?`${s.changes.length?(seMode()?`<button class="primary ucaccmake" data-id="${esc(u.id)}">Accept and make it in the tenant ›</button>`:`<button class="primary ucact" data-id="${esc(u.id)}" data-s="accepted">Add to the change list</button>`):""}<button class="ucact" data-id="${esc(u.id)}" data-s="directions">Keep as directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="discarded">Discard</button>`:""}
       ${u.status=="accepted"?`<button class="primary ucmake" data-id="${esc(u.id)}" title="Checks the tenant, shows exactly what changes, then signs off and applies">Make it in the tenant ›</button><button class="ucplan">Open the change list ›</button><button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Take it out</button>`:""}
       ${u.status=="directions"?`<button class="ucdl" data-id="${esc(u.id)}">Download directions</button><button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Back to proposed</button>`:""}
       ${u.status=="discarded"?`<button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Restore</button>`:""}
     </div><div class="ucmk" data-id="${esc(u.id)}"></div></div>`}
-async function ucMake(id,el){el.innerHTML='<div class="notice" style="margin-top:10px">Checking the tenant and making the change list (about a minute)…</div><div class="log" style="display:block"></div>';
+async function ucMake(id,el,auto){el.innerHTML='<div class="notice" style="margin-top:10px">Checking the tenant and making the change list (about a minute)…</div><div class="log" style="display:block"></div>';
   let P;try{P=await runJob((await api("/api/usecase/make",{id,preview:true})).job,el.querySelector(".log"))}catch(e){el.innerHTML=note(e.message,"bad");return}
   const li=xs=>`<ul style="margin:4px 0 0 18px;padding:0">${xs.map(i=>`<li><b>${esc(i.name)}</b> <span class="muted">· ${esc(i.product.toUpperCase())} ${esc(i.kind.replace(/_/g," "))}${i.affects?" · affects "+esc(i.affects):""}</span></li>`).join("")}</ul>`;
   const se=P.mode=="se";let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
@@ -1366,6 +1397,8 @@ async function ucMake(id,el){el.innerHTML='<div class="notice" style="margin-top
     ${(P.mine.length||P.others.length)&&!P.blocked.length&&(se||P.approved)?`<div class="row" style="margin-top:10px;gap:8px">${se&&!P.approved?`<label class="chk"><input type="checkbox" class="mkrev"> I reviewed these changes</label><input type="text" class="mkby" placeholder="Your name (the sign-off)" value="${esc(by)}" style="width:200px">`:'<span class="hint" style="margin:0">Approved.</span>'}<button class="primary mkgo">Sign off and apply</button><button class="mkcancel">Cancel</button></div>`:'<div class="row" style="margin-top:10px"><button class="mkcancel">Close</button></div>'}
     <div class="mkmsg"></div></div>`;
   const q=k=>el.querySelector(k);q(".mkcancel").onclick=()=>el.innerHTML="";
+  if(se&&P.mine.length&&!P.others.length&&!P.blocked.length&&q(".mkgo")){   // SE applies directly: nothing else rides along
+    if(q(".mkrev"))q(".mkrev").checked=true;if(q(".mkby")&&!q(".mkby").value)q(".mkby").value="SE";setTimeout(()=>q(".mkgo")&&q(".mkgo").click(),0)}
   q(".mkgo")&&(q(".mkgo").textContent=se&&!P.approved?"Sign off and apply":"Apply");
   q(".mkgo")&&(q(".mkgo").onclick=async()=>{if(se&&!P.approved&&!(q(".mkrev").checked&&q(".mkby").value.trim())){q(".mkmsg").innerHTML=note("Tick the box and type your name for the sign-off.");return}
     q(".mkgo").disabled=true;const nm=se&&!P.approved?q(".mkby").value.trim():"";try{if(nm)localStorage.setItem("pov.exby",nm)}catch(_){}

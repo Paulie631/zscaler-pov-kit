@@ -197,6 +197,35 @@ def make_now(pov, tenant_for, uc_id, seen_hash, by, log=lambda *a: None):
     return len(led.active())
 
 
+def changes_made(pov):
+    """The POV's objects in the tenant, newest first, with why each was made (from the change list)."""
+    led = ledger(pov)
+    try:
+        why = {i["key"]: i for i in ChangeList(pov.dir).plan().get("items", [])}
+    except KitError:
+        why = {}
+    out = []
+    for e in reversed(led.entries):
+        if e["state"] not in ("owned", "adopted", "deleted"):
+            continue
+        it = why.get(e["key"]) or {}
+        out.append({"name": e["name"], "product": e["product"], "kind": e["kind"], "state": e["state"],
+                    "at": e.get(f"{e['state']}_at") or e.get("at"), "why": it.get("why") or "",
+                    "affects": it.get("affects") or "", "criteria": it.get("criteria") or []})
+    return out
+
+
+def pending(pov):
+    """What the change list on disk would still create (not in the tenant yet)."""
+    led = ledger(pov)
+    try:
+        items = ChangeList(pov.dir).plan().get("items", [])
+    except KitError:
+        return []
+    return [{"name": i["name"], "product": i["product"], "kind": i["kind"], "affects": i.get("affects", "")}
+            for i in items if i["action"] in ("create", "create_or_adopt") and not led.find(i["key"])]
+
+
 def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
     """Applies one product's part of the change list straight away, for a setting the SE just saved (SE sign-off POVs
     only): the change list is made and signed off in the SE's name, then only that product's items are applied.
@@ -217,7 +246,7 @@ def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
         pov.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']} ({why})")
     led = ledger(pov)
     before = {e["key"] for e in led.active()}
-    apply(pov, tenant_for, log, only=set(only))
+    apply(pov, tenant_for, log, only=set(only) if only else None)
     made = [e["name"] for e in ledger(pov).active() if e["key"] not in before]
     return {"made": made}
 
@@ -266,7 +295,14 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
     items, _ = make_plan(pov, snaps)
     cl = ChangeList(pov.dir)
     a = cl.approval()
-    if a:
+    if (pov.cfg.get("approval") or "se") == "se":   # the SE applies directly: what's waiting, not who signed
+        led0 = ledger(pov)
+        wait = [i["name"] for i in items if i["action"] in ("create", "create_or_adopt") and not led0.find(i["key"])]
+        checks.append(check("plan-approved", "Everything planned is in the tenant", INFO if wait else OK,
+                            f"waiting to apply: {', '.join(wait[:6])}" + (f" and {len(wait) - 6} more" if len(wait) > 6
+                                                                         else "") if wait else "nothing waiting",
+                            "Setup › Apply." if wait else ""))
+    elif a:
         same = digest(items) == a["hash"]
         checks.append(check("plan-approved", "Tenant still matches the approved change list", OK if same else WARN,
                             f"approved by {a['by']} on {a['at'][:10]}",

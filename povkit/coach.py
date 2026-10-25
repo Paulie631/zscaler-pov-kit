@@ -46,11 +46,16 @@ def steps(pov):
     pilot = cfg.get("pilot_group") or cfg.get("pilot_emails") or (cfg.get("identity") or {}).get("pilot")
     add("pilot", "Choose who tests", pilot or prods <= {"aiguard"}, "A pilot group, named people or test accounts.",
         "step:2")
-    add("plan", "Make the change list", plan, "Everything the kit will create, from a read-only look at the tenant.",
-        "step:4")
-    add("signoff", "Sign off the change list", appr and plan and appr.get("hash") == plan["hash"],
-        "You (or the customer) sign off this exact list; Apply refuses anything else.", "step:5")
-    add("apply", "Apply", applied, "Creates the POV's objects, each recorded so teardown removes exactly them.", "step:6")
+    if (cfg.get("approval") or "se") == "se":   # the SE applies directly: one step, signed off as it applies
+        add("apply", "Apply to the tenant", applied, "Shows what the kit will make, then makes it (pilot users only); "
+            "each object is recorded so teardown removes exactly them.", "step:4")
+    else:
+        add("plan", "Make the change list", plan, "Everything the kit will create, from a read-only look at the "
+            "tenant.", "step:4")
+        add("signoff", "Customer signs off the change list", appr and plan and appr.get("hash") == plan["hash"],
+            "The customer approves this exact list; Apply refuses anything else.", "step:5")
+        add("apply", "Apply", applied, "Creates the POV's objects, each recorded so teardown removes exactly them.",
+            "step:6")
     o, t = _manual(pov, "finish")
     add("finish", "Finish setup (steps for people)", applied and o == 0,
         f"{t - o} of {t} done" if t else "Nothing for people to do after Apply.", "step:7")

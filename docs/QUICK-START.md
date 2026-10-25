@@ -55,9 +55,11 @@ letting Claude Desktop make changes.
    Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
    forgets it on your laptop, once it has checked nothing is left in the tenant.
 
-**A use case straight into the tenant:** on an accepted use case, **Make it in the tenant ›** shows what it creates
-(pilot users only) and anything else waiting in the change list; on an SE sign-off POV, tick, sign and apply from
-there. POVs that need the customer's approval still go through Sign-off.
+**The SE applies directly** (the default): Setup's **Apply** step shows what the kit will make (pilot users only) and
+the **Changes made** so far; type your name and Apply. Your sign-off is recorded as it applies, and every object is in
+the ledger, so teardown removes exactly them. Use cases (**Accept and make it in the tenant**), AI Guard proxy setup
+(**Save**) and demo switches go straight in too. A customer that must approve changes first: **Switch to customer
+approval** on the Apply step, and the change-list page and Sign-off come back.
 
 ## Live demos
 

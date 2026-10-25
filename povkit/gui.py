@@ -498,6 +498,20 @@ def api(method, path, body, q):
             log("ok", s["headline"])
             return s
         return 200, {"job": start_job("summary", work)}
+    if path == "/api/apply-direct":   # SE applies directly: sign off what was just shown, and apply it
+        p = current()
+
+        def work_direct(log):
+            out = lifecycle.quick_apply(p, tf, None, "Setup", body.get("by"), log)
+            try:
+                lifecycle.api_proofs(p, tf, auto=True, log=log)
+            except KitError as e:
+                log("warn", f"Couldn't check the success criteria yet: {e}")
+            return out
+        return 200, {"job": start_job("apply", work_direct)}
+    if path == "/api/changes":
+        p = current()
+        return 200, {"made": lifecycle.changes_made(p), "pending": lifecycle.pending(p)}
     if path == "/api/usecase/make":   # make one accepted use case in the tenant, from its card
         p = current()
         uc = str(body.get("id") or "")

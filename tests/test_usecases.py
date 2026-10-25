@@ -106,6 +106,8 @@ def test_the_kit_validates_what_claude_proposes(pov, ready):
 
 
 def test_accepted_use_case_needs_a_fresh_approval_then_applies_scoped(pov, tenant, tenant_for, ready):
+    pov.cfg["approval"] = "customer"   # the customer-approval flow (SE sign-off POVs apply directly)
+    pov.save()
     lifecycle.plan(pov, tenant_for)
     ChangeList(pov.dir).approve("Jane Doe")
     lifecycle.apply(pov, tenant_for, log)

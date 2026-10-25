@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.75
+- **The SE applies directly** (POVs with SE sign-off, the default). Setup's Change list, Sign-off and Apply steps become one **Apply** step: what the kit will make now (pilot users only), the **Changes made** so far (what, why, who it affects, when), and Apply with your name recorded as the sign-off. The checklist shows "Apply to the tenant" instead of making and signing off a change list, and Status shows what's waiting to apply instead of who approved.
+- Use cases: **Accept and make it in the tenant ›** accepts and applies in one go; Make it in the tenant applies straight away when nothing else is waiting (and still shows anything else that would go in with it first).
+- The change list still works underneath: the kit only creates what it planned, only changes or deletes what its ledger holds, and teardown removes exactly that. **Switch to customer approval** on the Apply step brings back the change-list page and the customer's sign-off.
+
 ## 0.9.74
 - AI Guard proxy mode: the provider's own keys are listed first ("Default OpenAI Provider" before "DeepSeek (OpenAI-compatible)"); compatible providers come after.
 

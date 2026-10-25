@@ -86,3 +86,17 @@ def test_mac_profile_made_without_a_windows_default(pov, tenant, tenant_for):
     names = [a["name"] for a in tenant.mac_apps]
     assert any("pilot Macs" in n for n in names)
     assert any(f["name"].startswith("ZPOV") for f in tenant.fwds)
+
+
+def test_se_applies_directly(pov, tenant, tenant_for):
+    lifecycle.plan(pov, tenant_for)
+    assert lifecycle.pending(pov) and not lifecycle.changes_made(pov)
+    out = lifecycle.quick_apply(pov, tenant_for, None, "Setup", "Paul", lambda *a: None)
+    assert out["made"] and not lifecycle.pending(pov)
+    made = lifecycle.changes_made(pov)
+    assert any(m["name"] == "ZPOV: Block gambling" and m["why"] is not None for m in made)
+    st = {c["id"]: c for c in lifecycle.status(pov, tenant_for)}
+    assert st["plan-approved"]["status"] == "ok" and "nothing waiting" in st["plan-approved"]["detail"]
+    from povkit import coach
+    ids = [x["id"] for x in coach.steps(pov)]
+    assert "signoff" not in ids and "plan" not in ids and "apply" in ids
