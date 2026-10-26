@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.83
+- **See what the kit is doing.** Preflight, Apply and the change list now show each step live while they read the tenant: each product as it's read, every read-only API call it makes (for example "ZPA application segment: list segments"), what each product's checks found, and how many objects each product will make, ending with "Nothing has changed in the tenant". When it finishes, the log folds away under "What the kit read and checked", one click to open.
+- Setup's side note says when the tenant changes in the SE-applies flow ("until you click Apply in step 5"); it named the customer-approval steps before.
+
 ## 0.9.82
 - **Seed stack for AI-SPM and DSPM** (Next steps › Seed stack, or `pov-kit seed template [--mcp] [--public-decoy]`): CloudFormation for the customer's test AWS account with synthetic sensitive data (customers, payroll, patients, cards; CSV, JSON, PDF and Word), a deliberately weak bucket, a DynamoDB table, AI training data with personal data in it, an over-permissioned AI agent on Bedrock and, optionally, an MCP server with no authentication and a public decoy file. Everything is named zpov-… and tagged; deleting the stack empties and removes it all. Step-by-step deployment: docs/SEED-STACK.md.
 - **DSPM (draft)**: a new product with three attested criteria (sensitive data found and classified, risky exposure flagged, access to sensitive data mapped).

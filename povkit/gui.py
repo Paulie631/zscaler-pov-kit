@@ -433,22 +433,34 @@ def api(method, path, body, q):
         return 200, {"ok": True}
     if path == "/api/preflight":
         p = current()
-        good, why = secrets.keychain_works()
-        from .core.checks import FAIL, OK, check
-        checks = [check("keychain", "Keychain works on this computer", OK if good else FAIL, why,
-                        "" if good else "Unlock the login keychain (Mac) or install a keyring service (Linux).")]
-        _, more = lifecycle.discover(p, tf)
-        checks += more
-        from . import manual
-        for c in checks:
-            h = manual.check_help(c["id"])
-            if h:
-                c["help"] = h
-        return 200, {"checks": checks, "exit": exit_code(checks)}
+
+        def preflight(log=None):
+            good, why = secrets.keychain_works()
+            from .core.checks import FAIL, OK, check
+            checks = [check("keychain", "Keychain works on this computer", OK if good else FAIL, why,
+                            "" if good else "Unlock the login keychain (Mac) or install a keyring service (Linux).")]
+            if log:
+                log("ok" if good else "fail", f"This computer's keychain: {'works' if good else why}")
+            _, more = lifecycle.discover(p, tf, log)
+            checks += more
+            from . import manual
+            for c in checks:
+                h = manual.check_help(c["id"])
+                if h:
+                    c["help"] = h
+            return {"checks": checks, "exit": exit_code(checks)}
+        if body.get("job"):   # the console shows each step as it happens
+            return 200, {"job": start_job("preflight", preflight)}
+        return 200, preflight()
     if path == "/api/plan":
         p = current()
-        items, notes, h, checks = lifecycle.plan(p, tf)
-        return 200, {"items": items, "notes": notes, "hash": h, "checks": checks}
+
+        def make(log=None):
+            items, notes, h, checks = lifecycle.plan(p, tf, log)
+            return {"items": items, "notes": notes, "hash": h, "checks": checks}
+        if body.get("job"):
+            return 200, {"job": start_job("plan", make)}
+        return 200, make()
     if path == "/api/approve":
         p = current()
         by_se = (p.cfg.get("approval") or "se") == "se"

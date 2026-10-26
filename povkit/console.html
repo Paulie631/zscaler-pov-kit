@@ -187,7 +187,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
 <div class="view on" id="v-setup"><div class="wrap">
   <div class="wiz">
     <div class="panel"><ol class="steps" id="wsteps"></ol>
-      <div class="hint">Nothing changes in the customer's tenant until step 7, and only what they approved in step 6.</div></div>
+      <div class="hint" id="wsafe">Nothing changes in the customer's tenant until step 7, and only what they approved in step 6.</div></div>
     <div class="panel" id="wstage"></div>
   </div>
 </div></div>
@@ -335,6 +335,12 @@ async function api(path,body){
   if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j}
 function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div>`}
+// a read-only job shown live: each tenant read and check as it happens, folded away when done
+async function liveJob(path,box,label){
+  box.innerHTML=`<details class="doing" open><summary class="muted" style="cursor:pointer">${esc(label)}</summary><div class="log"></div></details>`;
+  const el=box.querySelector(".log"),r=await runJob((await api(path,{job:true})).job,el);
+  const n=el.children.length,d=box.querySelector("details");d.open=false;
+  d.querySelector("summary").textContent=`What the kit read and checked (${n} step${n==1?"":"s"}) ›`;return r}
 async function runJob(id,el){let since=0;el.innerHTML="";
   for(;;){const j=await api(`/api/job?id=${id}&since=${since}`);
     for(const l of j.lines){const d=document.createElement("div");d.className=l.level;d.textContent=`${l.t}  ${l.msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight}
@@ -471,7 +477,8 @@ function seMode(){const c=S&&S.current;return !!c&&((c.settings||{}).approval||"
 function firstOpen(){if(!S.current)return 0;for(let i=1;i<8;i++)if(!done(i))return i;return 8}
 function wsteps(){const se=seMode();let n=0;$("#wsteps").innerHTML=STEPS.map((t,i)=>{if(se&&(i==5||i==6))return "";n++;const lab=se&&i==4?"Apply":t;
     return `<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":n}</span><span>${esc(lab)}</span></li>`}).join("");
-  $$("#wsteps li").forEach(li=>li.onclick=()=>{const i=+li.dataset.i;if(i>0&&!S.current)return;W.step=i;wizard()})}
+  $$("#wsteps li").forEach(li=>li.onclick=()=>{const i=+li.dataset.i;if(i>0&&!S.current)return;W.step=i;wizard()});
+  $("#wsafe")&&($("#wsafe").textContent=se?"Nothing changes in the customer's tenant until you click Apply in step 5, and only what it lists, for the pilot users.":"Nothing changes in the customer's tenant until step 7, and only what they approved in step 6.")}
 function head(i,title,desc){const se=seMode(),n=se&&i>=7?i-1:i+1,tot=se?STEPS.length-2:STEPS.length;return `<div class="kicker">STEP ${n} OF ${tot}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
 function nav(back,next,nextLabel,disabled){return `<div class="row wnav" style="margin-top:20px">${back?'<button id="wback">‹ Back</button>':""}${next?`<button class="primary" id="wnext" ${disabled?"disabled":""}>${esc(nextLabel||"Continue ›")}</button>`:""}</div>`}
 function bindNav(onNext){$("#wback")&&($("#wback").onclick=()=>{W.step--;wizard()});$("#wnext")&&($("#wnext").onclick=onNext||(()=>{W.step++;wizard()}))}
@@ -654,7 +661,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   }
   else if(W.step==3){
     st.innerHTML=head(3,"Preflight","Read-only checks of this computer, each product, and the pilot users across products. Nothing is written.")+
-      `<div id="wchecks">${W.checks?preflightHTML(W.checks):'<div class="notice">Running the checks…</div>'}</div><div id="wpeople"></div><div id="wgate"></div>`;
+      `<div id="wdoing"></div><div id="wchecks">${W.checks?preflightHTML(W.checks):'<div class="notice">Running the checks…</div>'}</div><div id="wpeople"></div><div id="wgate"></div>`;
     const draw=async()=>{const fails=W.checks.filter(x=>x.status=="fail");$("#wchecks").innerHTML=preflightHTML(W.checks);
       const passed=await gate($("#wpeople"),"preflight",{title:"Steps for people before the change list",listTitle:"In the Zscaler console",
         intro:"These need a person in the Zscaler console. Until they're done, some checks above can't pass, or a product sits out the change list.",redraw:()=>draw()});
@@ -663,17 +670,17 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         `<div class="row" style="margin-top:14px"><button id="wback">‹ Back</button><button id="wrerun">Run checks again</button><button id="wcopy" title="Checks only. No secrets.">Copy report</button><button class="primary" id="wnext" ${fails.length||!passed?"disabled":""}>Continue ›</button></div>`;
       bindNav();$("#wrerun").onclick=run;
       $("#wcopy").onclick=async()=>{const t=reportText(W.checks);try{await navigator.clipboard.writeText(t);$("#wcopy").textContent="Copied ✓"}catch(e){download("pov-preflight.txt",t,"text/plain")}}};
-    const run=async()=>{$("#wchecks").innerHTML='<div class="notice">Running the checks…</div>';$("#wgate").innerHTML="";
-      try{W.checks=(await api("/api/preflight",{})).checks;wsteps();
+    const run=async()=>{$("#wchecks").innerHTML='<div class="notice">Running the checks (read-only)…</div>';$("#wgate").innerHTML="";
+      try{W.checks=(await liveJob("/api/preflight",$("#wdoing"),"What it’s doing now")).checks;wsteps();
         // the steps for people the API can see: check them now, so ones already done tick themselves
         try{await runJob((await api("/api/manual/check",{stage:"preflight"})).job,document.createElement("div"))}catch(e){}
         draw()}catch(e){$("#wchecks").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}};
     W.checks?draw():run();
   }
   else if(W.step==4&&seMode()){
-    st.innerHTML=head(4,"Apply to the tenant","What the kit will make in "+esc(c.customer)+"’s tenant, for the pilot users only, then you apply it. Your sign-off is recorded as it applies; each object goes in the ledger, so teardown removes exactly them. (Need the customer to approve first? <a href=\"#\" id=\"wtocust2\">Switch to customer approval</a>.)")+'<div id="wplan"><div class="notice">Reading the tenant (read-only) and working out what to make…</div></div>';
+    st.innerHTML=head(4,"Apply to the tenant","What the kit will make in "+esc(c.customer)+"’s tenant, for the pilot users only, then you apply it. Your sign-off is recorded as it applies; each object goes in the ledger, so teardown removes exactly them. (Need the customer to approve first? <a href=\"#\" id=\"wtocust2\">Switch to customer approval</a>.)")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Reading the tenant (read-only) and working out what to make…</div></div>';
     $("#wtocust2").onclick=async e=>{e.preventDefault();await api("/api/settings",{values:{approval:"customer"}});await load();wizard()};
-    try{const r=await api("/api/plan",{});W.plan=r;const ch=await api("/api/changes",{});await load();wsteps();
+    try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now");W.plan=r;const ch=await api("/api/changes",{});await load();wsteps();
       const acts=r.items.filter(i=>i.action=="customer_action"),pend=ch.pending,made=ch.made.filter(m=>m.state!="deleted");
       const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
       const kindOf=i=>esc(KIND[i.kind]||i.kind.replace(/_/g," "));
@@ -697,8 +704,8 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
   }
   else if(W.step==4){
-    st.innerHTML=head(4,"The change list","Everything the kit will create, who it affects, and the changes only the customer makes. Walk the customer's admin through it; any change after approval needs a new approval.")+'<div id="wplan"><div class="notice">Making the change list from the tenant (read-only)…</div></div>';
-    try{const r=await api("/api/plan",{});W.plan=r;await load();wsteps();
+    st.innerHTML=head(4,"The change list","Everything the kit will create, who it affects, and the changes only the customer makes. Walk the customer's admin through it; any change after approval needs a new approval.")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Making the change list from the tenant (read-only)…</div></div>';
+    try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now");W.plan=r;await load();wsteps();
       const creates=r.items.filter(i=>i.action!="customer_action"), acts=r.items.filter(i=>i.action=="customer_action");
       const byP={};for(const i of creates)(byP[i.product]=byP[i.product]||[]).push(i);
       const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;

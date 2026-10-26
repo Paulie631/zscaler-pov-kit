@@ -59,18 +59,54 @@ def wait_for(pov, checks, ran=None):
 PILOT_PRODUCTS = {"zia", "zcc", "zpa", "zdx", "casb", "zid"}
 
 
-def discover(pov, tenant_for):
-    t = ReadOnlyTenant(tenant_for(pov, "discovery"))
+AREA = {"zia": "ZIA", "zpa": "ZPA", "zcc": "Client Connector", "zid": "ZIdentity", "zdx": "ZDX", "aiguard": "AI Guard",
+        "zwa": "Workflow Automation", "zeasm": "EASM", "zbi": "Business Insights", "zms": "Microsegmentation",
+        "ztw": "Cloud Connector", "zins": "Insights", "ztb": "Zero Trust Branch"}
+
+
+def describe_call(resource, method):
+    """'zpa.application_segment', 'list_segments' -> 'ZPA application segment: list segments' (for the live log)."""
+    pre, _, area = resource.partition(".") if "." in resource else ("zia", "", resource)
+    return f"{AREA.get(pre, pre.upper())} {area.replace('_', ' ')}: {method.replace('_', ' ')}"
+
+
+class Narrated:
+    """A tenant that says each call it makes, as it makes it, so the console can show what the kit is doing."""
+    def __init__(self, tenant, log):
+        self._t, self._log = tenant, log
+
+    def call(self, resource, method, *a, **kw):
+        self._log("info", "  " + describe_call(resource, method))
+        return self._t.call(resource, method, *a, **kw)
+
+    def __getattr__(self, name):
+        return getattr(self._t, name)
+
+
+def _tally(c):
+    bad = sum(1 for x in c if x["status"] == FAIL)
+    warn = sum(1 for x in c if x["status"] == WARN)
+    return ("fail" if bad else "warn" if warn else "ok",
+            f"{len(c)} check{'' if len(c) == 1 else 's'}" + (f", {bad} to fix" if bad else "") + (f", {warn} to look at" if warn else ""))
+
+
+def discover(pov, tenant_for, log=None):
+    raw = tenant_for(pov, "discovery")
+    t = ReadOnlyTenant(Narrated(raw, log) if log else raw)
+    say = log or (lambda *a: None)
     snaps, checks = {}, []
     for p in products.selected(pov.products):
         if not p.ready:
             checks.append(check(f"{p.name}-later", p.title, INFO, getattr(p, "later_note", "")
                                 or f"arrives in {p.phase}; its criteria are in the catalog"))
             continue
+        say("info", f"{p.title}: reading the tenant (read-only)")
         try:
             s, c = p.discover(t, pov)
         except KitError as e:
             s, c = {}, [check(f"{p.name}-discover", f"{p.title} discovery", FAIL, str(e)[:200])]
+        lvl, txt = _tally(c)
+        say(lvl, f"{p.title}: {txt}")
         snaps[p.name] = s
         checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}", product=p.name) for x in c]
     # the identity step: who the pilot users are and how they sign in, across products (read-only too)
@@ -78,11 +114,15 @@ def discover(pov, tenant_for):
     if not set(pov.products) & PILOT_PRODUCTS:   # AI Guard alone has no pilot users (its app is the scope)
         ident, ic = {}, []
     else:
+        say("info", "Pilot users: finding them across products (read-only)")
         try:
             ident, ic = identity.discover(t, pov, snaps)
         except KitError as e:
             ident, ic = {}, [check("id-read", "Pilot users readable", FAIL, str(e)[:200])]
     snaps["identity"] = ident
+    if ic:
+        lvl, txt = _tally(ic)
+        say(lvl, f"Pilot users: {txt}")
     checks += [dict(x, label=f"Identity: {x['label']}") for x in ic]
     name_clash(pov, checks)
     waiting = wait_for(pov, checks, [n for n in snaps if n != "identity"])
@@ -126,7 +166,8 @@ def name_clash(pov, checks):
         c.update(detail=who + c.get("detail", ""), fix=fix, prefix_alt=None if applied else alt)
 
 
-def make_plan(pov, snaps):
+def make_plan(pov, snaps, log=None):
+    say = log or (lambda *a: None)
     items, notes = [], []
     for name, why in (snaps.get("_waiting") or {}).items():
         notes.append(f"{SHORT.get(name, name)} is added later (waiting on: {why}).")
@@ -137,18 +178,25 @@ def make_plan(pov, snaps):
             continue
         # Client Connector and CASB scope their objects to ZIA's pilot group, so they see ZIA's discovery too
         i, n = (p.plan(pov, snaps[p.name], snaps.get("zia")) if p.name in ("zcc", "casb") else p.plan(pov, snaps[p.name]))
+        made = [x for x in i if x["action"] != "customer_action"]
+        say("ok" if made else "info", f"{p.title}: {len(made)} object{'' if len(made) == 1 else 's'} to make"
+            + (f", {len(i) - len(made)} step{'' if len(i) - len(made) == 1 else 's'} for people" if len(i) > len(made) else ""))
         items += i
         notes += n
     return items, notes
 
 
-def plan(pov, tenant_for):
-    snaps, checks = discover(pov, tenant_for)
-    items, notes = make_plan(pov, snaps)
+def plan(pov, tenant_for, log=None):
+    snaps, checks = discover(pov, tenant_for, log)
+    if log:
+        log("info", "Working out what to make (nothing is written yet)")
+    items, notes = make_plan(pov, snaps, log)
     h = ChangeList(pov.dir).write(items, notes)
     from .report import render_plan
     pov.path("plan.html").write_text(render_plan(pov, items, notes, h), encoding="utf-8")
     pov.log("plan", f"change list {h[:12]}: {len(items)} items")
+    if log:
+        log("ok", f"Ready: {len(items)} items. Nothing has changed in the tenant.")
     return items, notes, h, checks
 
 

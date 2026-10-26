@@ -248,3 +248,13 @@ def test_zcc_macos_profile_for_mac_pilots(pov, tenant, tenant_for):
     assert next(a for a in tenant.mac_apps if a["name"] == "Default macOS")["macPolicy"]["installCerts"] == 0
     lifecycle.teardown(pov, tenant_for, log)
     assert [a["name"] for a in tenant.mac_apps] == ["Default macOS"]
+
+
+def test_plan_says_what_it_is_doing(pov, tenant_for):
+    lines = []
+    items, notes, h, checks = lifecycle.plan(pov, tenant_for, lambda lvl, msg: lines.append((lvl, msg)))
+    text = "\n".join(m for _, m in lines)
+    assert "Internet Access (ZIA): reading the tenant (read-only)" in text
+    assert "ZIA url filtering: list rules" in text            # each read, as it happens
+    assert "objects to make" in text and text.rstrip().endswith("Nothing has changed in the tenant.")
+    assert lifecycle.describe_call("zpa.application_segment", "list_segments") == "ZPA application segment: list segments"
