@@ -179,6 +179,7 @@ button.sm{padding:3px 9px;font-size:12.5px}
 .dtpolin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:5px 0 0;font-size:12.5px}.dtpolname{font-weight:500}
 .dtseg button{padding:2px 9px;font-size:12px}.dtswmsg{font-size:12px}
 .wtrow{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px}.wtmail{font-size:13px;white-space:nowrap}
+.ucdir.done ol{opacity:.55;text-decoration:line-through}.ucdonechk{cursor:pointer;display:inline-flex;gap:6px;align-items:center}
 .dtrow .dtdet{background:var(--panel);border-radius:8px;padding:2px 10px 8px;margin-top:6px}
 </style>
 </head>
@@ -1480,6 +1481,9 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $("#uclist").innerHTML=UC.usecases.length?UC.usecases.map(ucCard).join(""):'<div class="panel empty">No use cases yet.</div>';
   $$(".ucref").forEach(b=>b.onclick=async()=>{const id=b.dataset.id,box=$("#ucrf"+id),out=$("#ucrl"+id);b.disabled=true;out.style.display="block";
     try{await runJob((await api("/api/usecase/refine",{id,feedback:box.value})).job,out);await load();usecases()}catch(e){out.insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`)}finally{b.disabled=false}});
+  $$(".ucprep").forEach(b=>b.onclick=async()=>{const id=b.dataset.id,out=$("#ucpl"+id);b.disabled=true;out.style.display="block";
+    try{await runJob((await api("/api/usecase/prepare",{id})).job,out);await load();usecases()}catch(e){out.insertAdjacentHTML("beforeend",`<div class="fail">${esc(e.message)}</div>`);b.disabled=false}});
+  $$(".ucdone").forEach(x=>x.onchange=async()=>{try{await api("/api/usecase/done",{id:x.dataset.id,i:+x.dataset.i,done:x.checked});usecases()}catch(e){x.checked=!x.checked}});
   $$(".ucsave").forEach(b=>b.onclick=async()=>{try{const r=await api("/api/library/save",{id:b.dataset.id});b.textContent="Saved as "+r.entry.id;b.disabled=true;usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
   $$(".ucact").forEach(b=>b.onclick=async()=>{try{await api("/api/usecase/status",{id:b.dataset.id,status:b.dataset.s});await load();usecases()}catch(e){b.closest(".panel").insertAdjacentHTML("beforeend",note(e.message,"bad"))}});
   $$(".ucdl").forEach(b=>b.onclick=async()=>{const r=await api(`/api/usecase/directions?id=${encodeURIComponent(b.dataset.id)}`);download(`${b.dataset.id}-directions.md`,r.text,"text/markdown")});
@@ -1487,18 +1491,27 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $$(".ucmake").forEach(b=>b.onclick=()=>ucMake(b.dataset.id,$(`.ucmk[data-id="${b.dataset.id}"]`)));
   $$(".ucaccmake").forEach(b=>b.onclick=async()=>{b.disabled=true;const el=$(`.ucmk[data-id="${b.dataset.id}"]`);
     try{await api("/api/usecase/status",{id:b.dataset.id,status:"accepted"});ucMake(b.dataset.id,el,true)}catch(e){el.innerHTML=note(e.message,"bad");b.disabled=false}})}
+// what stopped the kit building this use case, and the one click that fixes it (add the products, read, ask again)
+function ucGapHTML(u){const g=(u.spec&&u.spec.gaps)||{},add=g.add||[],read=g.read||[];
+  if(!(add.length||read.length)||!["proposed","directions"].includes(u.status))return "";
+  const nm=x=>PSHORT[x]||x.toUpperCase(),why=[...add.map(x=>`${nm(x)} isn’t in this POV`),...read.filter(x=>!add.includes(x)).map(x=>`${nm(x)} wasn’t readable in the last tenant reading`)];
+  const label=(add.length?`Add ${add.map(nm).join(" and ")} to this POV, `:"")+(add.length?"read":"Read")+" the tenant and ask Claude again";
+  return `<div class="card ucgap" style="margin:10px 0;border-left:4px solid var(--accent)"><b>The kit could build more of this.</b> <span class="muted">${esc(why.join("; "))}, so Claude wrote directions.</span>
+    <div class="row" style="gap:8px;margin-top:8px"><button class="primary ucprep" data-id="${esc(u.id)}">${esc(label)} ›</button><span class="hint" style="margin:0">Read-only until you click Make it. Nothing changes in the tenant here.</span></div>
+    <div class="log" id="ucpl${esc(u.id)}" style="display:none"></div></div>`}
 function ucDetail(ch){const skip=new Set(["kind","name","why"]);return Object.entries(ch).filter(([k])=>!skip.has(k)).map(([k,v])=>`<span class="muted">${esc(k.replace(/_/g," "))}:</span> ${esc(Array.isArray(v)?v.join(", "):v)}`).join(" · ")}
 function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",directions:"warn",discarded:"fail"}[u.status];
   return `<div class="panel"><div class="row" style="justify-content:space-between"><div><span class="chip">${esc(u.id)}</span> <span class="badge b-${st}">${esc(u.status)}</span> <span class="muted" style="font-size:12px">${esc(u.at.slice(0,16).replace("T"," "))} UTC · ${esc(u.by)}</span></div></div>
     <p style="margin:10px 0 4px"><b>${esc(u.prompt)}</b></p><p class="muted" style="margin:0 0 10px">${esc(s.summary)}</p>
     ${s.already_covered_by.length?note("Already proved by "+s.already_covered_by.join(", ")+"."):""}
     ${s.changes.length?`<div class="group-h">Changes the kit can build (pilot users only)</div><div class="tablewrap"><table>${s.changes.map(ch=>`<tr><td style="width:34%"><b>${esc(ch.name)}</b><div class="muted" style="font-size:12px">${esc(KNAME[ch.kind]||ch.kind)}</div></td><td>${ucDetail(ch)}${ch.why?`<div style="font-size:12.5px;margin-top:3px">${esc(ch.why)}</div>`:""}</td></tr>`).join("")}</table></div>`:""}
-    ${s.directions.length?`<div class="group-h">Directions for a person</div>${s.directions.map(d=>`<div style="margin:6px 0"><b>${esc(PSHORT[d.product]||(d.product||"").toUpperCase()||"Steps")}</b>${d.console_page?` · ${esc(d.console_page)}`:""}<ol style="margin:4px 0 0 18px;padding:0">${d.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>`).join("")}`:""}
+    ${ucGapHTML(u)}
+    ${s.directions.length?`<div class="group-h">${s.changes.length?"Left for a person (the API can’t do these)":"Directions for a person"}</div>${s.directions.map((d,i)=>{const done=(u.done||[]).includes(i);return `<div class="ucdir ${done?"done":""}" style="margin:6px 0"><label class="ucdonechk" title="Tick when it's done"><input type="checkbox" class="ucdone" data-id="${esc(u.id)}" data-i="${i}" ${done?"checked":""}> <b>${esc(PSHORT[d.product]||(d.product||"").toUpperCase()||"Steps")}</b>${d.console_page?` · ${esc(d.console_page)}`:""}${done?' <span class="badge b-ok">done</span>':""}</label><ol style="margin:4px 0 0 18px;padding:0">${d.steps.map(x=>`<li>${esc(x)}</li>`).join("")}</ol></div>`}).join("")}`:""}
     <div class="group-h">How it's proved</div><div>${esc(t.statement)}</div>
     ${t.probe.length?`<ul style="margin:4px 0 0 18px;padding:0">${t.probe.map(p=>`<li><code>${esc(p.type)}</code> ${esc(p.url||p.host||p.name||"")}${p.port?":"+esc(p.port):""} → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
     ${(t.aiguard||[]).length?`<div class="hint" style="margin-top:6px">AI Guard test prompts (scanned with the POV's key):</div><ul style="margin:4px 0 0 18px;padding:0">${t.aiguard.map(p=>`<li><code>${esc(p.direction)}</code> “${esc(p.text)}” → ${esc(p.expect)}</li>`).join("")}</ul>`:""}
     ${t.attest?`<div class="hint">Shown live: ${esc(t.attest)}</div>`:""}
-    ${u.history&&u.history.length?`<div class="hint">Refined ${u.history.length} time${u.history.length>1?"s":""}; last: “${esc(u.history[u.history.length-1].feedback)}”</div>`:""}
+    ${u.history&&u.history.length?(()=>{const f=u.history[u.history.length-1].feedback||"";return `<div class="hint">Refined ${u.history.length} time${u.history.length>1?"s":""}; last: ${f.startsWith("The POV now includes")?"reworked after adding what it needed and reading the tenant again":"“"+esc(f)+"”"}</div>`})():""}
     ${u.from_library?`<div class="hint">From the library entry ${esc(u.from_library)}, checked against this tenant (no AI call).</div>`:""}
     ${u.status=="proposed"||u.status=="accepted"?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="ucrf${esc(u.id)}" placeholder="Refine: e.g. make it Caution, not Block; only the Sales group's sites" style="flex:1;min-width:240px"><button class="ucref" data-id="${esc(u.id)}">Refine</button></div><div class="log" id="ucrl${esc(u.id)}" style="display:none"></div>`:""}
     <div class="row" style="margin-top:14px">

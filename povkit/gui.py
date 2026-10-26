@@ -320,7 +320,8 @@ def api(method, path, body, q):
             p = current()
             via, key, where = ai.route()
             from . import library
-            return 200, {"usecases": [{k: v for k, v in u.items() if k != "raw"} for u in usecases.load(p)][::-1],
+            return 200, {"usecases": [usecases.with_gaps(p, {k: v for k, v in u.items() if k != "raw"})
+                                      for u in usecases.load(p)][::-1],
                          "consent": ai.consent(p), "key": bool(key), "key_source": where, "share": ai.share(p),
                          "route": via, "proxy": bool(ai.proxy_key()[0]), "direct": bool(ai.direct_key()),
                          "model": (p.cfg.get("ai") or {}).get("model") or ai.DEFAULT_MODEL,
@@ -1147,6 +1148,20 @@ def api(method, path, body, q):
             log("ok", f"{uc['id']} from the library (no AI call): {len(uc['spec']['changes'])} changes the kit can build")
             return {k: v for k, v in uc.items() if k != "raw"}
         return 200, {"job": start_job("usecase", work)}
+    if path == "/api/usecase/prepare":   # the one-click fix: add the products it needs, read the tenant, ask again
+        from . import usecases
+        p, uid = current(), body.get("id")
+
+        def work(log):
+            uc = usecases.prepare(p, tf, uid, log, by=body.get("by") or "SE")
+            log("ok", f"{uid}: {len(uc['spec']['changes'])} changes the kit can build, "
+                      f"{len(uc['spec']['directions'])} directions left for a person")
+            return {k: v for k, v in uc.items() if k != "raw"}
+        return 200, {"job": start_job("usecase", work)}
+    if path == "/api/usecase/done":   # a person did one group of directions
+        from . import usecases
+        uc = usecases.mark_done(current(), body.get("id"), body.get("i"), bool(body.get("done", True)))
+        return 200, {"usecase": {k: v for k, v in uc.items() if k != "raw"}}
     if path == "/api/usecase/status":
         from . import usecases
         uc = usecases.set_status(current(), body.get("id"), body.get("status"))

@@ -370,6 +370,7 @@ def validate(pov, snaps, proposal):
         kind = str((d["change"] or {}).get("kind") or "") if isinstance(d["change"], dict) else ""
         directions.append({"product": KINDS.get(kind, ""), "console_page": "", "steps": [
             f"Not built by the kit ({d['why']}). Claude suggested: {json.dumps(d['change'])[:300]}"]})
+    gaps = find_gaps(pov, snaps, proposal, directions)
     test = proposal.get("test") or {}
     probe = [p for p in (validate_probe(x) for x in (test.get("probe") or []) if isinstance(x, dict)) if p][:6]
     prompts = [p for p in (validate_prompt(x, snaps) for x in (test.get("aiguard") or []) if isinstance(x, dict)) if p][:6]
@@ -377,9 +378,85 @@ def validate(pov, snaps, proposal):
         prompts = []
     return {"summary": str(proposal.get("summary") or "")[:400],
             "already_covered_by": [str(x) for x in proposal.get("already_covered_by") or []][:6],
-            "changes": changes, "dropped": dropped, "directions": directions,
+            "changes": changes, "dropped": dropped, "directions": directions, "gaps": gaps,
             "test": {"title": str(test.get("title") or "Use case")[:80], "statement": str(test.get("statement") or "")[:300],
                      "probe": probe, "aiguard": prompts, "attest": str(test.get("attest") or "")[:300]}}
+
+
+# ---------------------------------------------------------------- what stops the kit building it, and the fix
+def _readable(snap):
+    return bool(snap) and snap.get("readable") is not False and not snap.get("error")
+
+
+def find_gaps(pov, snaps, proposal, directions):
+    """Why a use case came back as directions when the kit could build it: products it needs that aren't in the POV
+    (add them), and POV products the tenant reading couldn't see (read again). Only products the kit builds for.
+    -> {"add": [...], "read": [...]}"""
+    from . import products as _products
+    buildable = set(KINDS.values())
+    involved = {KINDS.get(str((c or {}).get("kind"))) for c in (proposal.get("changes") or []) if isinstance(c, dict)}
+    involved |= {str(d.get("product") or "").lower() for d in directions}
+    involved &= buildable
+    add = sorted(p for p in involved if p not in pov.products and p in _products.CHOOSABLE)
+    read = sorted(p for p in involved if p in pov.products and not _readable((snaps or {}).get(p)))
+    return {"add": add, "read": read}
+
+
+def with_gaps(pov, uc):
+    """Gaps for a use case saved before the kit looked for them, and current ones for every card: a product added or
+    a tenant read since then closes the gap. Uses the last tenant reading."""
+    spec = uc.get("spec") or {}
+    snaps = (pov.read_json("discovery.json", {}) or {}).get("products") or {}
+    proposal = {"changes": [d.get("change") for d in spec.get("dropped") or [] if isinstance(d.get("change"), dict)]
+                + list(spec.get("changes") or [])}
+    uc = dict(uc, spec=dict(spec, gaps=find_gaps(pov, snaps, proposal, spec.get("directions") or [])))
+    return uc
+
+
+AUTO_FEEDBACK = ("The POV now includes {products} and the tenant snapshot was just read again. Turn every step you "
+                 "can into changes the kit builds (pilot users only); keep directions only for what the kit can't "
+                 "build: Client Connector profiles, tenant-wide settings and the customer's own objects.")
+
+
+def prepare(pov, tenant_for, uid, log=lambda *a: None, by="SE"):
+    """The one-click fix on a use case card: add the products it needs to the POV, read the tenant again, check those
+    products are readable now, and ask Claude again with that. -> the reworked use case"""
+    from . import lifecycle, settings
+    uc = get(pov, uid)
+    g = (uc["spec"].get("gaps") or {})
+    add = [x for x in g.get("add") or [] if x not in pov.products]
+    if add:
+        settings.set_value(pov, "products", list(pov.products) + add)
+        log("ok", f"Added {', '.join(SHORT.get(x, x) for x in add)} to this POV")
+    log("info", "Reading the tenant again (read-only), every product at once")
+    snaps, checks = lifecycle.discover(pov, tenant_for, log, reuse_minutes=0)
+    need = list(dict.fromkeys(add + list(g.get("read") or [])))
+    still = [x for x in need if not _readable(snaps.get(x))]
+    if still:
+        why = [f"{c['label']}: {c['detail']}" + (f" Fix: {c['fix']}" if c.get("fix") else "")
+               for c in checks if c.get("status") in ("fail", "warn") and any(
+                   str(c.get("id", "")).startswith(x + "-") or c.get("product") == x for x in still)]
+        why += [f"{SHORT.get(x, x)}: {r}" for x, r in ((snaps.get("_waiting") or {}).items()) if x in still and r
+                and not any(str(r) in w for w in why)]
+        raise KitError(f"{', '.join(SHORT.get(x, x) for x in still)} still can't be read, so Claude would only write "
+                       "directions again. " + (" ".join(why[:3]) if why else "Check Setup › Connect and Preflight."))
+    names = ", ".join(SHORT.get(x, x) for x in (list(pov.products)))
+    log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]} again, with the tenant read")
+    return refine(pov, snaps, uid, AUTO_FEEDBACK.format(products=names), by=by)
+
+
+def mark_done(pov, uid, i, done=True):
+    """Tick off one group of directions a person did (what the API can't do)."""
+    ucs = load(pov)
+    uc = next((u for u in ucs if u["id"] == uid), None)
+    if not uc:
+        raise KitError(f"No use case {uid}.")
+    d = set(uc.get("done") or [])
+    (d.add if done else d.discard)(int(i))
+    uc["done"] = sorted(d)
+    save(pov, ucs)
+    pov.log("usecase", f"{uid} directions {int(i) + 1} {'done' if done else 'not done'}")
+    return uc
 
 
 # ---------------------------------------------------------------- lifecycle of a use case
@@ -447,6 +524,7 @@ def refine(pov, snaps, uid, feedback, by="SE"):
     proposal, raw, masked = _ask(pov, snaps, msg)
     uc.setdefault("history", []).append({"at": uc.get("refined_at") or uc["at"], "spec": uc["spec"],
                                          "status": uc["status"], "feedback": feedback.strip()[:1000]})
+    uc.pop("done", None)
     uc.update(spec=validate(pov, snaps, proposal), status="proposed", raw=raw[:20000], masked=masked,
               shared=ai.share(pov), refined_at=time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), refined_by=by)
     save(pov, ucs)

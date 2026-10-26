@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.93
+- **Use cases: from directions to changes in one click.** When Claude can only write directions because a product the use case needs isn't in the POV (ZPA for an internal app, say), or a product wasn't readable in the last tenant reading, the card says so and offers one button: **Add ZPA to this POV, read the tenant and ask Claude again**. It adds the product, reads the tenant (read-only), and asks Claude again, so the card comes back with changes the kit can build. Then **Accept and make it in the tenant** applies them as before, with the POV's own sign-off rule (the SE's, or the customer's). If the product still can't be read, the card says why (a missing ZPA customer ID, say) and nothing changes.
+- **Only what the API can't do is left for a person** (Client Connector profiles, tenant-wide settings, the customer's own objects), under "Left for a person", and each group can be ticked off when it's done.
+- Use cases made before this release show the button too.
+
 ## 0.9.92
 - **No Terminal window.** The desktop app (Mac) and shortcut (Windows) now start the console in the background and open it in the browser when it's ready; nothing else appears on screen. Its output goes to `~/.zscaler-pov-kit/console.log`, and if it doesn't start, a dialog says so and offers the log.
 - **Quit** is a button at the top of the console (click it twice). Opening the app again while the console runs brings that console back up rather than starting a second one.
