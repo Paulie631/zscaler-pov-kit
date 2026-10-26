@@ -258,12 +258,45 @@ def activation_state(t):
     return str((g(st, "status") if isinstance(st, dict) else st) or "").upper()
 
 
-def available_actions(t, rule_type, app):
+class ActionCache:
+    """Which Cloud App Control actions each app offers, kept in the POV's folder for a day. The answers don't change
+    during a POV, and asking costs one ZIA call per app per rule type (17 for the template alone, about half of a
+    ZIA reading). An empty answer (often a failed call) is never kept."""
+    TTL = 24 * 3600
+
+    def __init__(self, pov):
+        self.pov, self.dirty = pov, False
+        d = pov.read_json("actions-cache.json", {}) or {}
+        tenant = f"{pov.cfg.get('vanity_domain')}|{pov.cfg.get('cloud') or ''}"
+        fresh = d.get("tenant") == tenant and time.time() - float(d.get("at") or 0) < self.TTL
+        self.tenant, self.data, self.at = tenant, (d.get("data") or {}) if fresh else {}, d.get("at") if fresh else None
+
+    def get(self, rule_type, app):
+        return self.data.get(f"{rule_type}|{app or ''}")
+
+    def put(self, rule_type, app, acts):
+        if acts:
+            self.data[f"{rule_type}|{app or ''}"], self.dirty = acts, True
+
+    def save(self):
+        if self.dirty:
+            self.pov.write_json("actions-cache.json", {"tenant": self.tenant, "at": self.at or time.time(),
+                                                       "data": self.data})
+            self.dirty = False
+
+
+def available_actions(t, rule_type, app, cache=None):
+    hit = cache.get(rule_type, app) if cache else None
+    if hit is not None:
+        return list(hit)
     try:
-        return [str(a) for a in items(t.call("cloudappcontrol", "list_available_actions", rule_type, [app] if app else []))
+        acts = [str(a) for a in items(t.call("cloudappcontrol", "list_available_actions", rule_type, [app] if app else []))
                 if isinstance(a, str) and a]
     except Exception:
         return []
+    if cache:
+        cache.put(rule_type, app, acts)
+    return acts
 
 
 def _match(choice, avail):
@@ -276,24 +309,24 @@ def _match(choice, avail):
     return next((a for a in avail if a.startswith(verb) and a.endswith("_".join(tail))), None)
 
 
-def pick_actions(t, rule_type, apps, choices):
+def pick_actions(t, rule_type, apps, choices, cache=None):
     """Ask the tenant which actions each app supports (never guess: a guessed name makes ZIA reject the whole rule).
     -> (apps kept, actions or None, why). A shortened port of the demo kit's pick_actions."""
-    groups = {}
+    groups, seen = {}, {}
     for app in apps:
-        avail = available_actions(t, rule_type, app)
+        avail = seen[app] = available_actions(t, rule_type, app, cache)
         picked = [_match(c, avail) for c in choices]
         if avail and None not in picked:
             groups.setdefault(tuple(picked), []).append(app)
     if not groups:
-        general = available_actions(t, rule_type, None)
+        general = available_actions(t, rule_type, None, cache)
         picked = [_match(c, general) for c in choices] if general else [None]
         if None not in picked:
             return list(apps), picked, "actions from the rule type (the apps list none of their own)"
         return [], None, f"the tenant offers no action like {choices[0][0]} for {', '.join(apps)}"
     actions, kept = max(groups.items(), key=lambda kv: len(kv[1]))
     dropped = [a for a in apps if a not in kept]
-    acts = with_companions(rule_type, list(actions), available_actions(t, rule_type, kept[0]) if kept else None)
+    acts = with_companions(rule_type, list(actions), seen.get(kept[0]) if kept else None)
     return kept, acts, (f"left out {', '.join(dropped)} (no matching actions)" if dropped else "")
 
 
@@ -472,15 +505,19 @@ class ZIA(Product):
             snap["cbi"] = {"id": g(cbi, "id"), "name": g(cbi, "name"), "url": g(cbi, "url")} if cbi else None
         except Exception:
             snap["cbi"] = None
-        snap["cac"] = {}
+        snap["cac"], acache = {}, ActionCache(pov)
         for r in tpl["cloud_app_control"]:
-            apps, actions, why = pick_actions(t, r["rule_type"], r["applications"], r["actions"])
+            apps, actions, why = pick_actions(t, r["rule_type"], r["applications"], r["actions"], acache)
             snap["cac"][r["name"]] = {"apps": apps, "actions": actions, "why": why}
         from .. import usecases   # accepted use cases' Cloud App Control actions are checked the same way
         snap["uc_cac"] = {}
         for key, ch in usecases.cac_wanted(pov):
-            apps, actions, why = pick_actions(t, ch["rule_type"], ch["applications"], [[a] for a in ch["actions"]])
+            apps, actions, why = pick_actions(t, ch["rule_type"], ch["applications"], [[a] for a in ch["actions"]], acache)
             snap["uc_cac"][key] = {"apps": apps, "actions": actions, "why": why}
+        try:
+            acache.save()
+        except OSError:
+            pass
 
         planned = self._names(pov)
         snap["customer_names"], lookalikes, taken = [], [], []

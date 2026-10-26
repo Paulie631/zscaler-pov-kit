@@ -135,6 +135,29 @@ def next_id(ucs):
 
 
 # ---------------------------------------------------------------- the prompt
+# which products a use case is about, from its words: Ask Claude reads just these and takes the rest from the last
+# reading (when there is one). No match, or any doubt, reads everything.
+PRODUCT_WORDS = {
+    "zia": r"\b(zia|internet|web|site|url|categor|saas|chatgpt|openai|gemini|copilot|genai|gen ai|ai app|upload|download|"
+           r"dlp|credit card|ssn|ssl|tls|decrypt|inspect|firewall|dns|port|file type|sandbox|malware|phish|isolat|"
+           r"browser isolation|cloud app|dropbox|box\.com|webmail|social media|bandwidth)",
+    "zcc": r"\b(zcc|client connector|forwarding|app profile|tunnel|device posture|trusted network)",
+    "zpa": r"\b(zpa|private (app|access)|internal|intranet|wiki|\.internal|\.local|app connector|segment|rdp|ssh|"
+           r"privileged remote|pra|on-prem|data ?cent)",
+    "aiguard": r"\b(ai guard|aiguard|prompt injection|jailbreak|chatbot|llm app|guardrail|model (input|output)|toxic)",
+    "casb": r"\b(casb|m365|microsoft 365|office 365|onedrive|sharepoint|teams|google drive|at rest|saas tenant|"
+            r"shared (file|link)|external shar)",
+    "zdx": r"\b(zdx|digital experience|performance|latency|slow|call quality|zoom|score)",
+    "zid": r"\b(zidentity|identity|mfa|sign-?in|login|entitle)",
+}
+
+
+def products_for(text, products):
+    """-> the set of the POV's products a request names, or None to read them all."""
+    t = str(text or "").lower()
+    hit = {p for p, rx in PRODUCT_WORDS.items() if p in (products or []) and re.search(rx, t)}
+    return hit or None
+
 def build_message(pov, snaps, request):
     from . import evidence
     snap = json.dumps(snaps, default=str, ensure_ascii=False)   # as text, so masking sees 'Zürich', not 'Z\u00fcrich'

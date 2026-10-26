@@ -109,7 +109,7 @@ def discover(pov, tenant_for, log=None, only=None, reuse_minutes=0):
     last = pov.read_json("discovery.json", {}) or {} if (only or reuse_minutes) else {}
     cached = last.get("products") or {}
     when = str(last.get("at") or "")[11:16]
-    if reuse_minutes and cached and not only:
+    if reuse_minutes and cached:
         age = time.time() - _epoch(last.get("at"))
         led_at = pov.path("ledger.json").stat().st_mtime if pov.path("ledger.json").exists() else 0
         cfg_at = pov.path("pov.json").stat().st_mtime if pov.path("pov.json").exists() else 0   # settings since?
@@ -127,8 +127,8 @@ def discover(pov, tenant_for, log=None, only=None, reuse_minutes=0):
         else:
             todo.append(p)
 
-    def read(p, raw):
-        t = ReadOnlyTenant(Narrated(raw, log) if log else raw)
+    def read(p, client):
+        t = ReadOnlyTenant(client)
         t0 = time.time()
         say("info", f"{p.title}: reading the tenant (read-only)")
         try:
@@ -138,15 +138,20 @@ def discover(pov, tenant_for, log=None, only=None, reuse_minutes=0):
         lvl, txt = _tally(c)
         say(lvl, f"{p.title}: {txt} ({time.time() - t0:.1f} s)")
         return s, c
-    clients = [(p, tenant_for(pov, "discovery")) for p in todo]   # signed-in clients made here, one per product
+    from .core.guard import CachedReads
+    # signed-in clients made here, one per product; a list asked for twice in one reading is answered from memory
+    # (only real calls are narrated)
+    clients = [(p, CachedReads(Narrated(tenant_for(pov, "discovery"), log) if log else tenant_for(pov, "discovery")))
+               for p in todo]
     if len(clients) > 1:
         from concurrent.futures import ThreadPoolExecutor
         with ThreadPoolExecutor(max_workers=min(6, len(clients))) as ex:
             found = list(ex.map(lambda pc: read(*pc), clients))
     else:
         found = [read(*pc) for pc in clients]
-    t = ReadOnlyTenant(Narrated(clients[0][1], log) if log and clients else (clients[0][1] if clients
-                                                                               else tenant_for(pov, "discovery")))
+    # the pilot users step reads ZIA's users and groups again: through ZIA's own memory when ZIA was just read
+    shared = next((c for p, c in clients if p.name == "zia"), clients[0][1] if clients else None)
+    t = ReadOnlyTenant(shared or (Narrated(tenant_for(pov, "discovery"), log) if log else tenant_for(pov, "discovery")))
     for (p, _), (s, c) in zip(clients, found, strict=True):   # in product order, so checks always read the same way
         snaps[p.name] = s
         checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}", product=p.name) for x in c]
@@ -277,8 +282,10 @@ def make_preview(pov, tenant_for, uc_id):
 
 
 def make_now(pov, tenant_for, uc_id, seen_hash, by, log=lambda *a: None):
-    """Signs off (SE sign-off POVs) the change list the SE just reviewed for this use case, then applies it."""
-    items, notes, h, checks = plan(pov, tenant_for)
+    """Signs off (SE sign-off POVs) the change list the SE just reviewed for this use case, then applies it.
+    One tenant reading: the preview's, when it's minutes old and nothing was applied or changed since (the change
+    list's hash still has to match what the SE saw), and apply builds from the same reading."""
+    items, notes, h, checks, snaps = _plan(pov, tenant_for, log, reuse_minutes=10)
     if h != seen_hash:
         raise KitError("The tenant or the change list changed since you reviewed it. Review it again, then make it.")
     if any(c["status"] == FAIL for c in checks):
@@ -294,7 +301,7 @@ def make_now(pov, tenant_for, uc_id, seen_hash, by, log=lambda *a: None):
         rec = cl.approve(by, f"Reviewed by the SE from Use cases ({uc_id}); customer sign-off not required for this POV.")
         pov.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']} for {uc_id}")
         log("ok", f"Change list signed off by {rec['by']}")
-    led = apply(pov, tenant_for, log)
+    led = apply(pov, tenant_for, log, found=(snaps, checks))
     return len(led.active())
 
 
@@ -327,7 +334,7 @@ def pending(pov):
             for i in items if i["action"] in ("create", "create_or_adopt") and not led.find(i["key"])]
 
 
-def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
+def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None, reuse_minutes=0):
     """Applies one product's part of the change list straight away, for a setting the SE just saved (SE sign-off POVs
     only): the change list is made and signed off in the SE's name, then only that product's items are applied.
     -> what was applied"""
@@ -338,7 +345,8 @@ def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
     from .core.guard import CachedReads
     shared = CachedReads(tenant_for(pov, "discovery"))   # one sign-in and one read of each list, for both steps
     reads = lambda p, which: shared if which == "discovery" else tenant_for(p, which)  # noqa: E731
-    items, notes, h, checks, snaps = _plan(pov, reads, log, only=set(only) if only else None)
+    items, notes, h, checks, snaps = _plan(pov, reads, log, only=set(only) if only else None,
+                                           reuse_minutes=reuse_minutes)
     bad = [c["label"] for c in checks if c["status"] == FAIL]
     if bad:
         raise KitError("Saved, but not applied: the checks found problems (" + "; ".join(bad[:3]) + "). Setup › Review & apply.")

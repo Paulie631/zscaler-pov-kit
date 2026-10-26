@@ -205,6 +205,21 @@ def start_job(kind, work, streams=False):
 
 
 # ---------------------------------------------------------------- quick start
+def _uc_read(p, text, fresh, log):
+    """The tenant reading Ask Claude sends: the last one when it's recent and nothing changed since; otherwise only
+    the products the request is about are read again (the rest from the last reading); everything when unsure."""
+    from . import usecases
+    only = None if fresh else usecases.products_for(text, p.products)
+    have = (p.read_json("discovery.json", {}) or {}).get("products") or {}
+    if only and not all(x in have for x in p.products if x not in only and products.get(x).ready):
+        only = None   # no earlier reading of the others to fall back on
+    log("info", "Reading the tenant (read-only)" + (
+        f": {', '.join(lifecycle.SHORT.get(x, x) for x in sorted(only))}, the rest from the last reading" if only
+        else ", every product at once"))
+    snaps, _ = lifecycle.discover(p, tf, log, only=only, reuse_minutes=0 if fresh else 15)
+    return snaps
+
+
 def quickstart(body):
     """Start a POV from three answers (customer, products, API client): the kit fills in the rest from the tenant,
     checks the tenant and makes the change list, all read-only. -> {id, job}. The wizard stays for changing anything."""
@@ -578,7 +593,8 @@ def api(method, path, body, q):
         p = current()
 
         def work_direct(log):
-            out = lifecycle.quick_apply(p, tf, None, "Setup", body.get("by"), log)
+            # Review & apply read the tenant moments ago: apply from that reading when it's under 2 minutes old
+            out = lifecycle.quick_apply(p, tf, None, "Setup", body.get("by"), log, reuse_minutes=2)
             try:
                 lifecycle.api_proofs(p, tf, auto=True, log=log)
             except KitError as e:
@@ -1144,8 +1160,7 @@ def api(method, path, body, q):
             raise KitError("Describe the use case first.")
 
         def work(log):
-            log("info", "Reading the tenant (read-only), every product at once")
-            snaps, _ = lifecycle.discover(p, tf, log, reuse_minutes=0 if body.get("fresh") else 15)
+            snaps = _uc_read(p, text, body.get("fresh"), log)
             log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]}")
             uc = usecases.propose(p, snaps, text, by=body.get("by") or "SE")
             log("ok", f"{uc['id']}: {len(uc['spec']['changes'])} changes the kit can build, "
@@ -1162,8 +1177,11 @@ def api(method, path, body, q):
             raise KitError("Say what to change.")
 
         def work(log):
-            log("info", "Reading the tenant (read-only), every product at once")
-            snaps, _ = lifecycle.discover(p, tf, log, reuse_minutes=0 if body.get("fresh") else 15)
+            try:
+                uc0 = usecases.get(p, uid) or {}
+            except KitError:
+                uc0 = {}
+            snaps = _uc_read(p, f"{uc0.get('prompt') or ''} {text}", body.get("fresh"), log)
             log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]} to rework {uid}")
             uc = usecases.refine(p, snaps, uid, text, by=body.get("by") or "SE")
             log("ok", f"{uid}: {len(uc['spec']['changes'])} changes the kit can build, "

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.103
+Faster: the kit reads the tenant less often and less each time.
+- **Cloud App Control action lookups are kept for a day** (per POV and tenant). They were about a third of every ZIA reading (one call per app per rule type) and don't change during a POV; the second reading of the day skips them all.
+- **Make it in the tenant reads the tenant once, not three times.** The confirm step reuses the preview's reading when it's minutes old and nothing changed (the change list must still match what you saw), and Apply builds from that same reading.
+- **Apply on Review & apply uses the reading it just showed** when it's under 2 minutes old, instead of reading everything again.
+- **Ask Claude reads only the products the request is about** (a ChatGPT question reads ZIA; a wiki over ZPA reads ZPA), taking the rest from the last reading. When it can't tell, or there's no earlier reading, it reads everything as before.
+- Within one reading, a list asked for twice is answered from memory, and only real calls show in the log.
+- The working bar shows as soon as a job starts and checks less often when nothing runs. Enter signs in from the secret field; Ctrl/⌘+Enter asks Claude.
+
 ## 0.9.102
 - **You can see what the kit is doing while it runs.** A small bar, bottom right, appears whenever one of the POV's jobs runs (Apply, the change list, reading the tenant, Ask Claude…): what it is, how long it's taken, its latest step, and Show the log for all of it.
 - **A busy POV waits instead of refusing.** "Make it in the tenant" and Ask Claude, started while another job runs, follow that job's progress in place, then carry on by themselves (was: "This POV's apply is still running").

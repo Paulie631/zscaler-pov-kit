@@ -385,7 +385,9 @@ async function api(path,body){
     let last=0;try{last=+sessionStorage.getItem("pov.reload")||0;sessionStorage.setItem("pov.reload",Date.now())}catch(e){}
     if(Date.now()-last>15000){location.reload();throw new Error("The console restarted (an update?): reloading the page…")}
     throw new Error("The console restarted: reload this page (Cmd+R or Ctrl+R).")}
-  if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j}
+  if(!r.ok)throw new Error(j.error||("HTTP "+r.status));
+  if(j&&j.job&&typeof busyPoll=="function")setTimeout(busyPoll,400);   // a job just started: show the working bar now
+  return j}
 function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div>`}
 // a read-only job shown live: each tenant read and check as it happens, folded away when done
@@ -508,7 +510,11 @@ async function busyPoll(){const bar=$("#busybar");if(!bar||document.hidden)retur
   bar.querySelector(".last").textContent=j.last||"Starting…";
   const lg=bar.querySelector(".log");lg.style.display=BUSY.open?"block":"none";
   if(BUSY.open){const r=await api(`/api/job?id=${j.id}&since=0`);lg.innerHTML=r.lines.slice(-60).map(l=>`<div class="${esc(l.level)}">${esc(l.t)}  ${esc(l.msg)}</div>`).join("");lg.scrollTop=lg.scrollHeight}}
-setInterval(busyPoll,1500);
+// every 1.5 s while a job runs, every 5 s when nothing does
+(function busyLoop(){busyPoll().finally(()=>setTimeout(busyLoop,BUSY.id?1500:5000))})();
+// Enter does the obvious thing: sign in from a secret field, ask from the use-case box (Ctrl/⌘+Enter)
+document.addEventListener("keydown",e=>{if(e.key!="Enter")return;const id=e.target&&e.target.id,go=q=>{const b=$(q);if(b&&!b.disabled){e.preventDefault();b.click()}};
+  if(id=="wsec"||id=="wcid")go("#wnext");else if(id=="qsec"||id=="qcid")go("#wquick");else if(id=="ucprompt"&&(e.metaKey||e.ctrlKey))go("#ucask")});
 document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("#busytog");if(!b)return;e.preventDefault();BUSY.open=!BUSY.open;b.textContent=BUSY.open?"Hide the log":"Show the log";busyPoll()});
 // a job refused because another of this POV's jobs is running: follow that one into `el`, then say so (true) so the
 // caller can start its own
@@ -1604,7 +1610,7 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $("#ucsavedirect")&&($("#ucsavedirect").onclick=async()=>{try{await api("/api/ai/key",{key:$("#ucdirect").value,direct:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
   $("#ucrmdirect")&&($("#ucrmdirect").onclick=async()=>{try{await api("/api/ai/key",{direct:true,remove:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
   $("#ucsavekey")&&($("#ucsavekey").onclick=async()=>{try{await api("/api/ai/key",{key:$("#uckey").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
-  const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").innerHTML=ready?'Reuses the tenant reading from the last 15 minutes when nothing was applied since; otherwise reads every product at once first. <label class="chk" style="margin-left:6px"><input type="checkbox" id="ucfresh"> Read the tenant again</label>':"Record the customer's agreement and a key first.";
+  const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").innerHTML=ready?'Reuses the tenant reading from the last 15 minutes when nothing was applied since; otherwise reads only the products your request is about (all of them when it can\'t tell). Ctrl/⌘+Enter asks. <label class="chk" style="margin-left:6px"><input type="checkbox" id="ucfresh"> Read the tenant again</label>':"Record the customer's agreement and a key first.";
   $("#ucex").innerHTML=UC_EX.map(x=>`<button class="ucx" style="font-size:12.5px">${esc(x)}</button>`).join("");
   $$(".ucx").forEach(b=>b.onclick=()=>{$("#ucprompt").value=b.textContent});
   $("#uclist").innerHTML=UC.usecases.length?UC.usecases.map(ucCard).join(""):'<div class="panel empty">No use cases yet.</div>';
