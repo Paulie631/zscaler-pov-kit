@@ -29,3 +29,8 @@ def test_check_returns_the_domains(pov, tenant, tenant_for, monkeypatch):
     tenant.org_domains = ["acme.com", "acme.io"]
     r = gui.api("POST", "/api/test-accounts", {"check": True}, {})[1]
     assert r["domains"][:2] == ["acme.com", "acme.io"] and r["domain"] == "acme.com"
+
+
+def test_role_spec_reads_org_information(pov):
+    from povkit import rolespec
+    assert "organization information" in rolespec.render(pov)

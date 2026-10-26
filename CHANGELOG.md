@@ -3,6 +3,7 @@
 ## 0.9.97
 - **Pilot users › Test accounts is easier to read.** The accounts show as a table (Account · Password · Status) with the full address, plain-text status and real buttons (Show, Generate/New, Type…). Fewer hints; the summary banner stays.
 - **The domain fills itself in from the tenant.** The kit reads the domains ZIA has for the organisation (orgInformation), ranked by how many users have each, and falls back to the users' email domains. One domain: it's filled in, marked *from tenant*, still editable. Several: a dropdown with the most used picked, plus Other…. ZIdentity accounts show their zslogin.net domain, read-only.
+- The role spec asks for view access to ZIA's organization information (company profile and its domains), which the domain fill reads. Without it the kit falls back to the users' email domains.
 
 ## 0.9.96
 - **Test account names nobody in the tenant has.** When you pick Test accounts, the kit looks in the tenant (read-only): if `zpov-pilot-1`… already belongs to another POV or SE, this POV's accounts get its own code, `zpov-b10c-pilot-1`…, and the step says why. Preflight checks again. Works for ZIA (Hosted DB) and ZIdentity accounts. A name you type is always kept (and flagged if it's taken), and once the accounts exist their name doesn't change until teardown.

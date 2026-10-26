@@ -305,6 +305,8 @@ class ZIA(Product):
         users = bool(pov and test_mode(pov.cfg) and not users_in_zidentity(pov.cfg)
                      and (pov.cfg.get("identity") or {}).get("pilot") != "create")
         return {"discovery": [("ZIA: all policy and administration areas", "view only"),
+                              ("ZIA: organization information (company profile and its domains, for the test accounts'"
+                               " domain)", "view only"),
                               ("Workflow Automation: DLP incidents", "view only")],
                 "apply": [("ZIA policy: URL filtering, SSL inspection, Cloud App Control, file type control, DLP web "
                            "rules, firewall and DNS control, rule labels, custom URL categories, network services",
@@ -314,7 +316,7 @@ class ZIA(Product):
                 + ([("ZIA user management (for the POV's Hosted DB test users only)", "full")] if users else [])
                 + ([("ZIA Nanolog Streaming Service (the POV's Cloud NSS web-log feed)", "full")]
                    if pov and (pov.cfg.get("logfeed") or {}).get("mode") in ("console", "siem") else [])
-                + [("ZIA administration, roles, authentication settings"
+                + [("ZIA administration, roles, authentication settings (changes)"
                     + ("" if users else ", user management"), "none")]}
 
     # ---------------------------------------------------------------- names
