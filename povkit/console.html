@@ -347,6 +347,33 @@ async function liveJob(path,box,label){
   const el=box.querySelector(".log"),r=await runJob((await api(path,{job:true})).job,el);
   const n=el.children.length,d=box.querySelector("details");d.open=false;
   d.querySelector("summary").textContent=`What the kit read and checked (${n} step${n==1?"":"s"}) ›`;return r}
+// ---- AI Guard: the POV policy, detector by detector (Policy tab and Test runner share it)
+let AGPOL=null;const AGACT=[["block","Block"],["monitor","Monitor"],["off","Off"]];
+const agLabel=d=>(AG&&AG.labels&&AG.labels[d])||(AG&&AG.panels&&AG.panels[d])||d;
+async function agPolLoad(){const els=$$(".agpol");if(!els.length)return;els.forEach(el=>el.innerHTML='<span class="muted">Reading the POV policy from AI Guard (read-only)…</span>');
+  try{AGPOL=await api("/api/aiguard/policy-state");agPolDraw()}catch(e){els.forEach(el=>el.innerHTML=note(e.message,"bad"))}}
+function agPolDraw(){if(!AGPOL)return;const never=new Set(AG.never_block||[]);
+  $$(".agpol").forEach(el=>{const w=el.dataset.where;
+    el.innerHTML=`<div class="cards">${[["prompt","Prompts"],["response","Replies"]].map(([side,t])=>`<div class="card"><h4>${t}</h4>${Object.entries(AGPOL.state[side]).map(([d,a])=>`<div class="row" style="justify-content:space-between;gap:8px;margin:3px 0"><span>${esc(agLabel(d))}</span><div class="seg agps" data-s="${side}" data-d="${esc(d)}">${AGACT.filter(([k])=>!(k=="block"&&never.has(d))).map(([k,l])=>`<button data-a="${k}" class="${a==k?"on":""}">${l}</button>`).join("")}</div></div>`).join("")}</div>`).join("")}</div>
+      <label class="chk" style="margin-top:6px"><input type="checkbox" class="agregpii" ${(((AG.custom||{}).pii_regulated_only)??true)?"checked":""}> For PII, block only regulated data (cards, SSNs, bank, passport, ITIN)</label>
+      <div class="row" style="margin-top:8px;gap:8px"><button class="primary agpolgo" disabled>Apply changes</button><span class="hint agpolmsg">Policy now: ${esc(AGPOL.profile=="custom"?"custom":(AG.profiles[AGPOL.profile]||"").split(":")[0])}. Changes take about 30 seconds to reach AI Guard.</span></div>`;
+    el.querySelectorAll(".agps button").forEach(b=>b.onclick=()=>{const g=b.parentElement;g.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));el.querySelector(".agpolgo").disabled=false});
+    el.querySelector(".agpolgo").onclick=async()=>{const st={prompt:{},response:{}};el.querySelectorAll(".agps").forEach(g=>{st[g.dataset.s][g.dataset.d]=g.querySelector("button.on").dataset.a});
+      const prof={prompt:Object.keys(st.prompt).filter(d=>st.prompt[d]=="block"),response:Object.keys(st.response).filter(d=>st.response[d]=="block"),
+        off:{prompt:Object.keys(st.prompt).filter(d=>st.prompt[d]=="off"),response:Object.keys(st.response).filter(d=>st.response[d]=="off")},pii_regulated_only:el.querySelector(".agregpii").checked};
+      const m=el.querySelector(".agpolmsg"),go=el.querySelector(".agpolgo");go.disabled=true;m.textContent="Applying to the POV policy in AI Guard…";
+      try{const r=await api("/api/aiguard-policy",{profile:prof});AG.custom=prof;AG.profile="custom";$$("#agprof button,#agprof2 button").forEach(x=>x.classList.toggle("on",false));
+        m.textContent=r.message+(w=="runner"?" Run the test again once it has applied.":"");AGPOL.state=st;AGPOL.profile="custom"}catch(e){m.textContent=e.message;go.disabled=false}}})}
+// on an opened result: the detectors it triggered, each with its action, changed straight away
+function agResSwitch(r){const sides=[[r.direction=="OUT"?"response":"prompt",r.detectors||[]],["response",r.reply_detectors||[]]].filter(([,ds])=>ds.length);
+  if(!sides.length)return "";
+  return `<div class="gate" style="margin:8px 0"><b>Change what the policy does with these detectors</b><div class="hint">Changes the POV policy only, straight away; run the test again after about 30 seconds.</div>
+    ${sides.map(([side,ds])=>ds.map(d=>{const a=AGPOL&&AGPOL.state[side]?AGPOL.state[side][d]:null;return `<div class="row" style="gap:8px;margin:4px 0"><span style="min-width:220px">${side=="prompt"?"Prompt":"Reply"}: ${esc(agLabel(d))}</span><div class="seg agrs" data-s="${side}" data-d="${esc(d)}">${AGACT.filter(([k])=>!(k=="block"&&(AG.never_block||[]).includes(d))).map(([k,l])=>`<button data-a="${k}" class="${a==k?"on":""}">${l}</button>`).join("")}</div></div>`}).join("")).join("")}
+    <div class="row" style="gap:8px;margin-top:6px"><button class="agrsrun">Run this test again</button><span class="hint agrsmsg"></span></div></div>`}
+function agResBind(el,r,rerun){el.querySelectorAll(".agrs button").forEach(b=>b.onclick=async e=>{e.stopPropagation();const g=b.parentElement,m=el.querySelector(".agrsmsg");m.textContent="Changing the POV policy…";
+    try{const x=await api("/api/aiguard/detector",{side:g.dataset.s,detector:g.dataset.d,action:b.dataset.a});g.querySelectorAll("button").forEach(y=>y.classList.toggle("on",y===b));
+      if(AGPOL&&AGPOL.state[g.dataset.s])AGPOL.state[g.dataset.s][g.dataset.d]=b.dataset.a;AG.custom=x.custom;AG.profile="custom";agPolDraw();m.textContent=x.message+" Run it again in about 30 seconds."}catch(err){m.textContent=err.message}});
+  const rb=el.querySelector(".agrsrun");rb&&(rb.onclick=e=>{e.stopPropagation();rerun(r)})}
 async function runJob(id,el){let since=0;el.innerHTML="";
   for(;;){const j=await api(`/api/job?id=${id}&since=${since}`);
     for(const l of j.lines){const d=document.createElement("div");d.className=l.level;d.textContent=`${l.t}  ${l.msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight}
@@ -1111,6 +1138,9 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
           <div class="row" style="margin-top:10px;gap:10px"><div class="seg" id="aglivedir"><button data-d="IN" class="on">Prompt</button><button data-d="OUT">Model reply</button></div><button class="primary" id="aglivego" ${AG.keys.detection?"":"disabled"}>Scan</button><button id="aglivemodel" ${AG.keys.proxy?"":"disabled"}>Send to the model</button></div>
           <div class="hint">Scans are stored in the customer's AI Guard logs. Don't paste real customer data unless the customer has agreed.</div><div id="aglivres"></div></div>
       </div>
+      <div class="panel"><details id="agpoldet"><summary style="cursor:pointer"><h2 style="display:inline">Policy</h2> <span class="muted" id="agpolsum" style="font-size:13px">: block, monitor or turn off each detector, then run again</span></summary>
+        <div class="seg" id="agprof2" style="margin-top:10px">${Object.entries(AG.profiles).map(([k,v])=>`<button data-p="${k}" class="${AG.profile==k?"on":""}" title="${esc(v)}">${esc(v.split(":")[0])}</button>`).join("")}</div>
+        <div class="agpol" data-where="runner" style="margin-top:10px"></div><div id="agpmsg2" class="hint"></div></details></div>
       <div class="panel"><h2>The POV's criteria <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">: what the runner has proved (it updates Success criteria)</span></h2><div id="agev"></div></div>
       <div class="panel"><h2>Dashboard coverage <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">: AI Guard panels these results have fed</span></h2><div class="cov" id="agcov"></div></div>
       <div class="panel"><div class="row" style="justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px"><h2 style="margin:0">Results</h2>
@@ -1123,9 +1153,7 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
 
   <div class="agview" data-v="policy"><div class="panel"><h2>Policy</h2><p class="muted" style="margin-top:0">What the POV's own AI Guard policy blocks. Only the POV policy changes; the customer's apps and policies are untouched. Takes about 30 seconds to apply.</p>
     <div class="seg" id="agprof">${Object.entries(AG.profiles).map(([k,v])=>`<button data-p="${k}" class="${AG.profile==k?"on":""}" title="${esc(v)}">${esc(v.split(":")[0])}</button>`).join("")}<button data-p="custom" class="${AG.profile=="custom"?"on":""}">Custom…</button></div>
-    <div id="agcustom" style="display:none;margin-top:10px"><div class="cards">${[["prompt","inputDetectorPolicies","Prompts"],["response","outputDetectorPolicies","Replies"]].map(([k,side,t])=>`<div class="card"><h4>${t}: block</h4>${det[side].filter(d=>!never.has(d)).map(d=>`<label class="chk" style="display:block;margin:2px 0"><input type="checkbox" class="agc" data-s="${k}" value="${esc(d)}"> ${esc(AG.panels[d]||d)}</label>`).join("")}</div>`).join("")}</div>
-      <label class="chk"><input type="checkbox" id="agregpii" checked> For PII, block only regulated data (cards, SSNs, bank, passport, ITIN)</label>
-      <div class="row" style="margin-top:8px"><button class="primary" id="agcustomgo">Apply the custom policy</button></div></div>
+    <div class="agpol" data-where="tab" style="margin-top:12px"></div>
     <div id="agpmsg" class="hint"></div></div></div>
 
   <div class="agview" data-v="setup">
@@ -1194,6 +1222,10 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
     let jid;try{jid=(await api("/api/aiguard/run",{ids,mode:AGR.mode,tags:AGR.mode=="proxy"&&AGR.tags,users,rounds:AGR.rounds,providers:$$("#agprovs input").length?$$("#agprovs input").filter(i=>i.checked).map(i=>i.value):null})).job}
     catch(e){$("#agrunmsg").innerHTML=note(e.message,"bad");$("#agrun").disabled=false;$("#agstop").disabled=true;return}
     AGR.job=jid;attach(jid,0)};
+  async function rerun(r){if(AGR.job&&AGR.polling){$("#agrunmsg").innerHTML=note("A run is still going: wait for it, or Stop it.");return}
+    const body=r.id=="live"?{text:r.text,direction:r.direction}:{ids:[r.id]};
+    try{const jid=(await api("/api/aiguard/run",Object.assign(body,{mode:r.mode,tags:r.mode=="proxy",users:[r.user],rounds:1,providers:r.provider?[r.provider]:null}))).job;
+      $("#agrunmsg").innerHTML='<div class="notice">Running it again with the policy as it is now…</div>';AGR.job=jid;attach(jid,0)}catch(e){$("#agrunmsg").innerHTML=note(e.message,"bad")}}
   // follows a run until it ends; a redrawn tab (or a reloaded page) attaches to the run that's still going
   async function attach(jid,got){AGR.polling=jid;
     try{      let first=!got;
@@ -1215,11 +1247,13 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   $("#agstop").onclick=()=>{if(AGR.job){api("/api/job/stop",{id:AGR.job});$("#agstop").disabled=true;$("#agstop").textContent="Stopping…"}};
 
   // ---- results, coverage, evidence
-  function chips(r){return (r.detectors||[]).map(d=>`<span class="chip">${esc(AG.panels[d]||d)}</span>`).join("")+(!AGhideMissed?(r.missed||[]).map(d=>`<span class="chip miss" title="expected but not triggered">${esc(d)}?</span>`).join(""):"")}
+  function chips(r){return (r.detectors||[]).map(d=>`<span class="chip">${esc(agLabel(d))}</span>`).join("")+(!AGhideMissed?(r.missed||[]).map(d=>`<span class="chip miss" title="expected but not triggered">${esc(d)}?</span>`).join(""):"")}
   function drawRows(){const tb=$("#agrows");if(!tb)return;
     tb.innerHTML=AGR.results.length?AGR.results.map((r,i)=>`<tr class="r" data-i="${i}"><td class="muted">${esc((r.at||"").slice(11,19))}</td><td>${r.criterion?`<span class="chip">${esc(r.criterion)}</span> `:""}${esc(r.name)}<div class="muted" style="font-size:12px">${esc(r.category||"")}</div></td><td><span class="dir">${esc(r.direction)}</span></td><td>${esc((r.user||"").split("@")[0])}</td><td><span class="badge ${r.action=="BLOCK"?"b-fail":r.status=="error"?"b-warn":"b-ok"}">${esc(r.status=="error"?"ERROR":r.action||"")}</span>${r.mode=="proxy"?` <span class="muted" style="font-size:11px">${esc(r.provider||"proxy")}</span>`:""}</td><td>${r.status=="error"?`<span class="muted">${esc(String(r.error).slice(0,100))}</span>`:chips(r)||'<span class="muted">none</span>'}${r.mode=="proxy"&&r.reply?`<div class="muted" style="font-size:12px;margin-top:3px">${r.action=="BLOCK"?"⛔ ":"↩ "}${esc(r.reply.slice(0,110))}</div>`:""}</td><td class="muted">${r.latency_ms??""}</td></tr>`).reverse().join(""):'<tr><td colspan="7" class="empty">No results yet.</td></tr>';
     $$("#agrows tr.r").forEach(tr=>tr.onclick=()=>{const nx=tr.nextElementSibling;if(nx&&nx.classList.contains("detail")){nx.remove();return}const r=AGR.results[+tr.dataset.i];const d=document.createElement("tr");d.className="detail";
-      d.innerHTML=`<td colspan="7"><b>${r.direction=="OUT"?"Model reply scanned":"Prompt"}</b><pre class="log" style="white-space:pre-wrap">${esc(r.text)}</pre>${r.reply?`<b>${r.action=="BLOCK"?"AI Guard's response":"Model reply"}</b><pre class="log" style="white-space:pre-wrap">${esc(r.reply)}</pre>`:""}${r.reply_detectors&&r.reply_detectors.length?`<div>Reply detectors: ${r.reply_detectors.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</div>`:""}<div class="muted" style="font-size:12px;margin-top:6px">Expected: ${esc((r.expect||[]).join(", ")||"nothing harmful")} · user ${esc(r.user||"")} · ${esc(r.mode)}${r.policy?" · policy "+esc(r.policy):""}${r.pass===true?" · as expected":r.pass===false?" · not as expected":""}</div></td>`;tr.after(d)});
+      d.innerHTML=`<td colspan="7"><b>${r.direction=="OUT"?"Model reply scanned":"Prompt"}</b><pre class="log" style="white-space:pre-wrap">${esc(r.text)}</pre>${r.reply?`<b>${r.action=="BLOCK"?"AI Guard's response":"Model reply"}</b><pre class="log" style="white-space:pre-wrap">${esc(r.reply)}</pre>`:""}${r.reply_detectors&&r.reply_detectors.length?`<div>Reply detectors: ${r.reply_detectors.map(x=>`<span class="chip">${esc(agLabel(x))}</span>`).join("")}</div>`:""}<div class="muted" style="font-size:12px;margin-top:6px">Expected: ${esc((r.expect||[]).join(", ")||"nothing harmful")} · user ${esc(r.user||"")} · ${esc(r.mode)}${r.policy?" · policy "+esc(r.policy):""}${r.pass===true?" · as expected":r.pass===false?" · not as expected":""}</div>${r.status=="ok"?agResSwitch(r):""}</td>`;tr.after(d);
+      const draw=()=>{const box=d.querySelector(".gate");if(box&&AGPOL){box.outerHTML=agResSwitch(r);agResBind(d,r,rerun)}};
+      if(r.status=="ok"){agResBind(d,r,rerun);if(!AGPOL)api("/api/aiguard/policy-state").then(x=>{AGPOL=x;draw()}).catch(()=>{})}});
     const ok=AGR.results.filter(r=>r.status=="ok");$("#ags-done").textContent=AGR.results.length;$("#ags-hits").textContent=ok.filter(r=>(r.detectors||[]).length).length;
     $("#ags-block").textContent=ok.filter(r=>r.action=="BLOCK").length;$("#ags-miss").textContent=AGhideMissed?"–":ok.filter(r=>(r.missed||[]).length).length;$("#ags-err").textContent=AGR.results.length-ok.length;
     const seen=new Set(ok.flatMap(r=>[...(r.detectors||[]),...(r.reply_detectors||[])])),panels={};Object.entries(AG.panels).forEach(([d,p])=>{panels[p]=panels[p]||seen.has(d)});
@@ -1242,11 +1276,12 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   $("#aglivego").onclick=()=>live("detect");$("#aglivemodel").onclick=()=>live("proxy");
 
   // ---- policy
-  $$("#agprof button").forEach(b=>b.onclick=async()=>{if(b.dataset.p=="custom"){$("#agcustom").style.display="";return}
-    $("#agpmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#agprof button").forEach(x=>x.classList.toggle("on",x===b));$("#agpmsg").textContent=r.message}catch(e){$("#agpmsg").textContent=e.message}});
-  $$(".agc").forEach(x=>x.checked=(custom[x.dataset.s]||[]).includes(x.value));
-  $("#agcustomgo").onclick=async()=>{const prof={prompt:$$(".agc").filter(x=>x.checked&&x.dataset.s=="prompt").map(x=>x.value),response:$$(".agc").filter(x=>x.checked&&x.dataset.s=="response").map(x=>x.value),pii_regulated_only:$("#agregpii").checked};
-    $("#agpmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:prof});$$("#agprof button").forEach(x=>x.classList.toggle("on",x.dataset.p=="custom"));$("#agpmsg").textContent=r.message}catch(e){$("#agpmsg").textContent=e.message}};
+  $$("#agprof button").forEach(b=>b.onclick=async()=>{if(b.dataset.p=="custom"){$(".agpol[data-where=tab]").scrollIntoView({behavior:"smooth"});return}
+    $("#agpmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#agprof button,#agprof2 button").forEach(x=>x.classList.toggle("on",x.dataset.p==b.dataset.p));$("#agpmsg").textContent=r.message;agPolLoad()}catch(e){$("#agpmsg").textContent=e.message}});
+  $$("#agprof2 button").forEach(b=>b.onclick=async()=>{$("#agpmsg2").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});
+    $$("#agprof button,#agprof2 button").forEach(x=>x.classList.toggle("on",x.dataset.p==b.dataset.p));$("#agpmsg2").textContent=r.message+" Run the test again once it has applied.";agPolLoad()}catch(e){$("#agpmsg2").textContent=e.message}});
+  $("#agpoldet").ontoggle=()=>{if($("#agpoldet").open)agPolLoad()};
+  agPolLoad();
   // ---- setup
   $("#agcsv").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const r=await api("/api/aiguard/pack",{name:$("#agpackname").value||f.name.replace(/\.csv$/i,""),csv:await f.text()});$("#agpackmsg").innerHTML=note(`${r.count} prompts imported: criterion ${r.criterion}. It's in Success criteria, and under This POV's criteria in the test runner.`,"good");aiguardTab()}catch(err){$("#agpackmsg").innerHTML=note(err.message,"bad")}e.target.value=""};
   $$(".card[data-pt] .agpu").forEach(sel=>sel.onchange=()=>{sel.closest(".card").querySelector(".agpk").style.display=sel.value=="se"?"":"none"});
@@ -1376,7 +1411,7 @@ async function usecases(){if(!S.current){$("#ucsetup").innerHTML=note("Start a P
   $("#ucsavedirect")&&($("#ucsavedirect").onclick=async()=>{try{await api("/api/ai/key",{key:$("#ucdirect").value,direct:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
   $("#ucrmdirect")&&($("#ucrmdirect").onclick=async()=>{try{await api("/api/ai/key",{direct:true,remove:true});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
   $("#ucsavekey")&&($("#ucsavekey").onclick=async()=>{try{await api("/api/ai/key",{key:$("#uckey").value});usecases()}catch(e){$("#ucsetmsg").innerHTML=note(e.message,"bad")}});
-  const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").textContent=ready?"Takes about a minute: the kit reads the tenant first.":"Record the customer's agreement and a key first.";
+  const ready=UC.consent&&UC.key;$("#ucask").disabled=!ready;$("#uchint").innerHTML=ready?'Reuses the tenant reading from the last 15 minutes when nothing was applied since; otherwise reads every product at once first. <label class="chk" style="margin-left:6px"><input type="checkbox" id="ucfresh"> Read the tenant again</label>':"Record the customer's agreement and a key first.";
   $("#ucex").innerHTML=UC_EX.map(x=>`<button class="ucx" style="font-size:12.5px">${esc(x)}</button>`).join("");
   $$(".ucx").forEach(b=>b.onclick=()=>{$("#ucprompt").value=b.textContent});
   $("#uclist").innerHTML=UC.usecases.length?UC.usecases.map(ucCard).join(""):'<div class="panel empty">No use cases yet.</div>';
@@ -1432,7 +1467,7 @@ async function ucMake(id,el,auto){el.innerHTML='<div class="notice" style="margi
     try{const n=await runJob((await api("/api/usecase/make",{id,hash:P.hash,by:nm})).job,q(".mkmsg .log"));q(".mkmsg").insertAdjacentHTML("beforeend",note(`Done: ${id} is in the tenant (ZIA changes activated). Run its tests from Device tests to prove it.`,"good"));load()}
     catch(e){q(".mkmsg").insertAdjacentHTML("beforeend",note(e.message,"bad"));q(".mkgo").disabled=false}})}
 $("#ucask").onclick=async()=>{const b=$("#ucask");b.disabled=true;$("#uclog").style.display="block";$("#ucmsg").innerHTML="";
-  try{await runJob((await api("/api/usecase/propose",{prompt:$("#ucprompt").value})).job,$("#uclog"));$("#ucprompt").value="";usecases()}
+  try{await runJob((await api("/api/usecase/propose",{prompt:$("#ucprompt").value,fresh:!!($("#ucfresh")&&$("#ucfresh").checked)})).job,$("#uclog"));$("#ucprompt").value="";usecases()}
   catch(e){$("#ucmsg").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
 
 /* ---------------- status ---------------- */

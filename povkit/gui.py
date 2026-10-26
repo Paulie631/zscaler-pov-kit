@@ -263,6 +263,10 @@ def api(method, path, body, q):
             return 200, {"plan": cl.plan(), "approval": cl.approval()}
         if path == "/api/update":
             return 200, updater.status(force=q.get("force") == "1")
+        if path == "/api/aiguard/policy-state":   # the POV policy as it is in AI Guard now (read-only)
+            from .core.guard import ReadOnlyTenant
+            p = current()
+            return 200, products.get("aiguard").policy_state(ReadOnlyTenant(tf(p, "discovery")), lifecycle.ledger(p))
         if path == "/api/competitive":   # SE only: drafts of competitor notes, never sent anywhere
             from . import competitive
             return 200, competitive.se_view(current())
@@ -333,7 +337,7 @@ def api(method, path, body, q):
             PP = px.get("providers") or {}   # noqa: N806
             rs = aiguard_runner.runs(p, 200)
             return 200, {"groups": lib["groups"], "presets": lib["presets"], "users": lib["users"],
-                         "tests": [slim(t) for t in lib["tests"]], "panels": lib["panels"],
+                         "tests": [slim(t) for t in lib["tests"]], "panels": lib["panels"], "labels": lib["labels"],
                          "packs": {k: {"name": v["name"], "description": v.get("description", ""), "customer": v["customer"],
                                        "criterion": v.get("criterion"), "tests": [slim(t) for t in v["tests"]]}
                                    for k, v in lib["packs"].items()},
@@ -761,8 +765,8 @@ def api(method, path, body, q):
         p.write_json(criteria_import.FILE, data)
 
         def work(log):
-            log("info", "Reading the tenant (read-only) for a fresh snapshot")
-            snaps, _ = lifecycle.discover(p, tf)
+            log("info", "Reading the tenant (read-only), every product at once")
+            snaps, _ = lifecycle.discover(p, tf, log, reuse_minutes=0 if body.get("fresh") else 15)
             res = criteria_import.build(p, snaps, rows, log, by=body.get("by") or "SE")
             log("ok", "Done. Review the change list, then the customer approves it.")
             return res
@@ -972,6 +976,17 @@ def api(method, path, body, q):
                                                    body.get("password") or "")
         p.log("identity", f"new password for POV test user {body.get('n')} (kept in the keychain)")
         return 200, {"value": pw}
+    if path == "/api/aiguard/detector":   # one detector to block, monitor or off, from the Test runner
+        from .core.guard import LedgerTenant
+        p = current()
+        led = lifecycle.ledger(p)
+        out = []
+        prof = products.get("aiguard").set_detector(LedgerTenant(tf(p, "apply"), led, []), p, led, body.get("side"),
+                                                    body.get("detector"), body.get("action"), lambda lv, m: out.append(m))
+        p.cfg.setdefault("aiguard", {}).update(profile="custom", custom=prof)
+        p.save()
+        p.log("aiguard", f"policy: {body.get('side')} {body.get('detector')} → {body.get('action')}")
+        return 200, {"message": " ".join(out), "custom": prof}
     if path == "/api/aiguard-policy":
         from .core.guard import LedgerTenant
         p = current()
@@ -1047,8 +1062,8 @@ def api(method, path, body, q):
             raise KitError("Describe the use case first.")
 
         def work(log):
-            log("info", "Reading the tenant (read-only) for a fresh snapshot")
-            snaps, _ = lifecycle.discover(p, tf)
+            log("info", "Reading the tenant (read-only), every product at once")
+            snaps, _ = lifecycle.discover(p, tf, log, reuse_minutes=0 if body.get("fresh") else 15)
             log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]}")
             uc = usecases.propose(p, snaps, text, by=body.get("by") or "SE")
             log("ok", f"{uc['id']}: {len(uc['spec']['changes'])} changes the kit can build, "
@@ -1065,8 +1080,8 @@ def api(method, path, body, q):
             raise KitError("Say what to change.")
 
         def work(log):
-            log("info", "Reading the tenant (read-only) for a fresh snapshot")
-            snaps, _ = lifecycle.discover(p, tf)
+            log("info", "Reading the tenant (read-only), every product at once")
+            snaps, _ = lifecycle.discover(p, tf, log, reuse_minutes=0 if body.get("fresh") else 15)
             log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]} to rework {uid}")
             uc = usecases.refine(p, snaps, uid, text, by=body.get("by") or "SE")
             log("ok", f"{uid}: {len(uc['spec']['changes'])} changes the kit can build, "

@@ -31,6 +31,10 @@ PANELS = {"pii": "Sensitive data (PII)", "pii_deepscan": "Sensitive data (PII)",
           "competition": "Competition", "brand_and_reputation_risk": "Brand risk", "finance_advice": "Finance advice",
           "legal_advice": "Legal advice", "gibberish": "Gibberish", "invisible_text": "Invisible text",
           "malicious_url": "Malicious URL", "url_reachability": "URL reachability", "refusal": "Refusal"}
+# names for picking a detector (the policy, the results): AI Guard's dashboard files the three PII detectors under one
+# panel, but they're different detectors
+LABELS = dict(PANELS, pii="PII (cards, IDs, contact details)", pii_deepscan="PII deep scan",
+              personal_data="Personal data")
 
 
 # ---------------------------------------------------------------- the library
@@ -44,7 +48,7 @@ def library(pov):
     for k, v in customer_packs(pov).items():
         packs[k] = dict(v, customer=True, tests=[dict(t, customer=True) for t in v.get("tests") or []])
     return {"groups": LIB["groups"], "presets": LIB["presets"], "users": LIB["users"], "tests": LIB["tests"],
-            "packs": packs, "stories": LIB["stories"], "panels": PANELS}
+            "packs": packs, "stories": LIB["stories"], "panels": PANELS, "labels": LABELS}
 
 
 # ---------------------------------------------------------------- the POV's own criteria, as runner groups

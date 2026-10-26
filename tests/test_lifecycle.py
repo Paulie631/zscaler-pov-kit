@@ -258,3 +258,25 @@ def test_plan_says_what_it_is_doing(pov, tenant_for):
     assert "ZIA url filtering: list rules" in text            # each read, as it happens
     assert "objects to make" in text and text.rstrip().endswith("Nothing has changed in the tenant.")
     assert lifecycle.describe_call("zpa.application_segment", "list_segments") == "ZPA application segment: list segments"
+
+
+def test_discovery_reads_products_at_once_and_reuses_a_recent_reading(pov_all, tenant, tenant_for):
+    import threading
+    seen = set()
+    orig = tenant.call
+    tenant.call = lambda *a, **k: (seen.add(threading.current_thread().name), orig(*a, **k))[1]
+    lines = []
+    snaps, checks = lifecycle.discover(pov_all, tenant_for, lambda lvl, m: lines.append(m))
+    assert len(seen) > 1                                         # more than one thread did the reading
+    assert any(m.startswith("Private Access (ZPA): ") and m.endswith(" s)") for m in lines)   # with its time
+    again = lifecycle.discover(pov_all, tenant_for, lambda lvl, m: lines.append(m), reuse_minutes=15)
+    assert again[0].keys() == snaps.keys() and "Using the tenant reading from" in lines[-1]
+    import os
+    import time
+    later = time.time() + 5
+    os.utime(pov_all.path("discovery.json"), (later, later))
+    pov_all.path("ledger.json").write_text('{"entries": []}')    # something applied since: read again
+    os.utime(pov_all.path("ledger.json"), (later + 3600, later + 3600))
+    lines.clear()
+    lifecycle.discover(pov_all, tenant_for, lambda lvl, m: lines.append(m), reuse_minutes=15)
+    assert not any("Using the tenant reading" in m for m in lines)

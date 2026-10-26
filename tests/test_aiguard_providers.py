@@ -160,3 +160,31 @@ def test_two_providers_of_one_type_both_offered(pov_all, tenant, tenant_for):
     px = snaps["aiguard"]["proxy"]["providers"]["openai"]
     assert [c["name"] for c in px["creds"]] == ["OpenAI API Key", "DeepSeek API Key"]
     assert px["provider"]["id"] == 801 and px["cred"]["id"] == 802
+
+
+def test_detector_actions_block_monitor_off(pov_all, tenant, tenant_for):
+    from povkit import lifecycle, products
+    from povkit.core.changelist import ChangeList
+    from povkit.core.guard import LedgerTenant
+    from povkit.products import aiguard as agm
+    lifecycle.plan(pov_all, tenant_for)
+    ChangeList(pov_all.dir).approve("Jane")
+    lifecycle.apply(pov_all, tenant_for, lambda *a: None)
+    ag, led = products.get("aiguard"), lifecycle.ledger(pov_all)
+    t = LedgerTenant(tenant, led, [])
+    st = ag.policy_state(t, led)
+    assert st["profile"] == "monitor" and set(st["state"]["prompt"].values()) == {"monitor"}
+    ag.set_detector(t, pov_all, led, "prompt", "prompt_injection", "block", lambda *a: None)
+    ag.set_detector(t, pov_all, led, "prompt", "toxicity", "off", lambda *a: None)
+    st = ag.policy_state(t, led)["state"]
+    assert st["prompt"]["prompt_injection"] == "block" and st["prompt"]["toxicity"] == "off"
+    assert st["response"]["toxicity"] == "monitor"                     # the other side is untouched
+    ag.set_detector(t, pov_all, led, "prompt", "toxicity", "monitor", lambda *a: None)
+    assert ag.policy_state(t, led)["state"]["prompt"]["toxicity"] == "monitor"   # back on
+    ag.set_profile(t, pov_all, led, "attacks", lambda *a: None)       # a named profile turns everything back on
+    assert "off" not in ag.policy_state(t, led)["state"]["prompt"].values()
+    import pytest
+    from povkit.core import KitError
+    with pytest.raises(KitError):
+        ag.set_detector(t, pov_all, led, "prompt", next(iter(agm.NEVER_BLOCK & set(st["prompt"])), "language"), "block",
+                        lambda *a: None)

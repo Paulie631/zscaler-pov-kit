@@ -128,18 +128,45 @@ def profile_blocks(profile):
 
 def apply_profile(body, profile):
     """profile: a name in PROFILES, or a custom one: {"prompt": [detectors], "response": [detectors],
-    "pii_regulated_only": True} (Block for those, Detect for the rest)."""
+    "pii_regulated_only": True, "off": {"prompt": [...], "response": [...]}} (Block for those, Detect for the rest,
+    and the "off" ones don't run at all). A named profile turns every detector of the POV's template back on."""
     if isinstance(profile, dict):
         blocks = {side: {d: (REGULATED_PII if d == "pii" and profile.get("pii_regulated_only", True) else None)
                          for d in profile.get(SIDE_NAME[side]) or [] if d not in NEVER_BLOCK} for side in SIDES}
+        off = {side: set((profile.get("off") or {}).get(SIDE_NAME[side]) or []) for side in SIDES}
     else:
         blocks = profile_blocks(profile)
+        off = {side: set() for side in SIDES}
+    ours = template_detectors()   # only the template's detectors are switched on or off: never one the POV didn't enable
     for side in SIDES:
         for d in body.get(side, []):
-            if d.get("enabled") and d.get("detector") not in NEVER_BLOCK:
-                name = d.get("detector")
+            name = d.get("detector")
+            if name in ours[side]:
+                d["enabled"] = name not in off[side]
+            if d.get("enabled") and name not in NEVER_BLOCK:
                 _set_action(d, "BLOCK", blocks[side][name]) if name in blocks[side] else _set_action(d, "DETECT")
     return body
+
+
+def detector_state(body):
+    """{"prompt": {detector: "block"|"monitor"|"off"}, "response": {...}} for the POV template's detectors."""
+    ours, blocked = template_detectors(), blocked_map(body)
+    out = {}
+    for side in SIDES:
+        live = {d.get("detector"): d for d in body.get(side, [])}
+        out[SIDE_NAME[side]] = {
+            name: ("off" if not (live.get(name) or {}).get("enabled") else
+                   "block" if name in blocked[SIDE_NAME[side]] else "monitor")
+            for name in ours[side]}
+    return out
+
+
+def profile_from_state(state, pii_regulated_only=True):
+    """The custom profile that gives this detector state."""
+    return {"prompt": [d for d, a in state["prompt"].items() if a == "block"],
+            "response": [d for d, a in state["response"].items() if a == "block"],
+            "off": {k: [d for d, a in state[k].items() if a == "off"] for k in ("prompt", "response")},
+            "pii_regulated_only": pii_regulated_only}
 
 
 def blocked_map(body):
@@ -462,6 +489,27 @@ class AIGuard(Product):
                 return None
             raise
         return o if isinstance(o, dict) and o else None
+
+    def policy_state(self, t, ledger):
+        e = ledger.find("aiguard.policy")
+        live = self.live_object(t, e) if e else None
+        if not live:
+            raise KitError("The POV has no AI Guard policy in the tenant yet: apply first.")
+        return {"state": detector_state(live), "profile": current_profile(live)}
+
+    def set_detector(self, t, pov, ledger, side, detector, action, log):
+        """One detector on one side to block, monitor or off; the rest of the policy as it is in the tenant now."""
+        if side not in ("prompt", "response") or action not in ("block", "monitor", "off"):
+            raise KitError("Side is prompt or response; action is block, monitor or off.")
+        if action == "block" and detector in NEVER_BLOCK:
+            raise KitError("That detector only classifies; it can be on (monitor) or off, not block.")
+        st = self.policy_state(t, ledger)["state"]
+        if detector not in st[side]:
+            raise KitError(f"'{detector}' isn't one of the POV policy's detectors.")
+        st[side][detector] = action
+        prof = profile_from_state(st, ((pov.cfg.get("aiguard") or {}).get("custom") or {}).get("pii_regulated_only", True))
+        self.set_profile(t, pov, ledger, prof, log)
+        return prof
 
     def set_profile(self, t, pov, ledger, profile, log):
         if not isinstance(profile, dict) and profile not in PROFILES:

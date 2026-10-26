@@ -83,6 +83,14 @@ class Narrated:
         return getattr(self._t, name)
 
 
+def _epoch(at):
+    try:
+        import calendar
+        return calendar.timegm(time.strptime(str(at)[:19], "%Y-%m-%dT%H:%M:%S"))
+    except (ValueError, TypeError):
+        return 0
+
+
 def _tally(c):
     bad = sum(1 for x in c if x["status"] == FAIL)
     warn = sum(1 for x in c if x["status"] == WARN)
@@ -90,32 +98,55 @@ def _tally(c):
             f"{len(c)} check{'' if len(c) == 1 else 's'}" + (f", {bad} to fix" if bad else "") + (f", {warn} to look at" if warn else ""))
 
 
-def discover(pov, tenant_for, log=None, only=None):
+def discover(pov, tenant_for, log=None, only=None, reuse_minutes=0):
     """only: re-read just these products, and plan the rest from the last reading (a quick apply of one product's
-    setting doesn't need the whole tenant read again). The others' checks aren't repeated."""
-    raw = tenant_for(pov, "discovery")
-    t = ReadOnlyTenant(Narrated(raw, log) if log else raw)
+    setting doesn't need the whole tenant read again). The others' checks aren't repeated.
+    reuse_minutes: use the last reading as it is when it's this recent and nothing was applied since (Claude's
+    snapshot for a use case); 0 always reads.
+    Products are read at the same time, each with its own signed-in client: their APIs are separate, so this is as
+    fast as the slowest product rather than all of them added up."""
     say = log or (lambda *a: None)
-    snaps, checks = {}, []
-    last = pov.read_json("discovery.json", {}) or {} if only else {}
+    last = pov.read_json("discovery.json", {}) or {} if (only or reuse_minutes) else {}
     cached = last.get("products") or {}
     when = str(last.get("at") or "")[11:16]
+    if reuse_minutes and cached and not only:
+        age = time.time() - _epoch(last.get("at"))
+        led_at = pov.path("ledger.json").stat().st_mtime if pov.path("ledger.json").exists() else 0
+        if age <= reuse_minutes * 60 and led_at <= _epoch(last.get("at")):
+            say("ok", f"Using the tenant reading from {when} UTC ({max(1, int(age // 60))} min ago; nothing applied since)")
+            return dict(cached), []
+    snaps, checks, todo = {}, [], []
     for p in products.selected(pov.products):
         if not p.ready:
             checks.append(check(f"{p.name}-later", p.title, INFO, getattr(p, "later_note", "")
                                 or f"arrives in {p.phase}; its criteria are in the catalog"))
-            continue
-        if only and p.name not in only and p.name in cached:
+        elif only and p.name not in only and p.name in cached:
             snaps[p.name] = cached[p.name]
             say("info", f"{p.title}: not changing it, so using the last reading ({when} UTC) instead of reading it again")
-            continue
+        else:
+            todo.append(p)
+
+    def read(p, raw):
+        t = ReadOnlyTenant(Narrated(raw, log) if log else raw)
+        t0 = time.time()
         say("info", f"{p.title}: reading the tenant (read-only)")
         try:
             s, c = p.discover(t, pov)
         except KitError as e:
             s, c = {}, [check(f"{p.name}-discover", f"{p.title} discovery", FAIL, str(e)[:200])]
         lvl, txt = _tally(c)
-        say(lvl, f"{p.title}: {txt}")
+        say(lvl, f"{p.title}: {txt} ({time.time() - t0:.1f} s)")
+        return s, c
+    clients = [(p, tenant_for(pov, "discovery")) for p in todo]   # signed-in clients made here, one per product
+    if len(clients) > 1:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(6, len(clients))) as ex:
+            found = list(ex.map(lambda pc: read(*pc), clients))
+    else:
+        found = [read(*pc) for pc in clients]
+    t = ReadOnlyTenant(Narrated(clients[0][1], log) if log and clients else (clients[0][1] if clients
+                                                                               else tenant_for(pov, "discovery")))
+    for (p, _), (s, c) in zip(clients, found, strict=True):   # in product order, so checks always read the same way
         snaps[p.name] = s
         checks += [dict(x, label=f"{SHORT.get(p.name, p.title)}: {x['label']}", product=p.name) for x in c]
     # the identity step: who the pilot users are and how they sign in, across products (read-only too)
