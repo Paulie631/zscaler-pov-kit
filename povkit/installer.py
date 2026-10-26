@@ -113,6 +113,63 @@ def win_shortcut(path, target, args, workdir, description, icon=None):
                        f"{(r.stdout + r.stderr).strip().replace('ERR: ', '')[:300]}")
 
 
+# The desktop app: the console starts in the background (no Terminal window) and opens in the browser when ready.
+# Its output goes to ~/.zscaler-pov-kit/console.log. If it doesn't start, a dialog says so and offers the log.
+# Opened again while running, the console that's already running comes to the browser. Quit is in the console.
+MAC_LAUNCH = """#!/bin/bash
+LOGDIR="$HOME/.zscaler-pov-kit"; mkdir -p "$LOGDIR"; LOG="$LOGDIR/console.log"
+export ZPOV_HIDDEN=1 PYTHONUNBUFFERED=1
+nohup "__KIT__" gui >"$LOG" 2>&1 </dev/null &
+PID=$!
+for i in $(seq 1 240); do
+  grep -q "POV console" "$LOG" 2>/dev/null && exit 0
+  if ! kill -0 "$PID" 2>/dev/null; then
+    grep -q "POV console" "$LOG" 2>/dev/null && exit 0
+    MSG='display dialog "The POV console did not start. The log says why." buttons {"Open the log", "OK"}'
+    OPT=' default button "Open the log" with icon caution with title "__NAME__"'
+    B=$(osascript -e "button returned of ($MSG$OPT)" 2>/dev/null)
+    [ "$B" = "Open the log" ] && open -e "$LOG"
+    exit 1
+  fi
+  sleep 0.5
+done
+exit 0
+"""
+
+# Windows: the shortcut runs this with wscript, so no command window shows. Same log and same dialog.
+WIN_LAUNCH = """' Opens the __NAME__ with no window: it runs in the background and opens in the browser when ready.
+Set sh = CreateObject("WScript.Shell")
+sh.Environment("PROCESS")("ZPOV_HIDDEN") = "1"
+sh.Environment("PROCESS")("PYTHONUNBUFFERED") = "1"
+logdir = sh.ExpandEnvironmentStrings("%USERPROFILE%") & "\\.zscaler-pov-kit"
+Set fso = CreateObject("Scripting.FileSystemObject")
+If Not fso.FolderExists(logdir) Then fso.CreateFolder(logdir)
+logf = logdir & "\\console.log"
+q = Chr(34)
+sh.Run "cmd /c " & q & q & "__KIT__" & q & " gui > " & q & logf & q & " 2>&1" & q, 0, False
+started = False
+For i = 1 To 240
+  WScript.Sleep 500
+  If fso.FileExists(logf) Then
+    On Error Resume Next
+    Set f = fso.OpenTextFile(logf, 1)
+    t = f.ReadAll
+    f.Close
+    On Error GoTo 0
+    If InStr(t, "POV console") > 0 Then
+      started = True
+      Exit For
+    End If
+    If InStr(t, "Traceback") > 0 Then Exit For
+  End If
+Next
+If Not started Then
+  ans = MsgBox("The POV console did not start (or is taking longer than usual). Open the log?", 4 + 48, "__NAME__")
+  If ans = 6 Then sh.Run "notepad " & q & logf & q
+End If
+"""
+
+
 def mac_app(app, kit=None):
     """A small app bundle on the desktop: the kit's icon, and it opens the console in a Terminal window (closing
     the window stops the console). Built on the laptop, so Gatekeeper doesn't quarantine it."""
@@ -130,12 +187,13 @@ def mac_app(app, kit=None):
         info["CFBundleIconFile"] = "icon"
     with open(app / "Contents" / "Info.plist", "wb") as f:
         plistlib.dump(info, f)
+    # For troubleshooting only: the same console in a Terminal window, with its output on screen.
     console = app / "Contents" / "Resources" / "console.command"
-    console.write_text(f'#!/bin/bash\n# Opens the {APP_NAME}. Close this window to stop it.\nexec "{kit / CLI}" gui\n',
-                       encoding="utf-8")
+    console.write_text(f'#!/bin/bash\n# Opens the {APP_NAME} in Terminal (troubleshooting). Close this window to stop '
+                       f'it.\nexec "{kit / CLI}" gui\n', encoding="utf-8")
     os.chmod(console, 0o755)
     launch = app / "Contents" / "MacOS" / "launch"
-    launch.write_text(f'#!/bin/bash\nexec open -a Terminal "{console}"\n', encoding="utf-8")
+    launch.write_text(MAC_LAUNCH.replace("__KIT__", str(kit / CLI)).replace("__NAME__", APP_NAME), encoding="utf-8")
     os.chmod(launch, 0o755)
     os.utime(app)
 
@@ -169,7 +227,11 @@ def shortcuts(log, kit=None):
         for key in ("desktop", "start"):
             try:
                 sp[key].parent.mkdir(parents=True, exist_ok=True)
-                win_shortcut(sp[key], kit / "pov-kit.cmd", "gui", Path.home(), "Open the Zscaler POV console",
+                vbs = kit / "open-console.vbs"   # no command window: see WIN_LAUNCH
+                vbs.write_text(WIN_LAUNCH.replace("__KIT__", str(kit / "pov-kit.cmd")).replace("__NAME__", APP_NAME),
+                               encoding="utf-8")
+                wscript = Path(os.getenv("WINDIR", r"C:\Windows")) / "System32" / "wscript.exe"
+                win_shortcut(sp[key], wscript, f'"{vbs}"', Path.home(), "Open the Zscaler POV console",
                              kit / "assets" / "pov-icon.ico")
                 log("ok", f"Shortcut: {sp[key]}")
             except (KitError, OSError, subprocess.TimeoutExpired) as e:

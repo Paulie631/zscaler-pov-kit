@@ -991,6 +991,9 @@ def api(method, path, body, q):
         p.path("report.html").write_text(render_report(p, evidence.evaluate(p), ChangeList(p.dir).approval()),
                                          encoding="utf-8")
         return 200, {"ok": True}
+    if path == "/api/quit":   # stop the console (it runs in the background when opened from the desktop)
+        quit_console()
+        return 200, {"ok": True}
     if path == "/api/test-accounts":   # the test accounts the POV will make (or made), and their passwords
         p = current()
         if body.get("n") is not None:   # a password before apply: kept in the keychain, used when apply makes it
@@ -1207,13 +1210,30 @@ def restart_console():
         SERVER["srv"].shutdown()
 
 
+def _running_console(port):
+    """Is this kit's console already answering on the port (opened earlier, in the background)?"""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as r:
+            return b"<title>Zscaler POV Console</title>" in r.read(2000)
+    except Exception:   # noqa: BLE001
+        return False
+
+
+def quit_console():
+    """The Quit button: stop serving (the desktop app starts it in the background, with no window to close)."""
+    if SERVER.get("srv"):
+        threading.Timer(0.3, SERVER["srv"].shutdown).start()
+
+
 def _exec_installed(port):
     """Replace this process with the installed kit's console (on Windows, start it and exit)."""
     import subprocess
     launcher = installer.APP / ("pov-kit.cmd" if installer.windows() else "pov-kit")
     args = [str(launcher), "gui", "--port", str(port), "--no-browser"]
-    if installer.windows():
-        subprocess.Popen(["cmd", "/c", *args], creationflags=0x00000010)   # CREATE_NEW_CONSOLE
+    if installer.windows():   # started hidden from the desktop shortcut: stay hidden (CREATE_NO_WINDOW)
+        hidden = os.getenv("ZPOV_HIDDEN") == "1"
+        subprocess.Popen(["cmd", "/c", *args], creationflags=0x08000000 if hidden else 0x00000010)
         os._exit(0)
     os.execv(str(launcher), args)
 
@@ -1295,6 +1315,12 @@ def serve(port=8790, open_browser=True):
         def do_POST(self):
             self._route("POST")
 
+    if _running_console(port):   # opened again from the desktop: show the console that's already running
+        url = f"http://127.0.0.1:{port}/"
+        print(f"  POV console already running: {url}", flush=True)
+        if open_browser:
+            webbrowser.open(url)
+        return None
     srv = None
     for p in range(port, port + 20):
         try:
@@ -1312,7 +1338,7 @@ def serve(port=8790, open_browser=True):
     except Exception:   # noqa: BLE001 no POV yet
         pass
     url = f"http://127.0.0.1:{port}/"
-    print(f"  POV console: {url}   (this computer only; Ctrl+C to stop)")
+    print(f"  POV console: {url}   (this computer only; Ctrl+C to stop)", flush=True)
     if open_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
     try:
@@ -1325,4 +1351,11 @@ def serve(port=8790, open_browser=True):
         devlink.stop_tunnel()   # the restarted console starts its own
         print("  Restarting the console with the installed kit...")
         _exec_installed(port)
+    srv.server_close()   # Quit or Ctrl+C: free the port, and stop the device tunnel if one was on
+    try:
+        from . import devlink
+        devlink.stop_tunnel()
+    except Exception:   # noqa: BLE001
+        pass
+    print("  Console stopped.", flush=True)
     return srv

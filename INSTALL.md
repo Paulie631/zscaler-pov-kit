@@ -30,8 +30,9 @@ files rather than a browser, macOS Gatekeeper and Windows SmartScreen don't bloc
    - adds a **Zscaler POV Console** shortcut to your desktop (and the Start menu on Windows)
    - adds the `pov-kit` command, so `pov-kit gui` works from any folder in a new terminal
    - opens the console on its Setup tab
-4. From then on, double-click **Zscaler POV Console** on your desktop. A terminal window opens with it: keep it open
-   while you use the console, and close it to stop the console.
+4. From then on, double-click **Zscaler POV Console** on your desktop. It runs in the background and opens in your
+   browser; **Quit** at the top of the console stops it. If it doesn't start, a dialog offers the log
+   (`~/.zscaler-pov-kit/console.log`).
 
 You can delete the unzipped folder afterwards. Your POVs, their ledgers and secrets stay in `~/.zscaler-pov-kit/povs`
 and the system keychain, so reinstalling or upgrading never touches them.

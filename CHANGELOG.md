@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.92
+- **No Terminal window.** The desktop app (Mac) and shortcut (Windows) now start the console in the background and open it in the browser when it's ready; nothing else appears on screen. Its output goes to `~/.zscaler-pov-kit/console.log`, and if it doesn't start, a dialog says so and offers the log.
+- **Quit** is a button at the top of the console (click it twice). Opening the app again while the console runs brings that console back up rather than starting a second one.
+- For troubleshooting, the old way is still there: `pov-kit gui` in Terminal, or the app's `Contents/Resources/console.command`.
+
 ## 0.9.91
 - **Updates work on laptops whose Zscaler Client Connector inspects TLS.** Client Connector re-signs github.com with the Zscaler root, which the computer trusts but Python's own certificate list doesn't, so the update check failed with CERTIFICATE_VERIFY_FAILED. Update checks and downloads now trust the computer's roots too (the macOS System keychain, or Windows' certificate stores) alongside Python's list; nothing is turned off, and the release is still checked against its SHA-256. If the root isn't on the computer, the message says what to do.
 
