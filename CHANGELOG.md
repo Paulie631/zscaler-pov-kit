@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.91
+- **Updates work on laptops whose Zscaler Client Connector inspects TLS.** Client Connector re-signs github.com with the Zscaler root, which the computer trusts but Python's own certificate list doesn't, so the update check failed with CERTIFICATE_VERIFY_FAILED. Update checks and downloads now trust the computer's roots too (the macOS System keychain, or Windows' certificate stores) alongside Python's list; nothing is turned off, and the release is still checked against its SHA-256. If the root isn't on the computer, the message says what to do.
+
 ## 0.9.90
 - **Name the test accounts.** Setup › Pilot users › Test accounts has a name field (default `<prefix>-pilot`), so when another POV or SE already has `zpov-pilot-1` in the tenant you can use, say, `paul-pov` and get `paul-pov-1`, `paul-pov-2`… Preflight now checks the names are free, in ZIA and in ZIdentity, and says which are taken. Once the accounts exist, the name stays until teardown.
 - **See the accounts before Apply.** The step lists every account it will create with its full sign-in address (the domain comes from Preflight, or type it), and whether it exists yet.

@@ -47,12 +47,17 @@ def fetch_release(force=False, get=None):
                 return c["info"]
         except (ValueError, KeyError):
             pass
-    import requests
-    get = get or requests.get
+    from .core import trust
+    get = get or trust.get   # trusts this computer's roots too (Client Connector's TLS inspection re-signs GitHub)
     try:   # cache-busting query and headers, so a proxy or CDN can't answer with an old latest.json
         r = get(UPDATE_URL, params={"t": int(time.time())}, timeout=15,
                 headers={"Accept": "application/json", "Cache-Control": "no-cache"})
     except Exception as e:
+        if "CERTIFICATE_VERIFY_FAILED" in str(e):
+            raise KitError("Couldn't check for updates: GitHub's certificate isn't trusted on this computer. If "
+                           "Zscaler Client Connector inspects this laptop's traffic, its root certificate should be in "
+                           "the System keychain; IT can add it, or update from Terminal with the install command "
+                           "(curl uses the keychain).") from e
         raise KitError(f"Couldn't reach GitHub to check for updates: {e}") from e
     if r.status_code != 200:
         raise KitError(f"The update check failed: HTTP {r.status_code}. If your laptop's web policy blocks GitHub "
@@ -91,8 +96,8 @@ def install(info, get=None, log=lambda level, msg: None):
         raise KitError("This copy is a git checkout: update it with `git pull` instead.")
     if not _url_ok(info.get("zip_url", "")):
         raise KitError("Refusing to download an update from anywhere but GitHub.")
-    import requests
-    get = get or requests.get
+    from .core import trust
+    get = get or trust.get
     log("info", f"Downloading {info['version']}")
     r = get(info["zip_url"], timeout=120)
     data = r.content
