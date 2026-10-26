@@ -15,6 +15,12 @@ from povkit.core.changelist import ChangeList
 
 def load(name):
     os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")   # the seeder makes its clients at import, as in Lambda
+    try:
+        import boto3  # noqa: F401   (Lambda has it; CI may not)
+    except ImportError:
+        import sys
+        import types
+        sys.modules["boto3"] = types.SimpleNamespace(client=lambda *a, **k: types.SimpleNamespace(exceptions=None))
     spec = importlib.util.spec_from_file_location(name, seed_aws.CODE / f"{name}.py")
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
