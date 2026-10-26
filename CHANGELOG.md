@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.98
+- **Ask Claude rides out a brief AI Guard proxy hiccup.** When the proxy answers 502/503/504 (or Claude is overloaded, 529), the kit asks again twice, a few seconds apart, and the log says so. If it still fails, the message says what the code means and what to try, instead of a bare "HTTP 502:".
+
 ## 0.9.97
 - **Pilot users › Test accounts is easier to read.** The accounts show as a table (Account · Password · Status) with the full address, plain-text status and real buttons (Show, Generate/New, Type…). Fewer hints; the summary banner stays.
 - **The domain fills itself in from the tenant.** The kit reads the domains ZIA has for the organisation (orgInformation), ranked by how many users have each, and falls back to the users' email domains. One domain: it's filled in, marked *from tenant*, still editable. Several: a dropdown with the most used picked, plus Other…. ZIdentity accounts show their zslogin.net domain, read-only.

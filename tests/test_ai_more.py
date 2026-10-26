@@ -175,3 +175,33 @@ def test_a_model_that_refuses_forced_tools_is_asked_again(pov, monkeypatch):
     assert "calling the t tool" in calls[1]["system"]
     ai.ask(pov, "s", "u", tool=tool, needs_consent=False)       # remembered: straight to auto
     assert calls[-1]["tool_choice"]["type"] == "auto" and len(calls) == 3
+
+
+def _resp(code, body):
+    class R:
+        status_code, text = code, (json.dumps(body) if body is not None else "")
+
+        def json(self):
+            return body
+    return R()
+
+
+def test_gateway_errors_are_retried(pov, monkeypatch):
+    """The AI Guard proxy answered HTTP 502 with no body (seen live): ask again before giving up."""
+    seq = [_resp(502, None), _resp(529, {"type": "error"}), _resp(200, {"content": [{"type": "text", "text": "hi"}]})]
+    monkeypatch.setattr(ai, "TRANSPORT", lambda *a, **k: seq.pop(0))
+    monkeypatch.setattr(ai, "RETRY_WAITS", (0, 0))
+    monkeypatch.setattr(ai, "proxy_key", lambda: ("proxy-key-123", "test"))
+    assert ai.ask(pov, "s", "u", needs_consent=False) == "hi" and not seq
+
+
+def test_gateway_error_message_when_it_persists(pov, monkeypatch):
+    calls = []
+    monkeypatch.setattr(ai, "TRANSPORT", lambda *a, **k: calls.append(1) or _resp(502, None))
+    monkeypatch.setattr(ai, "RETRY_WAITS", (0, 0))
+    monkeypatch.setattr(ai, "proxy_key", lambda: ("proxy-key-123", "test"))
+    try:
+        ai.ask(pov, "s", "u", needs_consent=False)
+        raise AssertionError("expected a KitError")
+    except ai.KitError as e:
+        assert len(calls) == 3 and "Bad Gateway" in str(e) and "no details" in str(e) and "try again" in str(e)

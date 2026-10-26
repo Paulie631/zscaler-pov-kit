@@ -119,6 +119,8 @@ def post(url, json, headers, timeout):
 
 
 TRANSPORT = post   # tests swap in a fake
+TRANSIENT = {500, 502, 503, 504, 529}   # gateway / overloaded: worth asking again
+RETRY_WAITS = (3, 8)                    # seconds before the 2nd and 3rd try
 NO_FORCED_TOOL: set = set()   # models that refused tool_choice {"type": "tool"} this run
 
 
@@ -149,11 +151,21 @@ def ask(pov, system, user, max_tokens=4000, timeout=180, tool=None, needs_consen
         url, headers = f"{ANTHROPIC_HOST}/v1/messages", {"x-api-key": key}
     headers = dict(headers, **{"anthropic-version": "2023-06-01", "content-type": "application/json"})
 
-    def send(b):
+    def send1(b):
         try:
             return TRANSPORT(url, json=b, headers=headers, timeout=timeout)
         except Exception as e:
             raise KitError(f"Couldn't reach {label}: {str(e).replace(key, '<key>')}") from e
+
+    def send(b):   # a gateway error or an overloaded model is usually brief: try twice more before giving up
+        r = send1(b)
+        for wait in RETRY_WAITS:
+            if r.status_code not in TRANSIENT:
+                break
+            pov.log("ai", f"{label}: HTTP {r.status_code}, asking again in {wait} s", "info")
+            time.sleep(wait)
+            r = send1(b)
+        return r
     r = send(body)
     text = getattr(r, "text", "") or ""
     if tool and r.status_code == 400 and "tool_choice" in text and body["tool_choice"]["type"] != "auto":
@@ -174,6 +186,15 @@ def ask(pov, system, user, max_tokens=4000, timeout=180, tool=None, needs_consen
         if via == "direct" and r.status_code in (401, 403):
             raise KitError("Anthropic refused the API key (HTTP %d): check it in the Anthropic Console and save it "
                            "again (`pov-kit ai connect --direct`)." % r.status_code)
+        if r.status_code in TRANSIENT:
+            why = {502: "Bad Gateway", 503: "Service Unavailable", 504: "Gateway Timeout", 529: "Overloaded"}.get(
+                r.status_code, "server error")
+            raise KitError((f"{label[0].upper() + label[1:]} answered HTTP {r.status_code} ({why}) three times"
+                            + (f": {text.strip()[:200]}" if text.strip() else ", with no details")
+                            + ". It couldn't get an answer from Claude: this is usually brief, so try again in a minute."
+                            + (" If it keeps happening, check the AI Guard app in the AI Guard console (its LLM "
+                               "provider and model, or try another model in the Use cases settings)."
+                               if via == "aiguard" else "")).replace(key, "<key>"))
         raise KitError(f"{label[0].upper() + label[1:]} answered HTTP {r.status_code}: {text[:200]}".replace(key, "<key>"))
     d = r.json()
     pov.log("ai", f"Claude ({model}) {ROUTES[via]}: reply in {ms} ms", "ok", ms=ms)
