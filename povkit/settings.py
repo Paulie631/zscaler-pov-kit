@@ -8,7 +8,7 @@ SETTABLE = {"vanity_domain", "cloud", "client_mode", "pilot_group", "pilot_email
             "zpa.app_name", "zpa.domains", "zpa.tcp_ports", "zpa.group", "zpa.location", "zpa.latitude", "zpa.longitude",
             "zpa.scope", "zpa.saml_attribute", "zpa.pra_server", "zpa.pra_protocol", "zpa.pra_port", "zpa.pra_portal",
             "zpa.certificate", "zpa.saml_value", "zdx.app", "casb.tenant", "aiguard.competitor",
-            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain",
+            "identity.idp", "identity.bypass_domains", "identity.test_users", "identity.test_domain", "identity.test_login",
             "identity.pilot", "identity.create_users", "identity.users_in", "ai.model", "ai.share", "ends", "lab",
             "customer_id", "mcp.version", "zcc.cloud", "aiguard.proxy", "aiguard.provider",
             "aiguard.provider_credential", "aiguard.model", "prefix", "manual.mode", "approval"}
@@ -34,6 +34,12 @@ def parse(key, raw):
         v = str(raw).strip()
     if key in CHOICES and v not in CHOICES[key]:
         raise KitError(f"{key} is one of: {', '.join(CHOICES[key])}.")
+    if key == "identity.test_login" and v:
+        import re as _re
+        v = v.lower()
+        if not _re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,38}[a-z0-9]", v):
+            raise KitError("The test account name is 2 to 40 lower-case letters, digits, dots, dashes or underscores, "
+                           "such as acme-pov or jsmith-pilot; the kit adds -1, -2 and so on.")
     if key == "identity.test_users":
         if not str(v).isdigit() or int(v) > 10:
             raise KitError("identity.test_users is a number from 0 to 10.")

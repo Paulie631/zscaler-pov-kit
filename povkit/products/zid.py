@@ -67,10 +67,16 @@ def zid_domain(cfg):
     return f"{v}.zslogin.net" if v else None
 
 
-def test_emails(cfg):
-    dom = zid_domain(cfg)
-    prefix = str(cfg.get("prefix") or naming.DEFAULT_PREFIX).lower()
-    return [f"{TEST_LOGIN.format(prefix=prefix, n=n)}@{dom}" for n in range(1, test_count(cfg) + 1)] if dom else []
+def test_login(cfg):
+    """The test accounts' name before the number: identity.test_login when the SE set one (another POV or SE
+    already uses the default in this tenant), else <prefix>-pilot."""
+    v = str(ident(cfg).get("test_login") or "").strip().lower()
+    return v or f"{str(cfg.get('prefix') or naming.DEFAULT_PREFIX).lower()}-pilot"
+
+
+def test_emails(cfg, dom=None):
+    dom = dom or zid_domain(cfg)
+    return [f"{test_login(cfg)}-{n}@{dom}" for n in range(1, test_count(cfg) + 1)] if dom else []
 
 
 def enabled(cfg):
@@ -129,7 +135,7 @@ class ZID(Product):
         elif not emails:
             checks.append(check("zid-members", "Pilot users named", FAIL, "none yet",
                                 "List the pilot users' emails in the Pilot users step."))
-        missing = []
+        missing, taken = [], []
         from .zia import ledger_of
         led = ledger_of(pov)
         for e in emails:
@@ -138,10 +144,16 @@ class ZID(Product):
             made = led.find(f"zid.user.{slug(e)}")
             if hit and made and made["id"] == str(g(hit, "id")):
                 missing.append(e)   # the POV made this user: still planned as new, so the approved list holds
+            elif hit and testing:   # a test account by that name that this POV didn't make: someone else's
+                taken.append(e)
             elif hit:
                 snap["members"].append({"email": e, "id": str(g(hit, "id"))})
             else:
                 missing.append(e)
+        if taken:
+            checks.append(check("zid-taken", "Test account names are free", FAIL, f"already in ZIdentity: {', '.join(taken)}",
+                                "Another POV or SE uses these names. Change the account name in the Pilot users step "
+                                "(Test accounts), then run the checks again."))
         if missing and new_ok:
             snap["new"] = missing
             checks.append(check("zid-new", "New pilot users", INFO, ", ".join(missing),

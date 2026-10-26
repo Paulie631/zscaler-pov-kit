@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.90
+- **Name the test accounts.** Setup › Pilot users › Test accounts has a name field (default `<prefix>-pilot`), so when another POV or SE already has `zpov-pilot-1` in the tenant you can use, say, `paul-pov` and get `paul-pov-1`, `paul-pov-2`… Preflight now checks the names are free, in ZIA and in ZIdentity, and says which are taken. Once the accounts exist, the name stays until teardown.
+- **See the accounts before Apply.** The step lists every account it will create with its full sign-in address (the domain comes from Preflight, or type it), and whether it exists yet.
+- **Choose each password.** Per account: **Generate now**, **Type one…** (checked against ZIA's rules) or **Show**. A password set before Apply is the one Apply gives the account; after Apply, a new one is set in ZIA straight away. Passwords stay in your keychain and are never in the change list. Accounts made in ZIdentity get their passwords there (its API can't set them).
+
 ## 0.9.89
 - **The tenant check (IS-TEN-01, www.example.com) can be switched too: Block or Caution.** It was left out because every test run checks it first to confirm the device is the POV's. That check now accepts either Zscaler page (the block page, or the caution page while it's switched), so switching it no longer stops the tests. Allow isn't offered: an ordinary page can't prove the device is in the POV's tenant. A linked device is told which page to expect.
 

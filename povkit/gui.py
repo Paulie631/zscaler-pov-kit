@@ -140,6 +140,27 @@ def pilot_options(p):
     return out
 
 
+def test_accounts(p):
+    """The POV's test accounts as they'll be made (or were): name, sign-in email, where, and whether a password is
+    in the keychain. Passwords are never sent here; Show password asks for one by number."""
+    from .products import zid as _zid
+    from .products.zia import TEST_PW
+    cfg, ic = p.cfg, (p.cfg.get("identity") or {})
+    in_zid = _zid.enabled(cfg)
+    snap = ((p.read_json("discovery.json", {}) or {}).get("products") or {}).get("zia") or {}
+    dom = (_zid.zid_domain(cfg) if in_zid else None) or ic.get("test_domain") or (snap.get("test_users") or {}).get("domain")
+    led = lifecycle.ledger(p)
+    login = _zid.test_login(cfg)
+    rows = []
+    for n in range(1, _zid.test_count(cfg) + 1):
+        rows.append({"n": n, "email": f"{login}-{n}@{dom}" if dom else f"{login}-{n}@…",
+                     "made": bool(led.find(f"zia.user.{n}") or (dom and led.find(f"zid.user.{_zid.slug(f'{login}-{n}@{dom}')}"))),
+                     "password": None if in_zid else bool(secrets.get(p.id, TEST_PW.format(n=n)))})
+    return {"login": login, "default_login": f"{str(p.prefix).lower()}-pilot", "domain": dom,
+            "domain_from": "zidentity" if in_zid else ("set" if ic.get("test_domain") else "tenant" if dom else None),
+            "where": "zidentity" if in_zid else "zia", "accounts": rows}
+
+
 def diagnostics_zip(q, token):
     if q.get("t") != token:
         return None
@@ -970,6 +991,23 @@ def api(method, path, body, q):
         p.path("report.html").write_text(render_report(p, evidence.evaluate(p), ChangeList(p.dir).approval()),
                                          encoding="utf-8")
         return 200, {"ok": True}
+    if path == "/api/test-accounts":   # the test accounts the POV will make (or made), and their passwords
+        p = current()
+        if body.get("n") is not None:   # a password before apply: kept in the keychain, used when apply makes it
+            from .products import zia as _zia
+            led = lifecycle.ledger(p)
+            n = int(body["n"])
+            if led.find(f"zia.user.{n}"):   # already made: set it in ZIA too
+                from .core.guard import LedgerTenant
+                pw = products.get("zia").set_test_password(LedgerTenant(tf(p, "apply"), led, []), p, led, n,
+                                                           body.get("password") or "")
+            else:
+                pw = (body.get("password") or "").strip() or _zia.gen_password()
+                _zia.check_password(pw)
+                secrets.put(p.id, _zia.TEST_PW.format(n=n), pw)
+            p.log("identity", f"password for POV test account {n} {'typed' if body.get('password') else 'generated'} "
+                              "(kept in the keychain)")
+        return 200, test_accounts(p)
     if path == "/api/test-user/password":   # a new password for a ZIA test user: typed, or generated
         from .core.guard import LedgerTenant
         p = current()

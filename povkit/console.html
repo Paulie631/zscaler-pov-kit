@@ -178,6 +178,7 @@ button.sm{padding:3px 9px;font-size:12.5px}
 @media (max-width:700px){.dtrunbar{position:static}.rdy{white-space:normal}.dttests{padding-left:8px}}
 .dtpolin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:5px 0 0;font-size:12.5px}.dtpolname{font-weight:500}
 .dtseg button{padding:2px 9px;font-size:12px}.dtswmsg{font-size:12px}
+.wtrow{border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;font-size:13px}.wtmail{font-size:13px;white-space:nowrap}
 .dtrow .dtdet{background:var(--panel);border-radius:8px;padding:2px 10px 8px;margin-top:6px}
 </style>
 </head>
@@ -604,6 +605,34 @@ async function deletePov(id){
   $("#delgo").onclick=async()=>{try{await api("/api/pov/delete",{id,confirm:$("#delconf").value});m.classList.remove("on");
     S=null;await load();W.step=0;wizard()}catch(e){$("#delmsg").innerHTML=note(e.message,"bad")}};
 }
+/* Pilot users › Test accounts: the accounts the kit will make, by name, with their passwords (typed or generated,
+   kept in the keychain; used when Apply makes the account, or set in ZIA straight away once it exists) */
+async function testAccounts(){const el=$("#wtacct");if(!el)return;let TA=null;
+  const login=()=>(($("#s_identity\\.test_login")||{}).value||"").trim().toLowerCase()||(TA&&TA.default_login)||"",
+    dom=()=>(($("#s_identity\\.test_domain")||{}).value||"").trim()||(TA&&TA.domain)||"",n=()=>Math.max(1,Math.min(10,+(($("#s_identity\\.test_users")||{}).value||1)));
+  const draw=msg=>{if(!TA){el.innerHTML='<div class="muted" style="font-size:13px">Loading the accounts…</div>';return}
+    const made=TA.accounts.some(a=>a.made),zid=TA.where=="zidentity",bad=login()&&!/^[a-z0-9][a-z0-9._-]{0,38}[a-z0-9]$/.test(login());
+    const rows=Array.from({length:n()},(_,i)=>{const k=i+1,a=TA.accounts.find(x=>x.n==k)||{n:k},email=`${login()}-${k}@${dom()||"…"}`;
+      return `<div class="wtrow"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><code class="wtmail">${esc(email)}</code>${a.made?'<span class="badge b-ok">created</span>':'<span class="badge b-info">created at Apply</span>'}
+          ${zid?'':a.password?'<span class="badge b-ok">password in the keychain</span>':'<span class="badge b-info">password generated at Apply</span>'}</div>
+        ${zid?'<div class="hint" style="margin:4px 0 0">Set its password in ZIdentity after Apply (Administration › Users).</div>':`<div class="row" style="gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">${a.password?'<button class="sm wtshow" data-n="'+k+'">Show</button>':""}
+          <button class="sm wtgen" data-n="${k}">${a.password?"Generate a new one":"Generate now"}</button> <button class="sm wttype" data-n="${k}">Type one…</button><span class="wtout" data-n="${k}"></span></div>
+          <div class="wtform" data-n="${k}" style="display:none;margin-top:6px"><input type="password" class="wtpw" data-n="${k}" placeholder="New password" autocomplete="new-password" style="width:220px"> <button class="sm wtsave" data-n="${k}">Save</button>
+          <div class="hint" style="margin:2px 0 0">8+ characters with an upper-case letter, a lower-case letter, a digit and a special character.</div></div>`}</div>`}).join("");
+    el.innerHTML=`<div class="lbl" style="margin:0 0 4px">The accounts</div>${rows}
+      ${!dom()?'<div class="hint" style="margin:4px 0 0">The domain is found at Preflight (the one the tenant’s users have), or type it above.</div>':""}
+      ${bad?note("Use 2 to 40 lower-case letters, digits, dots, dashes or underscores.","bad"):""}
+      ${made?'<div class="hint" style="margin:4px 0 0">These accounts already exist in the tenant, so their name stays as it is until teardown.</div>':""}${msg||""}`;
+    const li=$("#s_identity\\.test_login");if(li&&made){li.readOnly=true;li.value=TA.login==TA.default_login?"":TA.login;li.title="Already created: the name stays until teardown"}
+    $$(".wttype").forEach(b=>b.onclick=()=>{const f=$(`.wtform[data-n="${b.dataset.n}"]`);f.style.display=f.style.display=="none"?"":"none";f.querySelector("input").focus()});
+    const save=async(k,pw,b)=>{b.disabled=true;try{TA=await api("/api/test-accounts",{n:+k,password:pw});draw(note(`Password ${pw?"saved":"generated"} for account ${k}${(TA.accounts.find(x=>x.n==+k)||{}).made?" and set in ZIA":""}. It’s in your keychain; Show reveals it.`,"good"))}
+      catch(e){b.disabled=false;const o=$(`.wtout[data-n="${k}"]`);if(o)o.innerHTML=note(e.message,"bad")}};
+    $$(".wtgen").forEach(b=>b.onclick=()=>save(b.dataset.n,"",b));
+    $$(".wtsave").forEach(b=>b.onclick=()=>{const v=$(`.wtpw[data-n="${b.dataset.n}"]`).value;if(!v.trim())return;save(b.dataset.n,v,b)});
+    $$(".wtpw").forEach(x=>x.onkeydown=e=>{if(e.key=="Enter"){e.preventDefault();$(`.wtsave[data-n="${x.dataset.n}"]`).click()}});
+    $$(".wtshow").forEach(b=>b.onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:b.dataset.n})).value;$(`.wtout[data-n="${b.dataset.n}"]`).innerHTML=` <span class="secret">${esc(v||"(not in the keychain)")}</span>`})};
+  ["#s_identity\\.test_users","#s_identity\\.test_login","#s_identity\\.test_domain"].forEach(q=>{const x=$(q);x&&x.addEventListener("input",()=>draw())});
+  draw();try{TA=await api("/api/test-accounts",{})}catch(e){el.innerHTML=note(e.message,"bad");return}draw()}
 async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.current;
   try{
   if(W.step==0){
@@ -682,7 +711,12 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
           <label class="opt"><input type="radio" name="s_identity.pilot" value="create" ${mk=="create"?"checked":""}><span><b>People we name</b><br><span class="muted">The kit makes a POV group, <code>${esc(c.prefix)} - pilot users</code>, and adds them. Nobody named yet? It starts with a test user. <a href="#" class="whow" data-h="create">How this works</a></span><span class="hint whowt" id="whow-create" style="display:none">The group is in ZIdentity, made only after approval and removed at teardown. ZIdentity sends it to ZIA once it has the Internet &amp; SaaS entitlement, which the customer grants (ZIdentity's API can't): it's on Next steps → Steps for people.</span></span></label>
           <div id="wcreate" style="margin:6px 0 0 26px;${mk=="create"?"":"display:none"}"><label class="chk"><input type="checkbox" id="wnewusers" ${s["identity.create_users"]=="yes"?"checked":""}>Also create the users who don't exist in ZIdentity yet <span class="muted">(lab tenants; you set their passwords in ZIdentity)</span></label></div>
           ${zia?`<label class="opt"><input type="radio" name="s_identity.pilot" value="test" ${mk=="test"?"checked":""}><span><b>Test accounts</b> <span class="muted">(labs, or to start before they pick anyone)</span><br><span class="muted">The kit creates them and removes them at the end. <a href="#" class="whow" data-h="test">How this works</a></span><span class="hint whowt" id="whow-test" style="display:none">Like the SE demo kit: a group, a department and the users in ZIA, with passwords in this computer's keychain (Next steps → Test users). If the tenant keeps its users in ZIdentity, they're made there instead, on <code>${esc((c.settings.vanity_domain||"vanity").replace(/\.zslogin\.net$/,""))}.zslogin.net</code>, where you set their passwords.</span></span></label>
-          <div id="wtestopt" style="margin:6px 0 0 26px;${mk=="test"?"":"display:none"}"><input type="number" id="s_identity.test_users" min="1" max="10" value="${esc(s["identity.test_users"]||1)}" style="width:70px"> test accounts: <code>${esc(c.prefix.toLowerCase())}-pilot-1</code>… at <input type="text" id="s_identity.test_domain" value="${esc(s["identity.test_domain"]||"")}" placeholder="detected from the tenant" style="width:200px"></div>`:""}
+          <div id="wtestopt" style="margin:6px 0 0 26px;${mk=="test"?"":"display:none"}">
+            <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap"><input type="number" id="s_identity.test_users" min="1" max="10" value="${esc(s["identity.test_users"]||1)}" style="width:64px"> test accounts named
+              <input type="text" id="s_identity.test_login" value="${esc(s["identity.test_login"]||"")}" placeholder="${esc(c.prefix.toLowerCase())}-pilot" style="width:160px" autocomplete="off" spellcheck="false"><span class="muted">-1, -2…</span> at
+              <input type="text" id="s_identity.test_domain" value="${esc(s["identity.test_domain"]||"")}" placeholder="the tenant's domain" style="width:190px"></div>
+            <div class="hint" style="margin:4px 0 0">Change the name if another POV or SE already has accounts by it in this tenant; Preflight checks the names are free.</div>
+            <div id="wtacct" style="margin-top:8px"></div></div>`:""}
         </div>`:""}
         <span class="lbl wpilot">People <span class="muted">(with a group: optional, to check they're in it)</span></span><div class="wpilot">
           <div class="row" style="gap:8px"><input type="text" id="wpick" list="wusers" placeholder="Start typing a name or email" style="flex:1"><datalist id="wusers"></datalist><button id="wadd">Add</button></div>
@@ -709,7 +743,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         </div></details>`:""}
       ${has("casb")?`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`:""}
       <div id="wmsg"></div>`+nav(true,true,"Save ›");
-    pilotPicker(s);
+    pilotPicker(s);testAccounts();
     bindNav(async()=>{const vals={};
       $$("#wstage [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
       if($("#wnewusers"))vals["identity.create_users"]=$("#wnewusers").checked?"yes":"no";

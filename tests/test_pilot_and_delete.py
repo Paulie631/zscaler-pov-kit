@@ -365,3 +365,17 @@ def test_pov_group_with_nobody_named_gets_test_users(zpov, tenant_for):
     users = [i["body"]["login_name"] for i in items if i["product"] == "zid" and i["kind"] == "user"]
     assert users == ["zpov-pilot-1@acme.zslogin.net"]
     assert not [c for c in checks if c["status"] == "fail"]
+
+
+def test_zidentity_test_account_names_in_use(tpov, tenant, tenant_for):
+    tpov.cfg["identity"]["users_in"] = "zidentity"
+    tpov.save()
+    tenant.zid_users.append({"id": "z9", "loginName": "zpov-pilot-1@acme.zslogin.net"})   # another SE's
+    _, _, _, checks = lifecycle.plan(tpov, tenant_for)
+    taken = next(c for c in checks if c["id"] == "zid-taken")
+    assert taken["status"] == "fail" and "zpov-pilot-1@acme.zslogin.net" in taken["detail"]
+    tpov.cfg["identity"]["test_login"] = "paul-pov"
+    tpov.save()
+    items, _, _, checks = lifecycle.plan(tpov, tenant_for)
+    assert "zid-taken" not in {c["id"] for c in checks}
+    assert any(i["body"].get("login_name") == "paul-pov-1@acme.zslogin.net" for i in items if i["product"] == "zid")

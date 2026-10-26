@@ -143,6 +143,14 @@ def test_domain(t):
     return seen.most_common(1)[0][0] if seen else None
 
 
+def check_password(pw):
+    """ZIA's Hosted DB rules for a typed password."""
+    if len(pw) < 8 or not (any(c.isupper() for c in pw) and any(c.islower() for c in pw)
+                           and any(c.isdigit() for c in pw) and any(not c.isalnum() for c in pw)):
+        raise KitError("ZIA wants at least 8 characters with an upper-case letter, a lower-case letter, a digit "
+                       "and a special character. Or leave it empty and the kit makes one.")
+
+
 def gen_password(n=20):
     """Random, and meets ZIA's Hosted DB password rules (from the demo kit)."""
     import secrets as _s
@@ -355,7 +363,24 @@ class ZIA(Product):
                                 "Run the checks again: the change list now makes the test users in ZIdentity."))
         elif testing:   # as the demo kit: ZIA first; apply switches to ZIdentity if ZIA refuses
             dom = (pov.cfg.get("identity") or {}).get("test_domain") or test_domain(t)
-            snap["test_users"] = {"count": n_test, "domain": dom}
+            from .zid import test_emails
+            emails = test_emails(pov.cfg, dom) if dom else []
+            snap["test_users"] = {"count": n_test, "domain": dom, "emails": emails}
+            led = ledger_of(pov)
+            mine = {str(e["id"]) for e in led.active("zia") if e["kind"] == "user"}
+            taken = []
+            for em in emails:   # an account by that name the POV didn't make: another POV's or SE's
+                try:
+                    rows = items(t.call("user_management", "list_users", query_params={"search": em.split("@")[0]}))
+                except Exception:   # noqa: BLE001
+                    rows = []
+                if any(str(g(u, "email") or "").lower() == em and str(g(u, "id")) not in mine for u in rows):
+                    taken.append(em)
+            if taken:
+                checks.append(check("zia-testtaken", "Test account names are free", FAIL,
+                                    f"already in ZIA: {', '.join(taken)}",
+                                    "Another POV or SE uses these names. Change the account name in the Pilot users "
+                                    "step (Test accounts), then run the checks again."))
             gname = naming.safe_name(naming.name(pov.prefix, "pilot users"), pov.prefix)
             snap["pilot_group"] = {"id": "{ref:zia.user_group}", "name": gname}
             checks.append(check("zia-testusers", "Test users", OK if dom else FAIL,
@@ -508,11 +533,13 @@ class ZIA(Product):
             out.append(item("zia", "user_group", "zia.user_group", grp["name"], affects="the POV's test users only",
                             why="The pilot group: the POV's own test users, since this tenant keeps users in ZIA.",
                             body={"name": grp["name"], "comments": naming.describe(pid, "POV pilot users")}))
+            from .zid import test_login
             for n in range(1, tu["count"] + 1):
                 uname = naming.safe_name(naming.name(P, f"pilot user {n}"), P)
                 out.append(item("zia", "user", f"zia.user.{n}", uname, affects="this test user only",
                                 why="Its password is generated at apply and kept in the SE's keychain.",
-                                body={"name": uname, "email": f"zpov-pilot-{n}@{tu['domain']}",
+                                body={"name": uname, "email": (tu.get("emails") or [])[n - 1] if len(tu.get("emails") or []) >= n
+                                      else f"{test_login(pov.cfg)}-{n}@{tu['domain']}",
                                       "groups": [{"id": "{ref:zia.user_group}"}],
                                       "department": {"id": "{ref:zia.department}"},
                                       "comments": naming.describe(pid, "POV test user")}))
@@ -742,10 +769,7 @@ class ZIA(Product):
             raise KitError(f"Test user {n} isn't one of this POV's ZIA users (in ZIdentity, set it there: "
                            "Administration > Authentication > Directory > Users).")
         pw = (password or "").strip() or gen_password()
-        if len(pw) < 8 or not (any(c.isupper() for c in pw) and any(c.islower() for c in pw)
-                               and any(c.isdigit() for c in pw) and any(not c.isalnum() for c in pw)):
-            raise KitError("ZIA wants at least 8 characters with an upper-case letter, a lower-case letter, a digit "
-                           "and a special character. Or leave it empty and the kit makes one.")
+        check_password(pw)
         live = self.live_object(t, e)
         if not live:
             raise KitError("The POV's test user is gone from ZIA. Status > Fix drift recreates it.")
