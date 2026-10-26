@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.101
+- **Pilot users reads easily.** The step is one column, so nothing is squeezed. Test accounts have labeled fields (How many · Name · Domain), and each account is a card: its address, whether it's in the tenant yet, where its password is, and plain buttons (Show/Hide, New random password, Type my own…). A shown password sits on one line with a Copy button.
+
 ## 0.9.100
 - **Network hiccups don't stop the kit, and say what happened.** When this computer can't look up the tenant's address (DNS) or the connection drops, the kit tries twice more, a few seconds apart (reads always; writes only when nothing was sent). If it still fails, the message says it's this computer's network, that nothing changed in the tenant, and what to check (online, VPN, Client Connector, then the vanity domain), instead of a raw `HTTPSConnectionPool… NameResolutionError` line.
 
