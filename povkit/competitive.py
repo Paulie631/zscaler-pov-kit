@@ -78,7 +78,8 @@ def se_view(pov):
             vend[k] = dict(v, sources=[dict(src[i], id=i) for i in v.get("sources") or [] if i in src])
         out.append(dict(x, se=vend, zscaler=full.get("zscaler") or {}))
     return {"status": d["se_status"], "vendors": d["vendors"], "researched": d.get("researched"),
-            "independent": d.get("independent") or [], "differentiators": out}
+            "independent": [dict(x, links=[dict(src[i], id=i) for i in x.get("sources") or [] if i in src])
+                            for x in d.get("independent") or []], "differentiators": out}
 
 
 def sheet_html(pov):

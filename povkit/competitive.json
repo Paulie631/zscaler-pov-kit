@@ -1,47 +1,757 @@
 {
- "about": "Competitive land mines: vendor-neutral success criteria where the Zscaler platform stands apart, proved by tests. 'why' and 'ask' are customer-facing and never name a vendor. 'se' notes are for the SE only, drafted from public positioning and NOT verified: confirm with competitive intelligence before relying on them.",
+ "about": "Competitive land mines: vendor-neutral success criteria where the Zscaler platform stands apart, each proved by tests in the customer's tenant. 'why' and 'ask' are customer-facing and never name a vendor. 'se' notes are for the SE only: what each competitor's own public documentation says, with sources; stance gap = use it, parity = skip it, strong = avoid it, unknown = test, don't claim.",
+ "researched": "2026-10-25",
+ "se_status": "From competitors' public docs, researched 2026-10-25. Docs change: re-check a source before quoting it to anyone.",
  "vendors": {
   "prisma": "Palo Alto Networks Prisma Access",
   "netskope": "Netskope",
   "cisco": "Cisco Secure Access",
-  "cloudflare": "Cloudflare One"
+  "cloudflare": "Cloudflare One",
+  "microsoft": "Microsoft Entra (Global Secure Access)",
+  "fortinet": "Fortinet FortiSASE",
+  "checkpoint": "Check Point Harmony SASE",
+  "cato": "Cato Networks"
  },
- "se_status": "Draft, not verified: check with competitive intelligence.",
+ "independent": [
+  {
+   "text": "CyberRatings 2025 SSE comparative test: Zscaler, Palo Alto Networks, Fortinet and Versa rated Recommended; Cisco, Cloudflare and Skyhigh rated Caution; Netskope and Cato were absent from the report.",
+   "sources": [
+    "IND-1"
+   ]
+  }
+ ],
+ "sources": {
+  "PA-1": {
+   "title": "Predefined decryption exclusions",
+   "url": "https://docs.paloaltonetworks.com/network-security/decryption/administration/decryption-exclusions/palo-alto-networks-predefined-decryption-exclusions",
+   "date": "2026-03-13",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "PA-2": {
+   "title": "Configure DNS Security over DoH",
+   "url": "https://docs.paloaltonetworks.com/dns-security/administration/configure-dns-security/configure-dns-over-doh",
+   "date": "2026-09-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "PA-3": {
+   "title": "Enable ADEM for mobile users",
+   "url": "https://docs.paloaltonetworks.com/autonomous-dem/get-started-with-adem/enable-adem-for-mobile-users/enable-adem-in-panorama-managed-pa-mu",
+   "date": "2026-06-02",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "PA-6": {
+   "title": "Prisma Access service connections",
+   "url": "https://docs.paloaltonetworks.com/content/techdocs/en_US/prisma-access/administration/prisma-access-service-connections",
+   "date": "2026-10-20",
+   "type": "vendor doc",
+   "confidence": "medium",
+   "checked": "checked 2026-10-25"
+  },
+  "PA-9": {
+   "title": "Advanced file handling for explicit proxy",
+   "url": "https://docs.paloaltonetworks.com/prisma-access/administration/prisma-access-mobile-users/mobile-users-explicit-proxy/configure-advanced-file-handling-for-explicit-proxy",
+   "date": "2026-10-20",
+   "type": "vendor doc",
+   "confidence": "medium",
+   "checked": "checked 2026-10-25"
+  },
+  "PA-15": {
+   "title": "Cheat sheet: Remote Browser Isolation",
+   "url": "https://docs.paloaltonetworks.com/prisma-access/activation-and-onboarding/your-prisma-access-license/all-available-apps-and-services/cheat-sheet-rbi",
+   "date": "2026-10-05",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "PA-S1": {
+   "title": "GlobalProtect tunnel settings (all traffic by default)",
+   "url": "https://docs.paloaltonetworks.com/prisma-access/administration/prisma-access-mobile-users/mobile-users-globalprotect/globalprotect-tunnel-settings",
+   "date": "accessed 2026-10-25",
+   "type": "vendor doc",
+   "confidence": "medium",
+   "checked": "not independently checked"
+  },
+  "NS-1": {
+   "title": "Configure a steering profile",
+   "url": "https://docs.netskope.com/en/configure-a-steering-profile/",
+   "date": "accessed 2026-10-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "NS-4": {
+   "title": "Steering configuration",
+   "url": "https://docs.netskope.com/en/steering-configuration/",
+   "date": "accessed 2026-10-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "NS-5": {
+   "title": "DNS Security",
+   "url": "https://docs.netskope.com/en/dns-security/",
+   "date": "accessed 2026-10-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25, reworded"
+  },
+  "NS-8": {
+   "title": "Threat protection policy for patient zero",
+   "url": "https://docs.netskope.com/en/creating-a-threat-protection-policy-for-patient-zero/",
+   "date": "accessed 2026-10-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "NS-10": {
+   "title": "Digital Experience Management",
+   "url": "https://docs.netskope.com/en/digital-experience-management",
+   "date": "accessed 2026-10-25",
+   "type": "vendor doc",
+   "confidence": "medium",
+   "checked": "checked 2026-10-25, reworded"
+  },
+  "MS-1": {
+   "title": "Enable Internet Access traffic forwarding",
+   "url": "https://learn.microsoft.com/en-us/entra/global-secure-access/tutorial-internet-access-enable-traffic-forwarding",
+   "date": "2026-04-21",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "MS-2": {
+   "title": "Global Secure Access known limitations",
+   "url": "https://learn.microsoft.com/en-us/entra/global-secure-access/reference-current-known-limitations",
+   "date": "2026-09-30",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "MS-10": {
+   "title": "Netskope integration (Global Secure Access)",
+   "url": "https://learn.microsoft.com/en-us/entra/global-secure-access/concept-netskope-integration",
+   "date": "2026-08-25",
+   "type": "vendor doc",
+   "confidence": "medium",
+   "checked": "checked 2026-10-25"
+  },
+  "MS-17": {
+   "title": "Configure Quick Access",
+   "url": "https://learn.microsoft.com/en-us/entra/global-secure-access/how-to-configure-quick-access",
+   "date": "2026-03-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "FT-1": {
+   "title": "FortiSASE release notes: limitations",
+   "url": "https://docs.fortinet.com/document/fortisase/latest/release-notes/49049",
+   "date": "7.4.0",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "FT-2": {
+   "title": "FortiSASE SSL inspection",
+   "url": "https://docs.fortinet.com/document/fortisase/latest/administration-guide/552490",
+   "date": "7.4.0",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25, reworded"
+  },
+  "FT-4": {
+   "title": "FortiSASE sandbox (endpoint)",
+   "url": "https://docs.fortinet.com/document/fortisase/latest/administration-guide/259161",
+   "date": "7.4.0",
+   "type": "vendor doc",
+   "confidence": "medium",
+   "checked": "checked 2026-10-25, reworded"
+  },
+  "FT-5": {
+   "title": "FortiSASE 7.4.0 release notes",
+   "url": "https://docs.fortinet.com/document/fortisase/7.4.0/release-notes/969608/",
+   "date": "7.4.0",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CP-1": {
+   "title": "Internet Access and SWG capabilities",
+   "url": "https://sc1.checkpoint.com/documents/Infinity_Portal/WebAdminGuides/EN/SASE-Admin-Guide/SASE_Security/Topics/internet_access/internet_access_overview_and_swg_capabilities.html",
+   "date": "2026-10-23",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25, reworded"
+  },
+  "CP-3": {
+   "title": "Threat Prevention policy rules",
+   "url": "https://sc1.checkpoint.com/documents/Infinity_Portal/WebAdminGuides/EN/SASE-Admin-Guide/SASE_Security/Topics/threat_prevention_policy/creating_and_configuring_policy_rules.html",
+   "date": "2026-10-19",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CP-5": {
+   "title": "Understanding Data Loss Prevention",
+   "url": "https://sc1.checkpoint.com/documents/Infinity_Portal/WebAdminGuides/EN/SASE-Admin-Guide/SASE_Security/Topics/datalossprevention/understanding_data_loss_prevention.html",
+   "date": "2026-10-12",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CP-7": {
+   "title": "Workforce AI Security: prompt attack",
+   "url": "https://sc1.checkpoint.com/documents/Infinity_Portal/WebAdminGuides/EN/Workforce-AI-Security-Admin-Guide/Topics-Workforce-AI-Security-AG/Manage-Interactions-Prompt-Attack.htm",
+   "date": "2026-09-10",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CP-9": {
+   "title": "Introduction to Check Point SASE",
+   "url": "https://sc1.checkpoint.com/documents/Infinity_Portal/WebAdminGuides/EN/SASE-Admin-Guide/SASE_Security/Topics/introduction/introduction_to_SASE.html",
+   "date": "2026-10-19",
+   "type": "vendor doc",
+   "confidence": "medium",
+   "checked": "checked 2026-10-25, reworded"
+  },
+  "CT-1": {
+   "title": "Best practices for TLS inspection",
+   "url": "https://knowledge.catonetworks.com/docs/best-practices-for-tls-inspection",
+   "date": "2026-10-20",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25, reworded"
+  },
+  "CT-4": {
+   "title": "Scanning files in the sandbox",
+   "url": "https://knowledge.catonetworks.com/docs/scanning-files-in-the-sandbox",
+   "date": "2026-09-16",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CT-6": {
+   "title": "DLP troubleshooting",
+   "url": "https://knowledge.catonetworks.com/docs/dlp-troubleshooting",
+   "date": "2026-06-22",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CT-11": {
+   "title": "What is Cato experience monitoring",
+   "url": "https://knowledge.catonetworks.com/docs/what-is-cato-experience-monitoring",
+   "date": "2026-07-14",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CT-S1": {
+   "title": "Routing with the Cato Client (split tunnel)",
+   "url": "https://knowledge.catonetworks.com/docs/routing-with-the-cato-client-split-tunnel-policy",
+   "date": "2026-09-16",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "not independently checked"
+  },
+  "CS-1": {
+   "title": "Secure Access DNS and web: client configuration",
+   "url": "https://securitydocs.cisco.com/docs/csa/olh/120348.dita",
+   "date": "accessed 2026-10-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CS-8": {
+   "title": "Manage file inspection and file analysis",
+   "url": "https://docs.sse.cisco.com/sse-user-guide/docs/manage-file-inspection",
+   "date": "about 2026-06",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CS-16": {
+   "title": "Limitations and range limits",
+   "url": "https://docs.sse.cisco.com/sse-user-guide/docs/limitations-and-range-limits",
+   "date": "about 2026-05",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CS-10": {
+   "title": "DLP rules based on file size (announcement)",
+   "url": "https://community.cisco.com/t5/secure-access-announcements/dlp-rules-based-on-file-size/ta-p/5307811",
+   "date": "2025-07-14",
+   "type": "vendor announcement",
+   "confidence": "medium",
+   "checked": "not independently checked"
+  },
+  "CF-1": {
+   "title": "Gateway TLS decryption",
+   "url": "https://developers.cloudflare.com/cloudflare-one/traffic-policies/http-policies/tls-decryption/",
+   "date": "2026-06-08",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CF-2": {
+   "title": "Gateway protocol detection",
+   "url": "https://developers.cloudflare.com/cloudflare-one/traffic-policies/network-policies/protocol-detection",
+   "date": "2026-04-22",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CF-5": {
+   "title": "Connect an IP/CIDR through Cloudflare Tunnel",
+   "url": "https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/private-net/cloudflared/connect-cidr/",
+   "date": "2026-10-12",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CF-7": {
+   "title": "Gateway AV scanning",
+   "url": "https://developers.cloudflare.com/cloudflare-one/traffic-policies/http-policies/antivirus-scanning/",
+   "date": "2026-04-22",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "CF-13": {
+   "title": "DEX traceroute test",
+   "url": "https://developers.cloudflare.com/cloudflare-one/insights/dex/tests/traceroute",
+   "date": "2026-08-25",
+   "type": "vendor doc",
+   "confidence": "high",
+   "checked": "checked 2026-10-25"
+  },
+  "IND-1": {
+   "title": "SDxCentral: SSE protection found uneven (CyberRatings 2025)",
+   "url": "https://www.sdxcentral.com/news/sse-protection-found-uneven-across-major-vendors/",
+   "date": "2025-07-17",
+   "type": "independent test (press)",
+   "confidence": "medium",
+   "checked": "checked 2026-10-25"
+  },
+  "ZS-1": {
+   "title": "Zscaler: Configuring Advanced Settings",
+   "url": "https://help.zscaler.com/zia/configuring-advanced-settings",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-1b": {
+   "title": "Zscaler: Understanding firewall capabilities",
+   "url": "https://help.zscaler.com/zia/understanding-firewall-capabilities",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-2": {
+   "title": "Zscaler: About DNS Control",
+   "url": "https://help.zscaler.com/zia/about-dns-control",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-3": {
+   "title": "Zscaler: Configuring the Sandbox Policy",
+   "url": "https://help.zscaler.com/zia/configuring-sandbox-policy",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-3b": {
+   "title": "Zscaler: About Sandbox",
+   "url": "https://help.zscaler.com/zia/about-sandbox",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-4": {
+   "title": "Zscaler: DLP policy rules with content inspection",
+   "url": "https://help.zscaler.com/zia/configuring-dlp-policy-rules-content-inspection",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-5": {
+   "title": "Zscaler: About App Connectors",
+   "url": "https://help.zscaler.com/zpa/about-connectors",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-6": {
+   "title": "Zscaler: What is Zscaler Digital Experience?",
+   "url": "https://help.zscaler.com/zdx/what-is-zscaler-digital-experience",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  },
+  "ZS-7": {
+   "title": "Zscaler: What is AI Guard?",
+   "url": "https://help.zscaler.com/secure-ai-users/what-ai-guard",
+   "date": "accessed 2026-10-25",
+   "type": "Zscaler doc",
+   "confidence": "high",
+   "checked": "Zscaler doc, read once; confirm in a browser"
+  }
+ },
  "differentiators": [
   {
    "id": "inspect-all",
-   "title": "Inspects all of it, not just web traffic",
-   "why": "Threats and data move on any port and through encrypted DNS. Inspecting only web traffic leaves a gap an attacker or a careless app can use.",
-   "ask": "Show TLS inspection of traffic on a non-standard port, and control of DNS over HTTPS, from the endpoint agent, with no extra appliance.",
+   "title": "Every port inspected, not just web traffic",
+   "why": "Threats and data move on any port. Inspecting only standard web ports leaves a gap an attacker or a careless app can use.",
+   "ask": "From the endpoint agent, with the configuration you'd ship: show TLS on a non-standard port decrypted and inspected, and non-web traffic logged and controlled.",
    "criteria": [
     "IS-SSL-01",
     "IS-SSL-03",
-    "IS-DNS-02"
+    "IS-FW-01"
    ],
+   "zscaler": {
+    "needs": "ZIA Advanced Firewall, and Auto Proxy Forwarding for Non-Defined Ports (Advanced Settings) so non-standard-port web traffic goes to the web proxy; Z-Tunnel 2.0 in the forwarding profile.",
+    "sources": [
+     "ZS-1",
+     "ZS-1b"
+    ]
+   },
    "se": {
-    "prisma": "Probe: which traffic the agent steers and decrypts by default, and whether non-web ports are inspected inline or only firewalled.",
-    "netskope": "Probe: whether non-web traffic needs a separate steering mode or product (cloud firewall) to be inspected, and how DoH is handled.",
-    "cisco": "Probe: whether DNS-layer protection and full proxy inspection are separate components, and what covers DoH from the agent.",
-    "cloudflare": "Probe: what the agent sends through the gateway by default, and whether TLS on non-standard ports is decrypted and inspected."
+    "prisma": {
+     "stance": "strong",
+     "note": "Their docs say the agent routes all traffic to Prisma Access by default. Don't pick this fight.",
+     "sources": [
+      "PA-S1"
+     ]
+    },
+    "netskope": {
+     "stance": "gap",
+     "note": "Their steering doc recommends web-only steering (HTTP/HTTPS) for most customers and All Traffic when Cloud Firewall is subscribed. Check whether the quote includes Cloud Firewall.",
+     "sources": [
+      "NS-1"
+     ]
+    },
+    "cisco": {
+     "stance": "gap",
+     "note": "The roaming module steers web traffic on ports 80/443 to the SWG; all ports need VPN-as-a-service.",
+     "sources": [
+      "CS-1"
+     ]
+    },
+    "cloudflare": {
+     "stance": "gap",
+     "note": "By default Gateway inspects HTTP only on port 80 (HTTPS on 443 with decryption); other ports need protocol detection with 'inspect on all ports'. Non-HTTP protocols inside TLS bypass network policy filtering.",
+     "sources": [
+      "CF-1",
+      "CF-2"
+     ]
+    },
+    "microsoft": {
+     "stance": "gap",
+     "note": "The default Internet Access rule tunnels TCP 80 and 443, and the platform assumes standard HTTP/S ports; QUIC isn't supported.",
+     "sources": [
+      "MS-1",
+      "MS-2"
+     ]
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Default SSL inspection is certificate inspection (not deep). Whether the agent tunnels all ports by default wasn't confirmed.",
+     "sources": [
+      "FT-2"
+     ]
+    },
+    "checkpoint": {
+     "stance": "gap",
+     "note": "Their docs say the malware engine scans files under 10 MB and only for internet traffic through a browser.",
+     "sources": [
+      "CP-1"
+     ]
+    },
+    "cato": {
+     "stance": "strong",
+     "note": "The client routes traffic through the tunnel by default. Don't pick this fight.",
+     "sources": [
+      "CT-S1"
+     ]
+    }
    }
   },
   {
-   "id": "anywhere",
-   "title": "One agent, the same policy, on any network",
-   "why": "Users work from home, hotels and offices. Protection that changes with the network, or needs a VPN, is protection that fails when people travel.",
-   "ask": "Run the same tests from the office and from home Wi-Fi with no VPN: show identical results, internet and private apps, from one agent.",
+   "id": "non-browser",
+   "title": "Apps outside the browser get the same protection",
+   "why": "Desktop apps, scripts and sync clients move files and data too. Protection that only covers the browser misses them.",
+   "ask": "Run the malware and data-protection tests from a script or desktop app, not a browser, and show the same blocks.",
    "criteria": [
-    "IS-TEN-01",
-    "IS-ZCC-01",
-    "IS-ZCC-03",
-    "PA-APP-01",
-    "DX-SCR-01"
+    "IS-THR-01",
+    "IS-DLP-01"
    ],
+   "zscaler": {
+    "needs": "Nothing extra: the kit's device tests already run from a script (the POV probe), not a browser.",
+    "sources": []
+   },
    "se": {
-    "prisma": "Probe: how many agents or modes cover internet, private apps and experience monitoring, and whether policy differs on and off network.",
-    "netskope": "Probe: whether private access and internet security use one agent and one policy, and how experience monitoring is licensed.",
-    "cisco": "Probe: how many clients or modules are installed for secure internet, private access and experience monitoring.",
-    "cloudflare": "Probe: digital experience monitoring depth (hop-by-hop path) compared with ZDX."
+    "checkpoint": {
+     "stance": "gap",
+     "note": "DLP applies only to browser uploads and downloads (native EXE clients aren't supported), and the malware engine covers browser traffic.",
+     "sources": [
+      "CP-5",
+      "CP-1"
+     ]
+    },
+    "prisma": {
+     "stance": "parity",
+     "note": "No documented browser-only limit found.",
+     "sources": []
+    },
+    "netskope": {
+     "stance": "parity",
+     "note": "No documented browser-only limit found.",
+     "sources": []
+    },
+    "cisco": {
+     "stance": "parity",
+     "note": "No documented browser-only limit found.",
+     "sources": []
+    },
+    "cloudflare": {
+     "stance": "parity",
+     "note": "No documented browser-only limit found.",
+     "sources": []
+    },
+    "microsoft": {
+     "stance": "parity",
+     "note": "Covers apps on ports 80/443 (see 'every port').",
+     "sources": []
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "cato": {
+     "stance": "parity",
+     "note": "Tunnels all traffic.",
+     "sources": []
+    }
+   }
+  },
+  {
+   "id": "encrypted-dns",
+   "title": "Encrypted DNS can't route around policy",
+   "why": "DNS over HTTPS hides lookups from ordinary DNS controls, so a browser setting can quietly bypass DNS security.",
+   "ask": "Turn on DNS over HTTPS in a browser and show the lookup blocked or controlled, with the request logged.",
+   "criteria": [
+    "IS-DNS-01",
+    "IS-DNS-02"
+   ],
+   "zscaler": {
+    "needs": "DNS Control (the firewall on for the traffic); the kit adds a POV rule blocking DNS over HTTPS. Confirm in your lab first.",
+    "sources": [
+     "ZS-2"
+    ]
+   },
+   "se": {
+    "microsoft": {
+     "stance": "gap",
+     "note": "The client doesn't support secure DNS (DoH, DoT, DNSSEC).",
+     "sources": [
+      "MS-2"
+     ]
+    },
+    "netskope": {
+     "stance": "gap",
+     "note": "DNS Security needs both the Cloud Firewall and DNS licenses: check the quote includes both.",
+     "sources": [
+      "NS-5"
+     ]
+    },
+    "prisma": {
+     "stance": "gap",
+     "note": "DoH inspection is for listed resolvers, and only the first query of a pipelined connection is inspected; needs DNS Security licensing.",
+     "sources": [
+      "PA-2"
+     ]
+    },
+    "cloudflare": {
+     "stance": "strong",
+     "note": "DNS is a core strength. Don't pick this fight.",
+     "sources": []
+    },
+    "cisco": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "checkpoint": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "cato": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    }
+   }
+  },
+  {
+   "id": "hold-unknown",
+   "title": "Unknown files are held until they're proven safe",
+   "why": "Allowing a never-seen file while it's analyzed means patient zero gets it. Holding it until the verdict stops it the first time.",
+   "ask": "Download a file no one has seen before through the endpoint agent, and show it held until the sandbox verdict, not delivered and checked later.",
+   "criteria": [
+    "IS-SBX-01"
+   ],
+   "zscaler": {
+    "needs": "Advanced Cloud Sandbox; a rule with first-time action Quarantine (the kit makes it; Zscaler's predefined quarantine rules ship disabled).",
+    "sources": [
+     "ZS-3",
+     "ZS-3b"
+    ]
+   },
+   "se": {
+    "cisco": {
+     "stance": "gap",
+     "note": "Their docs: Secure Malware Analytics doesn't protect against the first download of a new or unknown malicious file.",
+     "sources": [
+      "CS-8"
+     ]
+    },
+    "prisma": {
+     "stance": "gap",
+     "note": "Wait-for-verdict handling (up to 100 MB) is documented for explicit-proxy traffic; ask them to show it over the agent tunnel.",
+     "sources": [
+      "PA-9"
+     ]
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "The documented wait-for-results option is the FortiClient endpoint sandbox (files up to 100 MB), not the inline gateway.",
+     "sources": [
+      "FT-4"
+     ]
+    },
+    "microsoft": {
+     "stance": "unknown",
+     "note": "Malware protection on Internet Access comes from a Netskope partner offer that needs TLS inspection.",
+     "sources": [
+      "MS-10"
+     ]
+    },
+    "netskope": {
+     "stance": "strong",
+     "note": "With Advanced Threat Protection, Netskope holds unknown files until a verdict. Don't use this one.",
+     "sources": [
+      "NS-8"
+     ]
+    },
+    "checkpoint": {
+     "stance": "parity",
+     "note": "Appears to hold files during emulation. Don't use this one.",
+     "sources": []
+    },
+    "cloudflare": {
+     "stance": "parity",
+     "note": "Holds supported file types behind an interstitial (Enterprise add-on). Don't use this one.",
+     "sources": []
+    },
+    "cato": {
+     "stance": "unknown",
+     "note": "Sandbox needs the ATP license; files over 100 MB aren't supported.",
+     "sources": [
+      "CT-4"
+     ]
+    }
+   }
+  },
+  {
+   "id": "large-files",
+   "title": "Large files are still inspected",
+   "why": "Attackers and leaks use big files because many products stop scanning at a size limit.",
+   "ask": "Upload a 60 MB file with sensitive data near the end, and download a large file with a test threat inside, and show both caught.",
+   "criteria": [
+    "IS-DLP-03",
+    "IS-THR-01"
+   ],
+   "zscaler": {
+    "needs": "DLP engines take files up to 400 MB and scan the first 100 MB of extracted text. Confirm the 60 MB test in your lab first.",
+    "sources": [
+     "ZS-4"
+    ]
+   },
+   "se": {
+    "cato": {
+     "stance": "gap",
+     "note": "Inline DLP maximum file size is 50 MB; the sandbox doesn't support files over 100 MB.",
+     "sources": [
+      "CT-6",
+      "CT-4"
+     ]
+    },
+    "cisco": {
+     "stance": "gap",
+     "note": "AV scans only the first 50 MB; a Cisco announcement recommends blocking uploads over 50 MB because DLP can't scan them.",
+     "sources": [
+      "CS-8",
+      "CS-10"
+     ]
+    },
+    "checkpoint": {
+     "stance": "gap",
+     "note": "Threat Prevention doesn't inspect encrypted files or files over 10 MB (add a large malware test by hand).",
+     "sources": [
+      "CP-3"
+     ]
+    },
+    "cloudflare": {
+     "stance": "gap",
+     "note": "AV scanning limit is 100 MB on Enterprise (15 MB Free, 25 MB PAYG); archives over three levels can't be scanned.",
+     "sources": [
+      "CF-7"
+     ]
+    },
+    "prisma": {
+     "stance": "parity",
+     "note": "Enterprise DLP handles files up to 100 MB depending on the app: a 60 MB test won't separate you. Use 150 MB only if Zscaler passes it in your lab.",
+     "sources": []
+    },
+    "netskope": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "microsoft": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    }
    }
   },
   {
@@ -55,33 +765,134 @@
     "PA-APP-04",
     "PA-CON-01"
    ],
+   "zscaler": {
+    "needs": "Nothing extra: App Connectors connect outbound only, and the POV segment opens only the app's ports.",
+    "sources": [
+     "ZS-5"
+    ]
+   },
    "se": {
-    "prisma": "Probe: whether private access is per-app or network-level for the tested setup, and what is exposed inbound.",
-    "netskope": "Probe: whether access is scoped to app and port, and what a user can reach on the same server.",
-    "cisco": "Probe: whether access is per-app or a network tunnel in the tested mode, and what lateral movement is possible.",
-    "cloudflare": "Probe: how app scoping is set up (tunnel routes versus per-app), and what else a user can reach on that network."
+    "cloudflare": {
+     "stance": "gap",
+     "note": "Their docs: by default every enrolled device can connect to a private network published through Cloudflare Tunnel; a catch-all block policy is recommended.",
+     "sources": [
+      "CF-5"
+     ]
+    },
+    "microsoft": {
+     "stance": "gap",
+     "note": "Quick Access (network-wide) is described as a transition state; check whether the POV uses Quick Access or per-app access.",
+     "sources": [
+      "MS-17"
+     ]
+    },
+    "prisma": {
+     "stance": "gap",
+     "note": "Service connections give mobile users access to private apps and resources (network-level); check whether the POV uses ZTNA Connector instead.",
+     "sources": [
+      "PA-6"
+     ]
+    },
+    "checkpoint": {
+     "stance": "gap",
+     "note": "Lists 'full mesh any-to-any connectivity to your private network' as a SASE benefit.",
+     "sources": [
+      "CP-9"
+     ]
+    },
+    "cisco": {
+     "stance": "unknown",
+     "note": "Resource connectors are outbound-only and per-resource; VPN-as-a-service is network-level. Check which the POV uses.",
+     "sources": []
+    },
+    "netskope": {
+     "stance": "parity",
+     "note": "Per-app access with outbound-only publishers. Don't use this one.",
+     "sources": []
+    },
+    "cato": {
+     "stance": "parity",
+     "note": "Per-app Private Access with deny-by-default rules. Don't use this one.",
+     "sources": []
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    }
    }
   },
   {
-   "id": "hold-unknown",
-   "title": "Unknown files are held until they're proven safe",
-   "why": "Allowing a never-seen file while it's analyzed means patient zero gets it. Holding it until the sandbox verdict stops it first time.",
-   "ask": "Download a file no one has seen before and show it held until the sandbox verdict, not delivered and checked later.",
+   "id": "experience",
+   "title": "Slow apps traced hop by hop, on every device",
+   "why": "When an app is slow, the question is where: Wi-Fi, ISP, the security cloud or the app. Hop-by-hop paths and device health answer it.",
+   "ask": "For a slow app, show the hop-by-hop path from the user's device to the app with Wi-Fi, CPU and memory, on Windows, macOS and mobile, within the quoted licenses.",
    "criteria": [
-    "IS-SBX-01"
+    "DX-SCR-01",
+    "DX-PATH-01"
    ],
+   "zscaler": {
+    "needs": "ZDX is licensed too: compare what each quote includes, not list prices.",
+    "sources": [
+     "ZS-6"
+    ]
+   },
    "se": {
-    "prisma": "Probe: default behavior for first-seen files during analysis in the tested setup (hold versus allow and alert).",
-    "netskope": "Probe: whether first-seen files are held inline or allowed while sandboxed, and at what file sizes.",
-    "cisco": "Probe: whether the sandbox verdict blocks the first download or only later ones.",
-    "cloudflare": "Probe: whether sandboxing holds the first download, and which file types it covers."
+    "prisma": {
+     "stance": "gap",
+     "note": "ADEM needs its own license and runs on Windows or macOS endpoints only for mobile users.",
+     "sources": [
+      "PA-3"
+     ]
+    },
+    "cato": {
+     "stance": "gap",
+     "note": "DEM needs a separate license; app performance metrics cover outbound TCP only.",
+     "sources": [
+      "CT-11"
+     ]
+    },
+    "cloudflare": {
+     "stance": "gap",
+     "note": "DEX traceroute gives hop-by-hop latency and loss but isn't available on Linux or iOS.",
+     "sources": [
+      "CF-13"
+     ]
+    },
+    "netskope": {
+     "stance": "unknown",
+     "note": "DEM is enabled through the sales representative; path depth not confirmed.",
+     "sources": [
+      "NS-10"
+     ]
+    },
+    "microsoft": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "checkpoint": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "cisco": {
+     "stance": "unknown",
+     "note": "Experience monitoring uses the ThousandEyes module; entitlement varies.",
+     "sources": []
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    }
    }
   },
   {
    "id": "ai-live",
    "title": "AI security proven on their own AI, live",
-   "why": "AI risk is specific: prompt injection on their own apps, sensitive data in prompts, and AI tools nobody approved. It should be shown working, not described.",
-   "ask": "Attack your own AI application with prompt injection and data-leak prompts, and show each one blocked; show sensitive data stopped in a GenAI prompt and an unapproved AI tool isolated.",
+   "why": "AI risk is specific: prompt injection on their own apps, sensitive data in prompts, and AI tools nobody approved. It should be shown blocking, not described.",
+   "ask": "Attack your own AI application with prompt injection and data-leak prompts and show each one blocked inline; show sensitive data stopped in a GenAI prompt and an unapproved AI tool isolated.",
    "criteria": [
     "AI-AIG-01",
     "AI-AIG-02",
@@ -89,11 +900,116 @@
     "AI-GEN-02",
     "AI-GEN-03"
    ],
+   "zscaler": {
+    "needs": "AI Guard for the customer's AI app; ZIA for the GenAI controls.",
+    "sources": [
+     "ZS-7"
+    ]
+   },
    "se": {
-    "prisma": "Probe: whether runtime protection for the customer's own AI apps is part of the same platform and policy, or a separate product.",
-    "netskope": "Probe: whether protection covers the customer's own AI app (prompt injection), not only use of public GenAI.",
-    "cisco": "Probe: how AI app protection is delivered and whether it can be shown on the customer's own app in the POV.",
-    "cloudflare": "Probe: whether AI protection covers prompt injection on the customer's own app and data in GenAI prompts with the same policy."
+    "checkpoint": {
+     "stance": "gap",
+     "note": "Prompt attack detection for MCP and agent traffic is Early Availability and detect-only: it doesn't block.",
+     "sources": [
+      "CP-7"
+     ]
+    },
+    "prisma": {
+     "stance": "strong",
+     "note": "Broad AI runtime security (AIRS). Fight on measured results, not features.",
+     "sources": []
+    },
+    "netskope": {
+     "stance": "strong",
+     "note": "AI guardrails, gateway and red teaming are GA. Fight on measured results.",
+     "sources": []
+    },
+    "cisco": {
+     "stance": "strong",
+     "note": "AI Access and AI Defense exist. Fight on measured results.",
+     "sources": []
+    },
+    "cato": {
+     "stance": "strong",
+     "note": "AI security for apps exists (separate SKU). Fight on measured results.",
+     "sources": []
+    },
+    "cloudflare": {
+     "stance": "unknown",
+     "note": "Firewall for AI protects apps proxied by Cloudflare; check whether the customer's AI app is.",
+     "sources": []
+    },
+    "microsoft": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    }
+   }
+  },
+  {
+   "id": "anywhere",
+   "title": "Same policy on any network, one agent",
+   "why": "Users work from home, hotels and offices. Protection that changes with the network is protection that fails when people travel.",
+   "ask": "Run the same tests on the office network and on home Wi-Fi with no VPN, and show identical results from one agent.",
+   "criteria": [
+    "IS-TEN-01",
+    "IS-ZCC-01",
+    "IS-ZCC-03"
+   ],
+   "zscaler": {
+    "needs": "Nothing extra: the forwarding profile sets on- and off-network behavior; the kit's profile tunnels both.",
+    "sources": []
+   },
+   "se": {
+    "netskope": {
+     "stance": "gap",
+     "note": "On premises, dynamic steering sends cloud apps only by default; All Traffic on-prem needs a backend option enabled by support.",
+     "sources": [
+      "NS-4"
+     ]
+    },
+    "microsoft": {
+     "stance": "unknown",
+     "note": "Check multi-session or VM hosts: the client doesn't support concurrent sessions or hosts that run VMs.",
+     "sources": [
+      "MS-2"
+     ]
+    },
+    "prisma": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "cisco": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "cloudflare": {
+     "stance": "parity",
+     "note": "One client for all traffic.",
+     "sources": []
+    },
+    "fortinet": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "checkpoint": {
+     "stance": "unknown",
+     "note": "Not researched or couldn't be confirmed: test it, don't claim it.",
+     "sources": []
+    },
+    "cato": {
+     "stance": "parity",
+     "note": "One client, tunnels by default.",
+     "sources": []
+    }
    }
   }
  ]

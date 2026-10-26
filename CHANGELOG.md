@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.86
+- **Competitive land mines, rebuilt from public research.** Nine differentiators, now with cited SE notes for eight competitors: Palo Alto Prisma Access, Netskope, Cisco Secure Access, Cloudflare One, Microsoft Entra (Global Secure Access), Fortinet FortiSASE, Check Point Harmony SASE and Cato Networks. For each, the notes say where the competitor stands (gap: use it; parity: skip it; strong: avoid it; unverified: test, don't claim), what their own public docs say, and link the sources (researched 2026-10-25, each claim re-checked against its page). Each differentiator also says what Zscaler needs for the test to pass. Independent results (CyberRatings 2025 SSE) are listed with their source.
+- New differentiators: apps outside the browser get the same protection, encrypted DNS can't route around policy, large files are still inspected, and slow apps traced hop by hop. New opt-in criteria: **IS-DLP-03** (a 60 MB upload with card numbers at the end is blocked) and **DX-PATH-01** (a slow app traced hop by hop to the cause, demonstrated).
+- **DNS over HTTPS is now blocked with a DNS Control rule** (protocol DNS over HTTPS) and tested with a real DNS-over-HTTPS query; 0.9.84's URL-category rule wouldn't have matched. **IS-SSL-03** names what it needs: ZIA Advanced Firewall and Auto Proxy Forwarding for Non-Defined Ports.
+- Customer-facing text (the vendor sheet, the report) still never names a competitor.
+
 ## 0.9.85
 - **AI Guard policy in the Test runner.** A Policy panel beside the run box (and the Policy tab) sets each detector to **Block, Monitor or Off**, for prompts and replies, read live from the POV policy in AI Guard; presets are there too. Open a result to change the detectors it triggered straight away, then **Run this test again** (it doesn't re-run by itself). Only the POV policy changes; a preset turns every detector back on.
 - Detectors have their own names: "PII (cards, IDs, contact details)", "PII deep scan" and "Personal data" were all "Sensitive data (PII)" (the name AI Guard's dashboard files them under, still used for dashboard coverage).
