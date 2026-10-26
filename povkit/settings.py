@@ -82,6 +82,13 @@ def set_value(pov, key, raw, save=True):
         if v in povs.prefixes_in_use(exclude=pov.id):
             raise KitError(f"Another POV on this laptop uses '{v}' in a tenant. Pick another, such as "
                            f"{povs.free_prefix(v, exclude=pov.id)}.")
+    if key == "identity.test_login":
+        ic = pov.cfg.setdefault("identity", {})
+        if not v and ic.get("test_login_auto"):   # left empty: keep the name the kit picked for this tenant
+            return ic.get("test_login")
+        if v != ic.get("test_login"):   # typed by the SE: theirs from now on, never renamed by the kit
+            ic.pop("test_login_auto", None)
+            ic.pop("test_login_why", None)
     if "." in key:
         sect, field = key.split(".", 1)
         pov.cfg.setdefault(sect, {})[field] = v

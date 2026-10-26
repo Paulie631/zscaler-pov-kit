@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.96
+- **Test account names nobody in the tenant has.** When you pick Test accounts, the kit looks in the tenant (read-only): if `zpov-pilot-1`… already belongs to another POV or SE, this POV's accounts get its own code, `zpov-b10c-pilot-1`…, and the step says why. Preflight checks again. Works for ZIA (Hosted DB) and ZIdentity accounts. A name you type is always kept (and flagged if it's taken), and once the accounts exist their name doesn't change until teardown.
+- The test accounts' domain shows as found in the tenant.
+
 ## 0.9.95
 - **The Apply step shows what's stopping it, with the fix, right there.** Instead of "The checks found problems… See Preflight", it lists each problem with what was found, the fix, the console steps where there are any, and a button to the setup step that fixes it (Open Pilot users, Open Connect, Use prefix ZPOV2…). **Fixed it: check again** reads the tenant again in place. The list of objects to make folds away until the problems are fixed. The customer-approval change list shows the same.
 - Fixes written as Terminal commands (`pov-kit set …`) now say where that setting is in Setup, with the command kept as a small aside; the test accounts' missing email domain says to type it in Pilot users › Test accounts.

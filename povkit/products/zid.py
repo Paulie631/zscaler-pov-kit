@@ -74,6 +74,71 @@ def test_login(cfg):
     return v or f"{str(cfg.get('prefix') or naming.DEFAULT_PREFIX).lower()}-pilot"
 
 
+def pov_code(pov):
+    """The short code at the end of the POV's ID (ztester-b10c -> b10c): unique on this laptop."""
+    return re.sub(r"[^a-z0-9]", "", str(pov.id).rsplit("-", 1)[-1].lower())[:8] or "pov"
+
+
+def choose_test_login(pov, dom, is_taken, made=False):
+    """Names for the kit's test accounts that nobody in the tenant has: <prefix>-pilot-1... unless one of those is
+    already there (another POV's or SE's), then <prefix>-<POV code>-pilot-1... A name the SE typed is kept as it is,
+    and so is the name once the accounts exist. is_taken(email) -> bool (accounts this POV made don't count).
+    Saves the choice. -> (name, why: str or "", taken: [emails still taken])"""
+    ic = pov.cfg.setdefault("identity", {})
+    cur = str(ic.get("test_login") or "").strip().lower()
+    if (cur and not ic.get("test_login_auto")) or made:
+        name = cur or test_login(pov.cfg)
+        return name, ic.get("test_login_why") or "", [e for e in test_emails(pov.cfg, dom) if is_taken(e)]
+    prefix = str(pov.cfg.get("prefix") or naming.DEFAULT_PREFIX).lower()
+    n = test_count(pov.cfg)
+    tried, chosen = [], None
+    for base in (f"{prefix}-pilot", f"{prefix}-{pov_code(pov)}-pilot", f"{prefix}-{pov_code(pov)}-pilot2"):
+        taken = [e for e in (f"{base}-{i}@{dom}" for i in range(1, n + 1)) if is_taken(e)]
+        if not taken:
+            chosen = base
+            break
+        tried.append((base, taken))
+    if chosen is None:
+        return cur or f"{prefix}-pilot", "", tried[0][1]
+    why = ""
+    if tried:
+        t = tried[0][1]
+        why = (f"{', '.join(t[:3])}{' and more' if len(t) > 3 else ''} {'is' if len(t) == 1 else 'are'} already in this "
+               f"tenant (another POV or SE), so this POV's accounts are named {chosen}-1, {chosen}-2…")
+    if chosen == f"{prefix}-pilot":
+        changed = bool(ic.pop("test_login", None)) | bool(ic.pop("test_login_auto", None)) | bool(ic.pop("test_login_why", None))
+    else:
+        changed = ic.get("test_login") != chosen or ic.get("test_login_why") != why
+        ic.update(test_login=chosen, test_login_auto=True, test_login_why=why)
+    if changed:
+        pov.save()
+    return chosen, why, []
+
+
+def name_lookup(t, pov):
+    """For the Pilot users step: is a test account email already in the tenant, as someone else's? Read-only.
+    -> (is_taken(email), made: this POV already made its test accounts, domain)"""
+    from .zia import ledger_of, test_domain
+    led = ledger_of(pov)
+    if enabled(pov.cfg):   # the accounts go in ZIdentity, on <vanity>.zslogin.net
+        def is_taken(em):
+            rows = items(t.call("zid.users", "list_users", query_params={"login_name": em}))
+            hit = next((r for r in rows if zid_login(r) == em), None)
+            own = led.find(f"zid.user.{slug(em)}")
+            return bool(hit) and not (own and own["id"] == str(g(hit, "id")))
+        return is_taken, any(e["kind"] == "user" for e in led.active("zid")), zid_domain(pov.cfg)
+    mine = {str(e["id"]) for e in led.active("zia") if e["kind"] == "user"}
+    seen = {}
+
+    def is_taken(em):
+        local = em.split("@")[0]
+        if local not in seen:
+            seen[local] = items(t.call("user_management", "list_users", query_params={"search": local}))
+        return any(str(g(u, "email") or "").lower() == em and str(g(u, "id")) not in mine for u in seen[local])
+    dom = ident(pov.cfg).get("test_domain") or test_domain(t)
+    return is_taken, bool(mine), dom
+
+
 def test_emails(cfg, dom=None):
     dom = dom or zid_domain(cfg)
     return [f"{test_login(cfg)}-{n}@{dom}" for n in range(1, test_count(cfg) + 1)] if dom else []
@@ -127,6 +192,19 @@ class ZID(Product):
             snap["readable"] = False
             return snap, checks
         snap["readable"] = True
+        if testing and zid_domain(pov.cfg):   # names nobody in ZIdentity has (another POV's or SE's accounts)
+            from .zia import ledger_of as _lo
+            _led = _lo(pov)
+
+            def taken_in_zid(em):
+                rows = items(t.call("zid.users", "list_users", query_params={"login_name": em}))
+                hit = next((r for r in rows if zid_login(r) == em), None)
+                own = _led.find(f"zid.user.{slug(em)}")
+                return bool(hit) and not (own and own["id"] == str(g(hit, "id")))
+            made = any(e["kind"] == "user" for e in _led.active("zid"))
+            _, why_names, _ = choose_test_login(pov, zid_domain(pov.cfg), taken_in_zid, made=made)
+            if why_names:
+                checks.append(check("zid-testnames", "Test account names", INFO, why_names))
         emails = (test_emails(pov.cfg) if testing else
                   [e.strip().lower() for e in pov.cfg.get("pilot_emails") or [] if e.strip()])
         if testing and not emails:

@@ -157,6 +157,7 @@ def test_accounts(p):
                      "made": bool(led.find(f"zia.user.{n}") or (dom and led.find(f"zid.user.{_zid.slug(f'{login}-{n}@{dom}')}"))),
                      "password": None if in_zid else bool(secrets.get(p.id, TEST_PW.format(n=n)))})
     return {"login": login, "default_login": f"{str(p.prefix).lower()}-pilot", "domain": dom,
+            "auto": bool(ic.get("test_login_auto")), "why": ic.get("test_login_why") or "",
             "domain_from": "zidentity" if in_zid else ("set" if ic.get("test_domain") else "tenant" if dom else None),
             "where": "zidentity" if in_zid else "zia", "accounts": rows}
 
@@ -1005,6 +1006,21 @@ def api(method, path, body, q):
         return 200, {"ok": True}
     if path == "/api/test-accounts":   # the test accounts the POV will make (or made), and their passwords
         p = current()
+        if body.get("check"):   # Pilot users › Test accounts: pick names nobody in the tenant has (read-only)
+            from .core.guard import ReadOnlyTenant
+            from .products import zid as _zid
+            try:
+                is_taken, made, dom = _zid.name_lookup(ReadOnlyTenant(tf(p, "discovery")), p)
+            except KitError as e:
+                return 200, dict(test_accounts(p), checked=False, check_error=str(e)[:200])
+            if dom:
+                _zid.choose_test_login(p, dom, is_taken, made=made)
+            res = test_accounts(p)
+            if dom and not res["domain"]:   # found in the tenant just now: show the real addresses
+                res.update(domain=dom, domain_from="tenant")
+                for a_ in res["accounts"]:
+                    a_["email"] = a_["email"].replace("@…", "@" + dom)
+            return 200, dict(res, checked=bool(dom))
         if body.get("n") is not None:   # a password before apply: kept in the keychain, used when apply makes it
             from .products import zia as _zia
             led = lifecycle.ledger(p)

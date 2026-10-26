@@ -23,16 +23,44 @@ def hosted(pov, tenant, n=2, **extra):
     pov.save()
 
 
-def test_plan_uses_the_name_and_flags_names_in_use(pov, tenant, tenant_for):
+def test_taken_default_names_get_the_pov_code(pov, tenant, tenant_for):
     hosted(pov, tenant)
     tenant.users.append({"id": 92, "name": "Other SE", "email": "zpov-pilot-1@acme.com", "groups": []})
+    items, _, _, checks = lifecycle.plan(pov, tenant_for)
+    st = {c["id"]: c for c in checks}
+    code = pov.id.rsplit("-", 1)[-1]
+    assert "zia-testtaken" not in st and "zpov-pilot-1@acme.com" in st["zia-testnames"]["detail"]
+    assert [i["body"]["email"] for i in items if i["kind"] == "user"] == [f"zpov-{code}-pilot-1@acme.com",
+                                                                          f"zpov-{code}-pilot-2@acme.com"]
+    assert pov.cfg["identity"]["test_login_auto"]
+    settings.set_value(pov, "identity.test_login", "")                         # Save with the box empty: kept
+    assert pov.cfg["identity"]["test_login"] == f"zpov-{code}-pilot"
+
+
+def test_a_typed_name_is_kept_and_flagged_if_taken(pov, tenant, tenant_for):
+    hosted(pov, tenant)
+    settings.set_value(pov, "identity.test_login", "paul-pov")
+    tenant.users.append({"id": 93, "name": "Old", "email": "paul-pov-1@acme.com", "groups": []})
     _, _, _, checks = lifecycle.plan(pov, tenant_for)
     st = {c["id"]: c for c in checks}
-    assert st["zia-testtaken"]["status"] == "fail" and "zpov-pilot-1@acme.com" in st["zia-testtaken"]["detail"]
-    settings.set_value(pov, "identity.test_login", "paul-pov")
+    assert st["zia-testtaken"]["status"] == "fail" and pov.cfg["identity"]["test_login"] == "paul-pov"
+    settings.set_value(pov, "identity.test_login", "paul-pov2")
     items, _, _, checks = lifecycle.plan(pov, tenant_for)
     assert "zia-testtaken" not in {c["id"] for c in checks}
-    assert [i["body"]["email"] for i in items if i["kind"] == "user"] == ["paul-pov-1@acme.com", "paul-pov-2@acme.com"]
+    assert [i["body"]["email"] for i in items if i["kind"] == "user"] == ["paul-pov2-1@acme.com", "paul-pov2-2@acme.com"]
+
+
+def test_pilot_users_step_checks_names_when_it_opens(pov, tenant, tenant_for, monkeypatch):
+    hosted(pov, tenant, pilot="test")
+    monkeypatch.setattr(gui, "TENANT_FOR", tenant_for)
+    tenant.users.append({"id": 92, "name": "Other SE", "email": "zpov-pilot-2@acme.com", "groups": []})
+    r = gui.api("POST", "/api/test-accounts", {"check": True}, {})[1]
+    code = pov.id.rsplit("-", 1)[-1]
+    assert r["checked"] and r["auto"] and "zpov-pilot-2@acme.com" in r["why"]
+    assert [a["email"] for a in r["accounts"]] == [f"zpov-{code}-pilot-1@acme.com", f"zpov-{code}-pilot-2@acme.com"]
+    tenant.users = [u for u in tenant.users if u["id"] != 92]                  # freed up: back to the default
+    r = gui.api("POST", "/api/test-accounts", {"check": True}, {})[1]
+    assert r["login"] == "zpov-pilot" and not r["auto"] and not r["why"]
 
 
 def test_accounts_list_and_passwords_before_apply(pov, tenant):

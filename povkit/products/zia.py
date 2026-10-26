@@ -363,19 +363,26 @@ class ZIA(Product):
                                 "Run the checks again: the change list now makes the test users in ZIdentity."))
         elif testing:   # as the demo kit: ZIA first; apply switches to ZIdentity if ZIA refuses
             dom = (pov.cfg.get("identity") or {}).get("test_domain") or test_domain(t)
-            from .zid import test_emails
-            emails = test_emails(pov.cfg, dom) if dom else []
-            snap["test_users"] = {"count": n_test, "domain": dom, "emails": emails}
+            from .zid import choose_test_login, test_emails
             led = ledger_of(pov)
             mine = {str(e["id"]) for e in led.active("zia") if e["kind"] == "user"}
-            taken = []
-            for em in emails:   # an account by that name the POV didn't make: another POV's or SE's
-                try:
-                    rows = items(t.call("user_management", "list_users", query_params={"search": em.split("@")[0]}))
-                except Exception:   # noqa: BLE001
-                    rows = []
-                if any(str(g(u, "email") or "").lower() == em and str(g(u, "id")) not in mine for u in rows):
-                    taken.append(em)
+            seen = {}
+
+            def taken_in_zia(em):   # an account by that email the POV didn't make: another POV's or SE's
+                local = em.split("@")[0]
+                if local not in seen:
+                    try:
+                        seen[local] = items(t.call("user_management", "list_users", query_params={"search": local}))
+                    except Exception:   # noqa: BLE001
+                        seen[local] = []
+                return any(str(g(u, "email") or "").lower() == em and str(g(u, "id")) not in mine for u in seen[local])
+            taken, why = [], ""
+            if dom:
+                _, why, taken = choose_test_login(pov, dom, taken_in_zia, made=bool(mine))
+            emails = test_emails(pov.cfg, dom) if dom else []
+            snap["test_users"] = {"count": n_test, "domain": dom, "emails": emails}
+            if why:
+                checks.append(check("zia-testnames", "Test account names", INFO, why))
             if taken:
                 checks.append(check("zia-testtaken", "Test account names are free", FAIL,
                                     f"already in ZIA: {', '.join(taken)}",
