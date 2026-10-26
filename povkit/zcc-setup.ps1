@@ -3,7 +3,7 @@
 # In PowerShell opened with "Run as administrator":
 #   & ([scriptblock]::Create((irm https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/zcc-setup.ps1))) -Cloud zscalertwo -Domain acme.com -User jane
 #
-# The POV console's Next steps > Set up a pilot device gives this line filled in, or a script file with the POV's
+# The POV console's Get ready to test > Set up a pilot device gives this line filled in, or a script file with the POV's
 # probe pack inside. What it does:
 #   1. downloads the kit's pinned Client Connector installer (or uses -Msi FILE from your tenant's Platform Releases
 #      page) and installs it only if its SHA-256 matches (pinned copy) and it's validly signed by Zscaler, Inc.;

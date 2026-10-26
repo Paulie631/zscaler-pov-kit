@@ -49,11 +49,11 @@ def record_actions_consent(pov, by):
 def ready(pov):
     from . import mcp
     if not mcp.consent(pov):
-        raise KitError("The customer hasn't agreed to Claude Desktop reading the tenant yet (Next steps > Ask Claude "
+        raise KitError("The customer hasn't agreed to Claude Desktop reading the tenant yet (Get ready to test > Ask Claude "
                        "about this tenant).")
     if not actions_consent(pov):
         raise KitError("The customer hasn't agreed to Claude Desktop making changes through the change list yet "
-                       "(Next steps > Ask Claude about this tenant > Let Claude make changes).")
+                       "(Get ready to test > Ask Claude about this tenant > Let Claude make changes).")
 
 
 def _tf():

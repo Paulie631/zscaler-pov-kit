@@ -59,7 +59,7 @@ def pov_state(p):
     for e in led.entries:
         states[e["state"]] = states.get(e["state"], 0) + 1
     return {"id": p.id, "customer": p.cfg["customer"], "prefix": p.prefix, "products": p.products,
-            "state": p.cfg.get("state"), "settings": settings.snapshot(p),
+            "state": p.cfg.get("state"), "settings": settings.snapshot(p), "criteria": list(p.cfg.get("criteria") or []),
             "clients": {s: {"client_id": ((p.cfg.get("clients") or {}).get(s) or {}).get("client_id"),
                             "saved": bool(secrets.get(p.id, f"{s}-client-secret"))} for s in slots},
             "plan": {"hash": plan["hash"], "items": len(plan["items"]),
@@ -206,7 +206,7 @@ def start_job(kind, work, streams=False):
 # ---------------------------------------------------------------- quick start
 def quickstart(body):
     """Start a POV from three answers (customer, products, API client): the kit fills in the rest from the tenant,
-    runs preflight and makes the change list, all read-only. -> {id, job}. The wizard stays for changing anything."""
+    checks the tenant and makes the change list, all read-only. -> {id, job}. The wizard stays for changing anything."""
     if body.get("existing"):   # a POV started earlier (to send the role spec before the kickoff): carry on from Connect
         p = current()
     else:
@@ -494,8 +494,13 @@ def api(method, path, body, q):
 
         def make(log=None):
             items, notes, h, checks = lifecycle.plan(p, tf, log, reuse_minutes=reuse)
+            good, why = secrets.keychain_works()   # Review & apply stands in for Preflight: this computer too
+            if not good:
+                from .core.checks import FAIL, check
+                checks = [check("keychain", "Keychain works on this computer", FAIL, why,
+                                "Unlock the login keychain (Mac) or install a keyring service (Linux).")] + list(checks)
             from . import manual
-            for c in checks:   # the same help Preflight shows, so the Apply step can show each fix where it is
+            for c in checks:   # each fix's help, shown right where the problem is
                 hp = manual.check_help(c["id"])
                 if hp:
                     c["help"] = hp
@@ -742,7 +747,7 @@ def api(method, path, body, q):
             return 200, {"ok": True, "job": start_job("apply", lambda log: lifecycle.quick_apply(
                 p, tf, ["aiguard"], "AI Guard proxy setup", body.get("by"), log))}
         on = any(v["use"] != "off" for v in agm.proxy_setup(p).values())
-        return 200, {"ok": True, "note": "Run the checks again (Preflight) and approve the new change list: it adds a "
+        return 200, {"ok": True, "note": "Read the tenant again (Setup › Review & apply) and approve the new change list: it adds a "
                      "proxy key per provider." if on else ""}
     if path == "/api/aiguard/provider-key":
         from .products import aiguard as agm

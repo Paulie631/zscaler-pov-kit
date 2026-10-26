@@ -24,7 +24,7 @@ CONNECT_WHY = ("The customer's cloud admin connects a TEST AWS account (or Azure
                "Zscaler console's cloud account onboarding for AI-SPM / DSPM. Zscaler's own template creates a role "
                "Zscaler assumes: it reads the account's configuration and, for classification, the data in it. Use "
                "a test account, and have their security team review the role first (docs/SEED-STACK.md).")
-SEED_WHY = ("After the account is connected: Next steps › Seed stack (or `pov-kit seed template`). CloudFormation "
+SEED_WHY = ("After the account is connected: Get ready to test › Seed stack (or `pov-kit seed template`). CloudFormation "
             "with synthetic sensitive data, a training-data bucket, an over-permissioned AI agent and, optionally, an "
             "unauthenticated MCP server, so the scans have something to find. Scans take hours to a day.")
 

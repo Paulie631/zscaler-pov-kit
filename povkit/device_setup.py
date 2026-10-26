@@ -1,6 +1,6 @@
 """Set up a pilot device: Client Connector installed for this tenant, then the POV's own tests.
 
-The console's Next steps > Set up a pilot device gives, per pilot user and OS:
+The console's Get ready to test > Set up a pilot device gives, per pilot user and OS:
   - a one-line command (the hosted zcc-setup.sh / zcc-setup.ps1, with this tenant's cloud, the user's domain and
     name filled in), and
   - a script file for the customer's IT to review or push: the same setup script inside, plus the POV's probe pack,

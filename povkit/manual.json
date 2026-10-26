@@ -43,7 +43,7 @@
    "steps": [
     "Open Administration > API > OneAPI > API Clients and edit the POV's client.",
     "Under its resources or roles, add Digital Experience (ZDX) with a view-only role (the kit only starts deep traces if a use case asks).",
-    "Save, then click Check now here (or run Preflight again)."
+    "Save, then click Check now here (or Read the tenant again on Review & apply)."
    ],
    "done": "Check now says ZDX is readable.",
    "stage": "preflight",
@@ -57,7 +57,7 @@
      "Edit the client, add Digital Experience (ZDX) with a view-only role, and save.",
      "If ZDX isn't offered, the tenant may have no ZDX subscription: continue without it."
     ],
-    "retest": "Check now, or Run checks again on Preflight."
+    "retest": "Check now, or Read the tenant again on Review & apply."
    }
   },
   "setup.zpa_customer_id": {
@@ -84,7 +84,7 @@
      "Paste the whole number into Connect > ZPA customer ID (no spaces).",
      "A 404 means the number is wrong or cut short: copy it again with the Copy ID button."
     ],
-    "retest": "Check now, or Run checks again on Preflight."
+    "retest": "Check now, or Read the tenant again on Review & apply."
    }
   },
   "zid.ca.entitlement": {
@@ -128,7 +128,7 @@
     "Search the console menu for Entitlement, open the end-user (service) entitlements page and choose Internet & SaaS.",
     "Make sure the pilot group (or each pilot user) is assigned, and save."
    ],
-   "done": "Preflight's ZIdentity entitlements check passes.",
+   "done": "Review & apply's ZIdentity entitlements check passes.",
    "check": "zid_entitled",
    "stage": "preflight",
    "help": {
@@ -203,7 +203,7 @@
    "when": "before the tests",
    "search": "Platform Releases",
    "steps": [
-    "In the POV console, Next steps > Set up a pilot device: pick the pilot user and the OS, then copy the one-line command or download the setup script (it has the POV's probe pack inside).",
+    "In the POV console, Get ready to test > Set up a pilot device: pick the pilot user and the OS, then copy the one-line command or download the setup script (it has the POV's probe pack inside).",
     "On the device: macOS, paste it into Terminal (it asks for the Mac password once); Windows, paste it into PowerShell opened with Run as administrator.",
     "It installs Client Connector for this tenant (cloud, domain and user filled in) from the kit's pinned, signature-checked copy. To use the customer's own version instead, download it from Platform Releases and give it to the setup (--pkg FILE on macOS, -Msi FILE on Windows).",
     "Sign in to Client Connector as the pilot user, then check Internet Security shows On (More > Update Policy if not).",
@@ -263,9 +263,9 @@
    "steps": [
     "Search the console menu for SaaS Application Tenants and add one (Microsoft 365, Google Workspace, Box...).",
     "Sign in with the SaaS app's admin account to grant Zscaler read access (an OAuth consent the kit can't give).",
-    "Wait for the first scan to finish, then run the checks again in Preflight."
+    "Wait for the first scan to finish, then read the tenant again on Review & apply."
    ],
-   "done": "Preflight shows a connected SaaS tenant.",
+   "done": "Review & apply shows a connected SaaS tenant.",
    "check": "casb_tenant",
    "stage": "preflight",
    "help": {
@@ -278,7 +278,7 @@
      "Add the tenant and sign in with the SaaS app's admin account to grant access.",
      "More than one connected: `pov-kit set casb.tenant NAME` picks the POV's."
     ],
-    "retest": "Check now, or Run checks again on Preflight."
+    "retest": "Check now, or Read the tenant again on Review & apply."
    }
   },
   "zpa.ca.connectors": {
@@ -286,7 +286,7 @@
    "who": "customer admin (cloud team)",
    "when": "after Apply, with ZPA",
    "steps": [
-    "In the POV console, Next steps > ZPA App Connectors: download the AWS or Azure template and show the provisioning key.",
+    "In the POV console, Get ready to test > ZPA App Connectors: download the AWS or Azure template and show the provisioning key.",
     "Deploy the template in the customer's cloud account, pasting the key into its ProvisioningKey field (nowhere else).",
     "Wait about ten minutes for both connectors to enroll."
    ],
@@ -300,7 +300,7 @@
      "Search the console menu for App Connectors: two connectors in the group below show Connected."
     ],
     "fix": [
-     "Deploy the AWS or Azure template (Next steps > ZPA App Connectors), or the CloudShare commands, with the provisioning key.",
+     "Deploy the AWS or Azure template (Get ready to test > ZPA App Connectors), or the CloudShare commands, with the provisioning key.",
      "Connectors take 10 to 15 minutes to enroll; they need outbound TCP 443."
     ],
     "retest": "Check now."
@@ -388,7 +388,7 @@
    "who": "customer cloud admin",
    "when": "right after the account is connected",
    "steps": [
-    "In the POV console, Next steps > Seed stack for AI-SPM and DSPM: download the template (choose whether to add the unauthenticated MCP server and the public decoy file).",
+    "In the POV console, Get ready to test > Seed stack for AI-SPM and DSPM: download the template (choose whether to add the unauthenticated MCP server and the public decoy file).",
     "In the test AWS account: CloudFormation > Create stack > With new resources > Upload a template file > the downloaded file.",
     "Leave the parameters as they are unless docs/SEED-STACK.md says otherwise; tick the IAM acknowledgement; Submit. It takes about two minutes.",
     "Lambda > zpov-support-agent-... > Test with an empty event, once, so the agent has used Bedrock.",

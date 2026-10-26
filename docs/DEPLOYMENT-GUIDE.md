@@ -14,7 +14,7 @@ POV, a 60-minute kickoff with the customer's admin, then a few minutes before ea
 | Piece | Runs on | What it does |
 | --- | --- | --- |
 | Zscaler POV Kit (`pov-kit`) | Your laptop | Reads the tenant, writes the change list, applies what the customer approved, proves the criteria, hands over |
-| The POV console | Your browser (this computer only) | Quick start and the step-by-step wizard, plus status, use cases, evidence and handover |
+| The POV console | Your browser (this computer only) | Setup (Connect, Pilot users, Review & apply, Get ready to test), plus status, use cases, evidence and handover |
 | Pilot devices | The customer's laptops, a spare laptop, or a virtual machine | Client Connector signed in as a pilot user; the POV probe (tests and traffic only, no keys) proves blocks, inspection and access from there |
 | App Connectors (ZPA POVs) | The customer's AWS or Azure, or a CloudShare lab | Two connectors from the kit's template, plus the kit's test app when the customer hasn't named one |
 | The customer's tenant | Zscaler cloud | Holds the POV's objects: each one is named with the POV prefix (`ZPOV`) and removed or handed over at the end |
@@ -94,7 +94,7 @@ The **Updates** button at the top of the console tells you when a new version is
 
 ## Part 2: Prove the kit in your lab tenant (30 minutes, before your first POV)
 
-1. **Setup → Start a POV.** Customer: "Lab". Tick the products you sell. Under **More options**, tick **This is my own
+1. **Setup → Connect.** Customer: "Lab". Tick the products you sell. Under **More options**, tick **This is my own
    lab tenant**. For the API client, choose **The one Claude Desktop uses** if it's offered, or enter your lab
    client. Click **Quick start**.
 2. **Your safety net (once, for every POV):** **Status → Safety net → Encrypted ledger backup**. Choose your synced
@@ -116,9 +116,9 @@ The **Updates** button at the top of the console tells you when a new version is
    joins the change list for the customer to approve, and the report shows each of their criteria in their own words
    next to its proof. (By hand: `pov-kit set criteria IS-URL-01,IS-SSL-01,...`; until criteria are chosen, the POV
    uses every criterion for its products.)
-2. **Setup → Start a POV**: the customer's name and the products, then **Step by step** (the end date, prefix and two
-   API clients are under **More options**). On **Connect**, **Copy the role spec** and send it to the customer's
-   admin. They create the client at kickoff, or give you a temporary admin login to create it yourself. The optional
+2. **Setup → Connect**: the customer's name and the products (the end date, prefix and two API clients are under
+   **More options**). Leave the API client fields empty and click **Quick start**: the kit creates the POV and shows the
+   **role spec**. **Copy the role spec** and send it to the customer's admin. They create the client at kickoff, or give you a temporary admin login to create it yourself. The optional
    read-only client in the spec is for Claude Desktop's read-only access (Part 5).
 3. Send the **Customer Overview** (attached to each release) to their security team: what the kit does and never does
    in their tenant, and how approval works.
@@ -129,28 +129,34 @@ The **Updates** button at the top of the console tells you when a new version is
 
 On **Connect**, enter the vanity domain and the client ID and secret the admin created (the secret goes straight to
 your keychain; with ZPA, also the customer ID from **Administration → API → Legacy API → Private Access API → Copy
-ID**), then click **Quick start from here**. If you didn't start the POV beforehand (in your lab, say), **Setup →
-Start a POV** takes the customer, the products and the API client on one page: click **Quick start** there. Two API
-clients (view-only first, write access after approval) use the step-by-step path instead.
+ID**), then click **Quick start**. If you didn't start the POV beforehand (in your lab, say), the same page takes the
+customer, the products and the API client at once. With two API clients (view-only first, write access after
+approval), the apply client is entered later.
 
 The kit signs in, then fills in the rest from the tenant, read-only:
 
 - **Pilot users:** if nobody's named, one test account the kit creates (in ZIA, or in ZIdentity when that's where the
-  tenant keeps its users; the kit detects it). Name the customer's group or people any time (step 3).
+  tenant keeps its users; the kit detects it). Name the customer's group or people any time (Pilot users).
 - **The Zscaler cloud** (for setting up pilot devices).
 - **ZPA:** the kit's test app when no app is named.
 
-It runs the preflight checks and opens the change list. If anything needs fixing first, the change list says so, and
-**Preflight** lists it under **Needs you**.
+It lands on **Review & apply**. If anything needs fixing first, it's listed at the top with its fix and a button to
+where you fix it; **Fixed it: check again** reads the tenant again.
 Products that can't go ahead yet (for example no ZDX role on the API client, or no ZPA group or customer ID) are
 **added later**: the rest of the POV goes ahead, and once they're fixed, running the checks again and approving the new change
 list adds them.
 
-### 2. Review and approve the change list
+### 2. Review & apply
 
-Walk the admin through every object, who it affects and where it sits, and the steps only they make. **Open the
-customer page** gives them the same list in their browser, printable with a signature line. Then **Approval**: record
-who approved it, or let them approve on their own: the change-list page has an approval form that saves a file they
+**Review & apply** shows the steps for people needed before the change list, then the change list: walk the admin
+through every object, who it affects and where it sits, and the steps only they make. The POV options a criterion
+needs (the ZPA app, its domains and ports, SCIM group or SAML attribute, PRA and App Protection, the SaaS tenant, the
+identity provider, sites not decrypted, rule placement) show here only when the change list needs them; save them and
+the change list is made again. **Open the printable list** gives the customer the same list in their browser. Type your
+name and **Apply**: your sign-off is recorded as it applies.
+
+A customer that must approve first: **Switch to customer approval**, and **Sign-off** and **Apply** come back as their
+own steps. On Sign-off, record who approved it, or let them approve on their own: the change-list page has an approval form that saves a file they
 send you, and **Import their approval file** checks it's for this exact list.
 
 ### 3. Who tests (any time, in Pilot users)
@@ -166,29 +172,26 @@ send you, and **Import their approval file** checks it's for this exact list.
   entitlement, stops at once if it's missing, and otherwise waits up to three minutes for ZIA to have the group; click
   **Apply** again after granting it and it carries on. With nobody named yet, the group starts with a test user.
 - **Test accounts:** 1 to 10 accounts the kit creates (`zpov-pilot-1@<domain>`…), with passwords in your keychain
-  (**Next steps → Test users → Show password**). If the tenant keeps its users in ZIdentity, they're made there, on
+  (**Get ready to test → Test users → Show password**). If the tenant keeps its users in ZIdentity, they're made there, on
   `<vanity>.zslogin.net`, and you set their passwords in **Administration → Authentication → Directory → Users** (a
   domain your IdP owns, such as Okta's, can't take a ZIdentity password).
 
-A line at the bottom says exactly who the POV's rules will apply to. **More options** has the identity provider (its
-sign-in and MFA sites stay out of SSL inspection), your own list of sign-in sites not to decrypt (it replaces the
-IdP's list), and rule placement. The ZPA and CASB
-details are on the same page. Any change here means a new change list for the customer to approve.
+A line at the bottom says exactly who the POV's rules will apply to. The identity provider (its sign-in and MFA sites
+stay out of SSL inspection), your own list of sign-in sites not to decrypt, rule placement and the ZPA and CASB details
+are on **Review & apply**, when the change list needs them. Any change here means a new change list.
 
 ### 4. Apply
 
-Live progress, then a status check. Client Connector profiles are created for the pilot group; if the tenant has no
+Live progress on Review & apply. Client Connector profiles are created for the pilot group; if the tenant has no
 profile to copy or its API refuses them, the console prints the exact spec to build by hand (Windows, plus macOS for
 Mac pilot devices), and **Status → Fix drift** adopts them by name.
 
-### 5. Finish setup
+### 5. Get ready to test
 
-After Apply, the setup stops at **Finish setup**: the steps for people that follow Apply, in order (entitle the POV's
-group, set test users' passwords, Client Connector profiles if the API refused them, App Connectors, ZPA in Client
-Connector, pilot devices), with **Set up a pilot device** on the same page. It works like Preflight (see **Steps the
-API can't do** below), and the POV is ready to test once they're done.
-
-### 6. Next steps
+After Apply, the setup moves to **Get ready to test**: the steps for people that follow Apply, in order (entitle the
+POV's group, set test users' passwords, Client Connector profiles if the API refused them, App Connectors, ZPA in
+Client Connector, pilot devices), with the same check-or-mark flow as before the change list (see **Steps the API
+can't do** below). The POV is ready to test once they're done. The same page has:
 
 - **Steps for people:** every step, done or not, with instructions (see below).
 - **Set up a pilot device** (see below).
@@ -198,7 +201,7 @@ API can't do** below), and the POV is ready to test once they're done.
 
 ### Setting up a pilot device
 
-**Next steps → Set up a pilot device** installs Client Connector already pointed at the customer's tenant, then the
+**Get ready to test → Set up a pilot device** installs Client Connector already pointed at the customer's tenant, then the
 **POV probe**. The probe is the kit's small pilot-device part: the POV's tests and the traffic generator, with no
 console, no API keys and no tenant access, so it's an easy install for the customer's security team to approve
 ([PROBE.md](PROBE.md) is its one-page description). Pick the pilot user and macOS or Windows, then either:
@@ -254,7 +257,7 @@ pov-probe traffic run                    # one round now, shaped by the probe pa
 pov-probe traffic schedule --every 30    # a round every 30 minutes while signed in; --remove stops it
 ```
 
-With no spare device: **Next steps → ZIA traffic generator → AWS generator template** writes a CloudFormation template
+With no spare device: **Get ready to test → ZIA traffic generator → AWS generator template** writes a CloudFormation template
 for the pilot user chosen in **Set up a pilot device**: a Windows Server instance in its own VPC, no inbound ports, an
 SSM role (connect with Fleet Manager remote desktop), the kit's pinned Client Connector for the POV's cloud and user,
 and a scheduled round every 30 minutes; a weekday start and nightly stop keeps the cost down. Upload it in
@@ -269,7 +272,7 @@ carries the POV's probe pack, so download it again after the criteria change.
 Some steps need a person in the Zscaler console: creating the API client, giving it a ZDX role, granting an
 entitlement, Malware Protection (tenant-wide, so the kit only reads it), connecting a SaaS tenant (an OAuth consent),
 deploying App Connectors, building Client Connector profiles by hand when the API refuses, and deleting the API
-clients at the end. **Next steps → Steps for people** lists the ones this POV needs, in order, each with:
+clients at the end. **Get ready to test → Steps for people** lists the ones this POV needs, in order, each with:
 
 - who does it and when, the console path (where it's been checked in a live console) and the term to type in the
   console's **Search menu** (it finds any page if a menu has moved);
@@ -281,15 +284,15 @@ clients at the end. **Next steps → Steps for people** lists the ones this POV 
 
 **The setup stops where they're needed**, like the SE demo kit's preflight:
 
-- **Preflight** lists the steps for people needed before the change list (ZDX role, ZPA customer ID, Malware
-  Protection, a SaaS tenant), under the read-only checks. **Finish setup** lists the ones after Apply.
-- **Continue** waits until each step is done: its check passes (Preflight checks the ones the API can see as it runs),
+- **Review & apply** lists the steps for people needed before the change list (ZDX role, ZPA customer ID, Malware
+  Protection, a SaaS tenant), above the change list. **Get ready to test** lists the ones after Apply.
+- **Continue** waits until each step is done: its check passes (the ones the API can see are checked as the tenant is read),
   or someone marks it done. **Continue anyway**, with a name (and why), lets the setup go on. Those steps stay on the
   list and keep holding up their criteria, and the record shows who decided.
 - **With the admin, now** (on a call) or **Admin does them later**: the second gives **Copy these steps for the
   admin**, with only what this point of the setup waits on. Come back when they're done and **Check them all**; the
   POV picks up where it stopped.
-- Every step, and every preflight check that isn't passing, has **How to verify**: what it checks, why it matters,
+- Every step, and every check that isn't passing, has **How to verify**: what it checks, why it matters,
   how to verify by hand, the fix, and how to re-test.
 
 **Copy the steps for the customer's admin** gives the same list as Markdown to paste into an email or the shared POV
@@ -343,7 +346,7 @@ four parts: **Test runner**, **Guided demos**, **Policy** and **Setup**.
   policy as you open the step. **Recap** lists what each step caught, ready to paste into the follow-up email.
 
 **AI Endpoint Security (Endpoint AI)** is a *draft* product in the kit: Zscaler announced it in October 2026, and it
-has no API in the Zscaler SDK yet, so the kit creates nothing for it. Tick it on Start a POV to add five draft
+has no API in the Zscaler SDK yet, so the kit creates nothing for it. Tick it on Connect to add five draft
 criteria (EP-AIE-01 to 05: shadow AI inventoried, a malicious skill file blocked, dangerous agent commands stopped,
 PII in a prompt to a local model flagged, agent activity visible per user and device). The probe proves the device
 side with harmless, clearly named test files: a local model file, an MCP server definition and an agent skill
@@ -373,13 +376,13 @@ customer's own list maps to them), so a POV without them is unchanged.
 | Cloud & Branch Connector | CC-GRP-01, CC-FWD-01 | Read-only: connector groups and their VMs, and forwarding rules. The customer deploys the connector from a provisioning template. |
 
 **AI-SPM and DSPM need the customer's cloud account.** Agree at kickoff: the customer's cloud admin connects a *test*
-AWS account with Zscaler's own onboarding template, then deploys the kit's **seed stack** (Next steps › Seed stack, or
+AWS account with Zscaler's own onboarding template, then deploys the kit's **seed stack** (Get ready to test › Seed stack, or
 `pov-kit seed template`): synthetic sensitive data, a deliberately weak bucket, AI training data with personal data in
 it, an over-permissioned AI agent on Bedrock and, optionally, an unauthenticated MCP server, so the scans find
 something. Both are on the steps for people, and removing them is on the end-of-POV steps. Step by step:
 [SEED-STACK.md](SEED-STACK.md).
 
-The read-only and draft products (AI-SPM, AI Red Teaming) are chosen on Start a POV like the others; draft criteria are replaced by Zscaler's internal POV plans, and by API proofs when the SDK has them. They put the customer's steps on the list of
+The read-only and draft products (AI-SPM, AI Red Teaming) are chosen on Connect like the others; draft criteria are replaced by Zscaler's internal POV plans, and by API proofs when the SDK has them. They put the customer's steps on the list of
 steps for people, create nothing, and have nothing to tear down. Their API client needs view access to each one.
 PRA and App Protection bodies follow the SDK's documentation and are confirmed in the lab test plan, like the rest
 of ZPA.
@@ -388,7 +391,7 @@ of ZPA.
 
 No cloud account for the connectors? [CLOUDSHARE.md](CLOUDSHARE.md) builds a CloudShare blueprint once (two App
 Connectors, the test app, a Windows pilot) with no customer values in it; each POV starts a copy and enrolls it with
-the commands from **Next steps → ZPA App Connectors → CloudShare commands**.
+the commands from **Get ready to test → ZPA App Connectors → CloudShare commands**.
 
 ### Competitive land mines
 
@@ -404,11 +407,10 @@ test results. Customer-facing text never names a competitor, and the SE notes ne
 *lab check* (IS-SSL-03 TLS on a non-standard port, IS-DNS-02 DNS over HTTPS, IS-DLP-03 a 60 MB file) depend on
 Zscaler settings or licenses: run them once in your lab before proposing them.
 
-### The step-by-step path
+### Changing anything later
 
-**Step by step** on Start a POV opens the same work as eight steps (Start a POV, Connect, Pilot users, Preflight,
-Change list, Approval, Apply, Next steps), for two-client POVs or when you want to set everything before the first change list.
-Any step can be revisited after Quick start.
+Any step can be revisited from the step bar after Quick start: Pilot users to change who tests, Connect for the API
+client or the More options, Review & apply for the POV options and a new change list.
 
 ## Part 5: During the POV
 
@@ -418,11 +420,11 @@ Any step can be revisited after Quick start.
   generator, so ZIA, Insights and Shadow IT have the pilot group's traffic to show.
 - **Evidence:** run the probe on each pilot device (the setup script runs it for you), and import the results
   (**Success criteria → Import probe results**). The kit checks what the API can see on its own (read-only): after
-  Apply, after Finish setup's checks, with every Status check, and when Success criteria opens if the last check is
+  Apply, after Get ready to test's checks, with every Status check, and when Success criteria opens if the last check is
   over three hours old (**Check again** runs it now). It covers the ZIA rules behind each criterion and its test
   sites' categories, connectors, ZDX scores, devices and SaaS scans; AI Guard's criteria come from the test runner.
   A criterion that doesn't pass says **why**, with the steps to fix it and, where the console can do it, a button
-  (Fix drift, Finish setup, the test runner). Record what
+  (Fix drift, Get ready to test, the test runner). Record what
   people see as attestations (a screenshot can be attached with `pov-kit attest <criterion> --note ... --file`).
 - **New use cases:** check the library first (no AI call). Otherwise, in the **Use cases** tab, give the kit a way to
   Claude (your AI Guard proxy key, found automatically if the AI Guard demo kit is on your laptop; or, without an AI
@@ -430,9 +432,9 @@ Any step can be revisited after Quick start.
   agreement once (names are replaced before anything leaves your laptop, unless they agree to share them), describe
   the use case, refine it in words, and **Add to the change list**. The customer approves the new change list before
   Apply builds it. **Save to library** keeps what worked.
-- **Products added later:** once the fix is in (for example, the ZDX role), **Preflight → Run checks again**, then
-  review and approve the new change list.
-- **Ask Claude about the tenant:** with the customer's agreement, **Next steps → Ask Claude about this tenant → Add to
+- **Products added later:** once the fix is in (for example, the ZDX role), **Review & apply → Read the tenant again**,
+  then review and apply the new change list.
+- **Ask Claude about the tenant:** with the customer's agreement, **Get ready to test → Ask Claude about this tenant → Add to
   Claude Desktop**. It is read-only: Claude can answer "why was Jane blocked?" but can't change anything.
 - **Let Claude make changes:** with a second agreement from the customer, the same card adds a **changes connector**
   that the kit runs (`pov-kit mcp actions`). Claude Desktop can then:
@@ -458,7 +460,7 @@ Any step can be revisited after Quick start.
 3. Either way, the kit removes the POV's secrets, discovery data, raw API recordings and Claude Desktop entry from
    your laptop (a recording is first kept as a test fixture with customer names replaced).
    Remind the customer to delete the POV's API clients (the last of the Steps for people).
-4. **Delete the POV** when you no longer need its record: **Setup → Start a POV → Delete…** next to it (or
+4. **Delete the POV** when you no longer need its record: **Setup → Connect → Delete…** next to it (or
    `pov-kit delete <pov-id>`). The kit first checks, read-only, that nothing the POV created is still in the tenant;
    if something is, it says what and stops. Then you type the POV's ID to confirm, and its folder, keychain secrets,
    Claude Desktop entry and backup are deleted from your laptop. The customer's tenant isn't touched.
@@ -490,14 +492,14 @@ repository is public).
 | ZPA added later: no SCIM group | ZPA needs the pilot users as a group from the customer's IdP (SCIM) or a SAML attribute: set it in Pilot users (ZPA) |
 | ZDX: "Pilot users for ZDX: none known yet" | Deep traces need pilot devices: name the pilot users, or apply the test accounts, then run the checks again |
 | ZDX added later: ZDX readable (403) | The API client has no ZDX role: **Administration → API → OneAPI → API Clients**, edit the client and add one (view only is enough), or take ZDX out of the POV |
-| Preflight: pilot users not in ZIA | With SAML or SCIM, users appear after provisioning or their first sign-in: have each one sign in to Client Connector once |
-| Preflight: ZIdentity entitlements | ZIdentity's API can't grant them: the customer assigns the missing service to the pilot group (Steps for people) |
-| Preflight: pilot group doesn't exist | Pick an existing group from the list, or choose **People we name** |
+| Review & apply: pilot users not in ZIA | With SAML or SCIM, users appear after provisioning or their first sign-in: have each one sign in to Client Connector once |
+| Review & apply: ZIdentity entitlements | ZIdentity's API can't grant them: the customer assigns the missing service to the pilot group (Steps for people) |
+| Review & apply: pilot group doesn't exist | Pick an existing group from the list, or choose **People we name** |
 | Apply stops: "don't have the Internet & SaaS entitlement" | The customer gives the POV's pilot group that entitlement, then click **Apply** again: it carries on and creates nothing twice. In a lab, **Test accounts** avoid it |
 | Apply stops: "keeps its users in ZIdentity" | Make the change list again (the test users now go in ZIdentity, on `<vanity>.zslogin.net`), get it approved, apply, then set their passwords in ZIdentity |
 | No option to set a user's password in ZIdentity | The user is on a domain your IdP (Okta, Entra…) owns, which signs them in. Use a user on `<vanity>.zslogin.net` |
 | Pilot device setup: "already has Client Connector" | It's protecting another organization's Client Connector (a work laptop). Use a spare device or a virtual machine; on a dedicated pilot device, add `--replace` / `-Replace` |
-| Self-test: "isn't marked as a lab POV" | Start a POV for your lab tenant with **More options → This is my own lab tenant** ticked |
+| Self-test: "isn't marked as a lab POV" | Connect your lab tenant's POV with **More options → This is my own lab tenant** ticked |
 | Delete: "still in the customer's tenant" | Remove the POV first (**Handover → Remove the POV**) or export it to Terraform, then delete |
 | Apply: "ZIA has changes waiting to be activated" | Another admin's changes are pending. The customer activates or discards them; the kit never does |
 | Apply: "the tenant changed since the customer approved" | Something the plan depends on changed. Make the change list again and get it approved again |

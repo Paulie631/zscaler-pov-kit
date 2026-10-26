@@ -220,7 +220,7 @@ button.sm{padding:3px 9px;font-size:12.5px}
 <div class="view on" id="v-setup"><div class="wrap">
   <div class="wiz">
     <div class="panel"><ol class="steps" id="wsteps"></ol>
-      <div class="hint" id="wsafe">Nothing changes in the customer's tenant until step 7, and only what they approved in step 6.</div></div>
+      <div class="hint" id="wsafe">Nothing changes in the customer's tenant until you click Apply in Review &amp; apply, and only what it lists, for the pilot users.</div></div>
     <div class="panel" id="wstage"></div>
   </div>
 </div></div>
@@ -378,10 +378,11 @@ function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div
 // what stops Apply, each with its fix, right where you are (no trip to Preflight): a button for fixes that live in a
 // setup step, the console page for the rest, and Run the checks again
 const FIXGO=[[/pilot users? step|pilot group|test accounts|Pilot users/i,2,"Open Pilot users"],[/\bConnect\b|client ID|customer ID|vanity domain|API client|secret/i,1,"Open Connect"],
-  [/More options|placement|sites not decrypted|sign-in provider/i,2,"Open Pilot users › More options"]];
+  [/More options|POV options|placement|sites not decrypted|sign-in provider/i,4,"Open POV options"]];
 // a fix written as a Terminal command (`pov-kit set KEY value`): where that setting is in Setup
-const SETAT={pilot_group:[2,"Pilot users"],pilot_emails:[2,"Pilot users"],"identity.":[2,"Pilot users"],"zpa.":[2,"Pilot users (ZPA)"],
-  "casb.":[2,"Pilot users (SaaS security)"],customer_id:[1,"Connect"],vanity_domain:[1,"Connect"],prefix:[0,"Start a POV › More options"],ends:[0,"Start a POV › More options"]};
+const SETAT={"identity.idp":[4,"POV options"],"identity.bypass_domains":[4,"POV options"],placement:[4,"POV options"],
+  pilot_group:[2,"Pilot users"],pilot_emails:[2,"Pilot users"],"identity.":[2,"Pilot users"],"zpa.":[4,"POV options (ZPA)"],
+  "casb.":[4,"POV options (SaaS security)"],customer_id:[1,"Connect"],vanity_domain:[1,"Connect"],prefix:[0,"Connect › More options"],ends:[0,"Connect › More options"]};
 function fixPlace(fix){const m=/pov-kit set ([a-z_.]+)/.exec(fix||"");if(!m)return null;
   const k=Object.keys(SETAT).find(x=>x.endsWith(".")?m[1].startsWith(x):m[1]==x);return k?{step:SETAT[k][0],where:SETAT[k][1],key:m[1]}:null}
 function fixText(fix){const fp=fixPlace(fix);if(!fp)return esc(fix);
@@ -394,9 +395,51 @@ function problemsHTML(checks){const f=(checks||[]).filter(c=>c.status=="fail");i
       return `<li><span class="ic fail">✕</span><div><b>${esc(c.label)}</b>${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix?`<div class="fx">Fix: ${fixText(c.fix)}</div>`:""}${howHTML(c.help,null,true)}
         <div class="row" style="gap:6px;margin-top:6px">${fp?`<button class="sm wpgo" data-step="${fp.step}">Open ${esc(fp.where)} ›</button>`:go?`<button class="sm wpgo" data-step="${go[1]}">${esc(go[2])} ›</button>`:""}${pre?`<button class="sm wppre" data-p="${esc(pre[1])}">Use prefix ${esc(pre[1])}</button>`:""}</div></div></li>`}).join("")}</ul>
     <div class="row" style="gap:8px;margin-top:6px"><button class="primary wprerun">Fixed it: check again</button><span class="hint" style="margin:0">Reads the tenant again (read-only).</span></div></div>`}
-function bindProblems(){$$(".wpgo").forEach(b=>b.onclick=()=>{W.step=+b.dataset.step;W.checks=null;wizard()});
+function bindProblems(){$$(".wpgo").forEach(b=>b.onclick=()=>{const o=$("#wopts");
+    if(+b.dataset.step==W.step&&o){o.open=true;o.scrollIntoView({behavior:"smooth",block:"start"});return}W.step=+b.dataset.step;W.checks=null;wizard()});
   $$(".wprerun").forEach(b=>b.onclick=()=>{W.fresh=true;wizard()});
   $$(".wppre").forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api("/api/settings",{values:{prefix:b.dataset.p}});await load();W.fresh=true;wizard()}catch(e){b.insertAdjacentHTML("afterend",note(e.message,"bad"))}})}
+// Review & apply's POV options: the settings the change list uses beyond who tests. Each has a default (from the
+// tenant or the kit), so they're folded away and open only when one is needed (PRA chosen without a server, or a fix
+// points here). PRA and App Protection only show when the POV chose PA-PRA-01 or PA-APP-03.
+function optsHTML(c,checks){const s=c.settings,crit=c.criteria||[],zia=has("zia"),scope=s["zpa.scope"]||"scim";
+  const pra=has("zpa")&&(crit.includes("PA-PRA-01")||crit.includes("PA-APP-03"));
+  const fails=(checks||[]).filter(x=>x.status=="fail").map(x=>(x.fix||"")+" "+x.label).join(" ");
+  const open=(pra&&!s["zpa.pra_server"])||/pov-kit set (zpa\.|casb\.|identity\.idp|identity\.bypass|placement)|More options|POV options|placement|sites not decrypted|sign-in provider/i.test(fails);
+  const sum=[],parts=[];
+  if(zia){sum.push(s.placement=="bottom"?"rules below the customer's":"rules above the customer's");if(s["identity.idp"])sum.push("IdP "+s["identity.idp"]);
+    parts.push(`<div class="group-h">Internet Access</div><div class="form">
+      <span class="lbl">Rule placement</span><div><label class="chk"><input type="radio" name="s_placement" value="top" ${s.placement!="bottom"?"checked":""}>Above the customer's rules</label> <label class="chk"><input type="radio" name="s_placement" value="bottom" ${s.placement=="bottom"?"checked":""}>Below them</label></div>
+      <span class="lbl">Identity provider</span><select id="s_identity.idp"><option value="">Detect it</option>${["okta","entra","ping","duo","google","onelogin"].map(x=>`<option ${s["identity.idp"]==x?"selected":""}>${x}</option>`).join("")}</select>
+      <span class="lbl">Sign-in sites not decrypted</span><input type="text" id="s_identity.bypass_domains" value="${esc((s["identity.bypass_domains"]||[]).join(", "))}" placeholder="leave empty to use the IdP's own sites"></div>`)}
+  if(has("zpa")){const doms=s["zpa.domains"]||[];sum.push("ZPA app: "+(s["zpa.app_name"]||(doms.length?doms.join(", "):"the kit's test app")));
+    if(pra)sum.push(s["zpa.pra_server"]?"PRA server "+s["zpa.pra_server"]:"PRA server needed");
+    parts.push(`<div class="group-h">Private Access (ZPA)</div><div class="form">
+      <span class="lbl">POV app name</span><input type="text" id="s_zpa.app_name" value="${esc(s["zpa.app_name"]||"")}" placeholder="leave empty to use the kit's test app">
+      <span class="lbl">Its domains or IPs</span><input type="text" id="s_zpa.domains" value="${esc(doms.join(", "))}" placeholder="empty: the connectors' template also starts a small test app">
+      <span class="lbl">TCP ports</span><input type="text" id="s_zpa.tcp_ports" value="${esc((s["zpa.tcp_ports"]||["443"]).join(", "))}">
+      <span class="lbl">Pilot users in ZPA</span><div><label class="chk"><input type="radio" name="s_zpa.scope" value="scim" ${scope!="saml"?"checked":""}>A SCIM group</label> <label class="chk"><input type="radio" name="s_zpa.scope" value="saml" ${scope=="saml"?"checked":""}>A SAML attribute</label></div>
+      <span class="lbl">SCIM group <span class="muted">(if not the pilot group)</span></span><input type="text" id="s_zpa.group" value="${esc(s["zpa.group"]||"")}">
+      <span class="lbl">SAML attribute and value</span><div class="row" style="gap:8px"><input type="text" id="s_zpa.saml_attribute" value="${esc(s["zpa.saml_attribute"]||"")}" placeholder="memberOf" style="flex:1"><input type="text" id="s_zpa.saml_value" value="${esc(s["zpa.saml_value"]||"")}" placeholder="pov-pilots" style="flex:1"></div>
+      ${pra?`<span class="lbl">PRA server <span class="muted">(what admins reach)</span></span><div class="row" style="gap:8px"><input type="text" id="s_zpa.pra_server" value="${esc(s["zpa.pra_server"]||"")}" placeholder="jump1.acme.internal" style="flex:2"><select id="s_zpa.pra_protocol">${["RDP","SSH"].map(x=>`<option ${(s["zpa.pra_protocol"]||"RDP")==x?"selected":""}>${x}</option>`).join("")}</select><input type="text" id="s_zpa.pra_port" value="${esc(s["zpa.pra_port"]||"")}" placeholder="3389 or 22" style="width:90px"></div>
+      <span class="lbl">PRA portal domain</span><input type="text" id="s_zpa.pra_portal" value="${esc(s["zpa.pra_portal"]||"")}" placeholder="pra.acme.com (the customer adds its CNAME after Apply)">
+      <span class="lbl">ZPA certificate <span class="muted">(name)</span></span><input type="text" id="s_zpa.certificate" value="${esc(s["zpa.certificate"]||"")}" placeholder="empty: one that covers the portal's domain; App Protection on an HTTPS app needs one too">`:""}</div>`)}
+  if(has("casb")){if(s["casb.tenant"])sum.push("SaaS: "+s["casb.tenant"]);
+    parts.push(`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`)}
+  if(!parts.length)return "";
+  return `<details id="wopts" class="card" style="margin:10px 0" ${open?"open":""}><summary style="cursor:pointer"><b>POV options</b> <span class="muted">· ${esc(sum.join(" · "))}</span></summary>
+    <p class="hint" style="margin:6px 0 0">The kit's defaults suit most POVs. Change one only if this POV needs it; the change list updates.</p>${parts.join("")}
+    <div class="row" style="margin-top:12px;gap:8px"><button id="woptsave">Save and update the change list</button></div><div id="woptmsg"></div></details>`}
+function bindOpts(){$("#woptsave")&&($("#woptsave").onclick=async()=>{const vals={};
+  $$("#wopts [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
+  ["placement","zpa.scope"].forEach(k=>{const r=$$(`#wopts input[name='s_${k}']`).find(x=>x.checked);if(r)vals[k]=r.value});
+  try{await api("/api/settings",{values:vals});await load();wizard()}catch(e){$("#woptmsg").innerHTML=note(e.message,"bad")}})}
+// the steps for people Review & apply waits on (what Preflight used to show): checked once per reading, then the gate
+async function peopleGate(){const el=$("#wpeople"),c=S.current;if(!el)return;
+  if(W.mchecked!=c.id){W.mchecked=c.id;try{await runJob((await api("/api/manual/check",{stage:"preflight"})).job,document.createElement("div"))}catch(e){}}
+  if(!$("#wpeople"))return;
+  W.gpassed=await gate($("#wpeople"),"preflight",{title:"Steps for people before Apply",listTitle:"In the Zscaler console",
+    intro:"These need a person in the Zscaler console. Until they're done, some checks can't pass, or a product sits out the change list. You can apply without them: they stay on the list.",redraw:()=>peopleGate()})}
 // moving past a gate with steps for people still open: recorded as the SE's call, so the checklist moves on too
 async function moveOn(stage){let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
   try{await api("/api/manual/skip",{stage,by:by||"SE",why:"moved on in Setup; to do later"});await load()}catch(_){}}
@@ -449,15 +492,15 @@ function howHTML(h,label,open){if(!h)return "";const li=a=>`<ul>${(a||[]).map(x=
 function actHTML(a){
   if(a=="backup")return S&&S.backup_folder?`<div class="row" style="gap:8px;margin-top:10px"><button class="hact" data-a="backup-now">Back up this POV now</button><span class="hint">to ${esc(S.backup_folder)}</span></div><div class="hactmsg"></div>`:
     `<div style="margin-top:10px"><b>Turn on backups</b><div class="row" style="gap:8px;margin-top:4px;flex-wrap:wrap"><input type="text" class="hdir" placeholder="Folder, e.g. ~/OneDrive/pov-backups" style="flex:1;min-width:220px"><input type="password" class="hpw" placeholder="Passphrase (12+ characters)" autocomplete="new-password" style="width:220px"><button class="hact" data-a="backup-setup">Turn on backups</button></div><div class="hactmsg"></div></div>`;
-  const go={mcp:["Open Ask Claude about this tenant",8],approve:["Open the change list",4],fixdrift:["Fix drift now",-1],
-    finish:["Open Finish setup",7],pilot:["Open Pilot users",2],changes:["Open the change list",4],runner:["Open the AI Guard test runner",-1],policy:["Open the AI Guard policy",-1]}[a];
+  const go={mcp:["Open Ask Claude about this tenant",7],approve:["Open the change list",4],fixdrift:["Fix drift now",-1],
+    finish:["Open Get ready to test",7],pilot:["Open Pilot users",2],changes:["Open the change list",4],runner:["Open the AI Guard test runner",-1],policy:["Open the AI Guard policy",-1]}[a];
   return go?`<div class="row" style="gap:8px;margin-top:10px"><button class="hact" data-a="${esc(a)}">${esc(go[0])}</button></div><div class="hactmsg"></div>`:""}
 document.addEventListener("click",async e=>{const b=e.target.closest&&e.target.closest(".hact");if(!b)return;e.preventDefault();e.stopPropagation();
   const box=b.closest(".body"),msg=t=>{const m=box&&box.querySelector(".hactmsg");if(m)m.innerHTML=t};
   try{const a=b.dataset.a;
     if(a=="backup-setup"){b.disabled=true;await api("/api/backup",{folder:box.querySelector(".hdir").value,passphrase:box.querySelector(".hpw").value});await load();msg(note("Backups are on: every POV on this laptop was backed up, and will be after every change. Save the passphrase in your password manager.","good"))}
     else if(a=="backup-now"){b.disabled=true;const r=await api("/api/backup",{now:true});msg(note("Backed up to "+r.file+".","good"))}
-    else if(a=="mcp"){W.step=8;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
+    else if(a=="mcp"){W.step=7;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
     else if(a=="approve"||a=="changes"){W.step=4;W.plan=null;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
     else if(a=="finish"||a=="pilot"){W.step=a=="finish"?7:2;$$("#tabs button").find(x=>x.dataset.t=="setup").click()}
     else if(a=="runner"||a=="policy"){AGTAB=a;$$("#tabs button").find(x=>x.dataset.t=="aiguard").click()}
@@ -515,7 +558,7 @@ function tab(){return $("#tabs button.on").dataset.t}
 function uiMode(m){if(m)try{localStorage.setItem("pov.ui",m)}catch(e){}let v=m;if(!v)try{v=localStorage.getItem("pov.ui")}catch(e){}v=v=="advanced"?"advanced":"simple";
   document.body.classList.toggle("simple",v=="simple");const b=$("#uimode");if(b){b.textContent=v=="simple"?"Simple view":"Advanced view";b.classList.toggle("on",v=="advanced")}return v}
 uiMode();$("#uimode").onclick=()=>uiMode(document.body.classList.contains("simple")?"advanced":"simple");
-function goManual(){W.step=8;$$("#tabs button").find(x=>x.dataset.t=="setup").click();setTimeout(()=>{const m=$("#manualtop");m&&m.scrollIntoView({behavior:"smooth"})},400)}
+function goManual(){W.step=7;W.allsteps=true;$$("#tabs button").find(x=>x.dataset.t=="setup").click();setTimeout(()=>{const m=$("#manualtop");m&&m.scrollIntoView({behavior:"smooth"})},400)}
 $("#polsel").onchange=async e=>{const v=e.target.value;$("#polstate").textContent="switching…";
   try{await api("/api/aiguard-policy",{profile:v});$("#polstate").textContent="applied";await load()}catch(err){$("#polstate").textContent="failed";alert(err.message)}};
 
@@ -563,21 +606,25 @@ setTimeout(()=>checkUpd(false),1500);
 function refreshTab(){const t=tab();if(t=="setup")wizard();if(t=="status")safety();if(t=="criteria"){criteria();ccInit()}if(t=="logs")logs();if(t=="usecases")usecases();if(t=="aiguard")aiguardTab();if(t=="devtests")devTestsTab();if(t=="handover")execsum()}
 
 /* ---------------- setup wizard ---------------- */
-const STEPS=["Start a POV","Connect","Pilot users","Preflight","Change list","Sign-off","Apply","Finish setup","Next steps"];
+const STEPS=["Connect","Connect","Pilot users","Review & apply","Review & apply","Sign-off","Apply","Get ready to test","Get ready to test"];
+// what the step bar shows: Connect (0 starts or switches a POV, 1 is this POV's API client), Pilot users, Review & apply
+// (3 was Preflight, now part of it), Sign-off and Apply (customer approval only), Get ready to test (8 was Next steps)
 const W={step:0,checks:null,plan:null,role:null};
 function done(i){const c=S&&S.current;if(!c)return false;
-  const clients=Object.values(c.clients);const s=c.settings;
+  const clients=Object.values(c.clients);const s=c.settings,made=(c.ledger.owned||0)+(c.ledger.adopted||0)>0;
   return [true, clients.length&&clients[0].saved,
-    !!(s.pilot_group||+s["identity.test_users"]>0||["create","test"].includes(s["identity.pilot"])), (W.checks?!W.checks.some(x=>x.status=="fail"):!!c.plan||(c.ledger.owned||0)+(c.ledger.adopted||0)>0),
-    ...(seMode()?[(c.ledger.owned||0)+(c.ledger.adopted||0)>0,(c.ledger.owned||0)+(c.ledger.adopted||0)>0]:[!!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash)]), (c.ledger.owned||0)+(c.ledger.adopted||0)>0,
-    (c.ledger.owned||0)+(c.ledger.adopted||0)>0&&!!(c.manual_open&&c.manual_open.stages&&c.manual_open.stages.finish.passed), false][i]}
+    !!(s.pilot_group||+s["identity.test_users"]>0||["create","test"].includes(s["identity.pilot"])), !!c.plan||made,
+    seMode()?made:!!c.plan, !!(c.approval&&c.plan&&c.approval.hash==c.plan.hash), made,
+    made&&!!(c.manual_open&&c.manual_open.stages&&c.manual_open.stages.finish.passed), false][i]}
 function seMode(){const c=S&&S.current;return !!c&&((c.settings||{}).approval||"se")=="se"}
-function firstOpen(){if(!S.current)return 0;for(let i=1;i<8;i++)if(!done(i))return i;return 8}
-function wsteps(){const se=seMode();let n=0;$("#wsteps").innerHTML=STEPS.map((t,i)=>{if(se&&(i==5||i==6))return "";n++;const lab=se&&i==4?"Apply":t;
-    return `<li data-i="${i}" class="${i==W.step?"on":""} ${done(i)&&i!=W.step?"done":""}"><span class="num">${done(i)&&i!=W.step?"✓":n}</span><span>${esc(lab)}</span></li>`}).join("");
-  $$("#wsteps li").forEach(li=>li.onclick=()=>{const i=+li.dataset.i;if(i>0&&!S.current)return;W.step=i;wizard()});
-  $("#wsafe")&&($("#wsafe").textContent=se?"Nothing changes in the customer's tenant until you click Apply in step 5, and only what it lists, for the pilot users.":"Nothing changes in the customer's tenant until step 7, and only what they approved in step 6.")}
-function head(i,title,desc){const se=seMode(),n=se&&i>=7?i-1:i+1,tot=se?STEPS.length-2:STEPS.length;return `<div class="kicker">STEP ${n} OF ${tot}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
+function barSteps(){return !S||!S.current||seMode()?[1,2,4,7]:[1,2,4,5,6,7]}
+function barOf(i){return i==0?1:i==3?4:i==8?7:i}
+function firstOpen(){if(!S.current)return 0;for(const i of barSteps())if(!done(i))return i;return 7}
+function wsteps(){const bar=barSteps(),cur=barOf(W.step);
+  $("#wsteps").innerHTML=bar.map((i,k)=>{const d=done(i)&&i!=cur;return `<li data-i="${i}" class="${i==cur?"on":""} ${d?"done":""}"><span class="num">${d?"✓":k+1}</span><span>${esc(STEPS[i])}</span></li>`}).join("");
+  $$("#wsteps li").forEach(li=>li.onclick=()=>{let i=+li.dataset.i;if(!S.current){if(i!=1)return;i=0}W.step=i;wizard()});
+  $("#wsafe")&&($("#wsafe").textContent=seMode()?"Nothing changes in the customer's tenant until you click Apply in Review & apply, and only what it lists, for the pilot users.":"Nothing changes in the customer's tenant until Apply, and only what they approved at Sign-off.")}
+function head(i,title,desc){const bar=barSteps(),n=bar.indexOf(barOf(i))+1;return `<div class="kicker">STEP ${n} OF ${bar.length}</div><h3>${esc(title)}</h3>${desc?`<p class="muted" style="margin-top:4px">${desc}</p>`:""}`}
 function nav(back,next,nextLabel,disabled){return `<div class="row wnav" style="margin-top:20px">${back?'<button id="wback">‹ Back</button>':""}${next?`<button class="primary" id="wnext" ${disabled?"disabled":""}>${esc(nextLabel||"Continue ›")}</button>`:""}</div>`}
 function bindNav(onNext){$("#wback")&&($("#wback").onclick=()=>{W.step--;wizard()});$("#wnext")&&($("#wnext").onclick=onNext||(()=>{W.step++;wizard()}))}
 const has=n=>S.current&&S.current.products.includes(n);
@@ -692,10 +739,10 @@ async function testAccounts(){const el=$("#wtacct");if(!el)return;let TA=null;
     if(!own&&doms.length){di.value=doms[0];tag.innerHTML=fromT;di.addEventListener("input",()=>{tag.innerHTML=""},{once:true});return}
     if(!own&&!doms.length&&!TA.check_error)hint.innerHTML="Couldn’t read the tenant’s domain. Type the one its users sign in with."}
 }
-async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.current;
+async function wizard(){if(!S)await load();if(W.step==3)W.step=4;if(W.step==8)W.step=7;if(W.step==1&&!S.current)W.step=0;wsteps();const st=$("#wstage"),c=S.current;
   try{
   if(W.step==0){
-    st.innerHTML=head(0,"Start a POV","One POV per customer. Its prefix goes on every object the kit creates in their tenant, so its objects are easy to see and can't be confused with theirs.")+
+    st.innerHTML=head(0,"Connect","One POV per customer, connected to their tenant. Its prefix goes on every object the kit creates there, so its objects are easy to see and can't be confused with theirs.")+
       (S.povs.length?`<div class="group-h">Continue a POV</div>${S.povs.map(p=>`<div class="row" style="gap:8px;align-items:stretch"><label class="opt" style="flex:1"><input type="radio" name="wp" value="${esc(p.id)}" ${c&&p.id==c.id?"checked":""}><span><b>${esc(p.customer)}</b> <span class="muted">· ${esc(p.id)} · ${esc(p.state||"new")}</span></span></label><button class="danger wdel" data-id="${esc(p.id)}" title="Check it's safe, then delete this POV from this computer" style="margin-top:8px">Delete…</button></div>`).join("")}<div class="row" style="margin:10px 0 18px"><button class="primary" id="wcont">Continue with this POV ›</button></div><div class="group-h">Or start a new one</div>`:"")+
       `<div class="form"><span class="lbl">Customer</span><input type="text" id="wcust" placeholder="Acme Corp">
         <span class="lbl">Products in scope</span><div><div id="wprods">${S.products.map(p=>`<label class="chk" style="margin:0 6px 6px 0"><input type="checkbox" value="${esc(p.name)}" ${["zia","zcc"].includes(p.name)?"checked":""}>${esc(p.title)}</label>`).join("")}</div><div id="wneeds" class="hint" style="margin-top:4px"></div></div>
@@ -712,8 +759,8 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         <span class="lbl">Ends</span><div><input type="date" id="wends" value="${new Date(Date.now()+30*864e5).toISOString().slice(0,10)}"> <span class="hint">A reminder comes in the last week.</span></div>
         <span class="lbl">API clients</span><div>
           <label class="opt" style="margin-top:0"><input type="radio" name="wmode" value="single" checked><span><b>One API client</b> (recommended)</span></label>
-          <label class="opt"><input type="radio" name="wmode" value="separate"><span><b>Two clients</b>: view-only first, write access after approval <span class="muted">(step by step only)</span></span></label></div></div></details>
-      <div class="row" style="margin-top:16px;gap:10px"><button class="primary" id="wquick">Quick start ›</button><button id="wnew">Step by step</button><span class="hint">Quick start fills in the rest from the tenant (read-only) and opens the change list. Change anything later in the steps.</span></div>
+          <label class="opt"><input type="radio" name="wmode" value="separate"><span><b>Two clients</b>: view-only first, write access after approval <span class="muted">(you connect each one on the next screen)</span></span></label></div></div></details>
+      <div class="row" style="margin-top:16px;gap:10px"><button class="primary" id="wquick">Quick start ›</button><span class="hint">Signs in, fills in the rest from the tenant (read-only) and opens Review &amp; apply. No API client yet? Leave it empty: the kit starts the POV and gives you the role spec for the customer's admin.</span></div>
       <div class="log" id="wqlog" style="display:none"></div><div id="wmsg"></div>`;
     $$(".wdel").forEach(b=>b.onclick=()=>deletePov(b.dataset.id));
     const zpaOn=()=>$$('#wprods input').some(x=>x.checked&&x.value=="zpa");
@@ -723,11 +770,14 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     $$('input[name=wcl]').forEach(x=>x.onchange=showCl);$$('#wprods input').forEach(x=>x.onchange=()=>{showCl();needs()});showCl();needs();
     $("#wcont")&&($("#wcont").onclick=async()=>{const v=($$('input[name=wp]').find(x=>x.checked)||{}).value;if(!v)return;await api("/api/pov/use",{id:v});await load();W.checks=null;W.plan=null;W.opts=null;W.step=firstOpen()||1;wizard()});
     const prods=()=>$$('#wprods input').filter(x=>x.checked).map(x=>x.value);
-    $("#wnew").onclick=async()=>{try{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,lab:$("#wlab").checked,
+    // no client yet (or two clients): start the POV and go to its Connect screen, which has the role spec
+    const startOnly=async()=>{await api("/api/pov/new",{customer:$("#wcust").value,prefix:$("#wprefix").value,ends:$("#wends").value,lab:$("#wlab").checked,
         products:prods(),client_mode:($$('input[name=wmode]').find(x=>x.checked)||{}).value});
-      await load();W.checks=null;W.plan=null;W.opts=null;W.step=1;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}};
+      await load();W.checks=null;W.plan=null;W.opts=null;W.step=1;W.hello=true;wizard()};
     $("#wquick").onclick=async()=>{const b=$("#wquick");b.disabled=true;$("#wmsg").innerHTML="";
       const cd=($$('input[name=wcl]').find(x=>x.checked)||{}).value=="cd";
+      if(($$('input[name=wmode]').find(x=>x.checked)||{}).value=="separate"||(!cd&&!$("#qcid").value.trim()&&!$("#qsec").value.trim())){
+        try{await startOnly()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad");b.disabled=false}return}
       try{const r=await api("/api/quickstart",{customer:$("#wcust").value,products:prods(),ends:$("#wends").value,from_claude_desktop:cd,lab:$("#wlab").checked,
           vanity_domain:$("#qvan").value,client_id:$("#qcid").value,secret:$("#qsec").value,customer_id:$("#qcust").value});
         $("#qsec").value="";$("#wqlog").style.display="block";
@@ -736,9 +786,16 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   }
   else if(W.step==1){
     const single=c.settings.client_mode!="separate", slot=single?"main":"discovery", cl=c.clients[slot]||{};
+    const fresh=single&&!c.plan&&!((c.ledger.owned||0)+(c.ledger.adopted||0));   // first time: connect, read, review
+    const quick=async(btn,body)=>{btn.disabled=true;$("#wmsg").innerHTML="";
+      try{const r=await api("/api/quickstart",Object.assign({existing:true},body||{}));$("#wsec").value="";$("#wqlog2").style.display="block";
+        await runJob(r.job,$("#wqlog2"));await load();W.checks=null;W.plan=null;W.opts=null;W.step=4;wizard()}
+      catch(e){$("#wmsg").innerHTML=note(e.message,"bad");btn.disabled=false}};
     if(!W.role)W.role=(await api("/api/rolespec")).text;
     st.innerHTML=head(1,"Connect to the customer's tenant",single?"The customer's admin (or you, with a temporary admin login) creates one OneAPI client from this role spec. The secret goes straight to this computer's keychain.":"Two clients: create the view-only discovery client now. The apply client comes at the approval step.")+
-      `<div class="row"><button id="wcopyrole">Copy the role spec</button><button id="wdlrole">Download it (.md)</button><button id="wshowrole">Show it</button></div><pre id="wrole" style="display:none">${esc(W.role)}</pre>
+      `<p class="hint" style="margin:-2px 0 10px"><b>${esc(c.customer)}</b> · ${esc(c.id)} · <a href="#" id="wswitch">Start another POV or switch</a></p>
+      ${W.hello?note("POV started. Send the role spec to the customer's admin. When they give you the client ID and secret, enter them here.","good"):""}
+      <div class="row"><button id="wcopyrole">Copy the role spec</button><button id="wdlrole">Download it (.md)</button><button id="wshowrole">Show it</button></div><pre id="wrole" style="display:none">${esc(W.role)}</pre>
       ${cl.saved?note(`Saved: client ${cl.client_id} on ${c.settings.vanity_domain}.zslogin.net`,"good"):""}
       ${c.claude_desktop&&!cl.saved?`<div class="row" style="gap:10px;margin-top:14px"><button id="wcd">Use the client from Claude Desktop</button><span class="muted" style="font-size:12px">the '${esc(c.claude_desktop.server)}' MCP server on this computer (${esc(c.claude_desktop.vanity_domain)}); the secret goes straight to the keychain</span></div>`:""}
       <div class="form" style="margin-top:14px"><span class="lbl">Vanity domain</span><input type="text" id="wvan" placeholder="acme (from acme.zslogin.net)" value="${esc(c.settings.vanity_domain||"")}">
@@ -746,22 +803,21 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         ${has("zpa")?`<span class="lbl">ZPA customer ID</span><input type="text" id="wcustid" placeholder="Administration > API > Legacy API > Private Access API > Copy ID" value="${esc(c.settings.customer_id||"")}">`:""}
         <span class="lbl">${single?"Client ID":"Discovery client ID"}</span><input type="text" id="wcid" autocomplete="off" value="${esc(cl.client_id||"")}">
         <span class="lbl">Client secret</span><input type="password" id="wsec" autocomplete="new-password" placeholder="${cl.saved?"saved in the keychain (enter a new one to replace it)":""}"></div>
-      <div id="wmsg"></div>`+nav(true,true,cl.saved?"Test and continue ›":"Save and test ›")+(single?`<div class="row" style="margin-top:8px;gap:10px"><button id="wqs">Quick start from here ›</button><span class="hint">Signs in, fills in the rest from the tenant (read-only), runs preflight and opens the change list.</span></div><div class="log" id="wqlog2" style="display:none"></div>`:"");
+      <div id="wmsg"></div>`+nav(false,true,fresh?"Connect and read the tenant ›":cl.saved?"Test and continue ›":"Save and test ›")+
+      (fresh?`<p class="hint">Signs in, fills in the rest from the tenant (read-only) and opens Review &amp; apply.</p>`:"")+`<div class="log" id="wqlog2" style="display:none"></div>`;
+    W.hello=false;$("#wswitch").onclick=e=>{e.preventDefault();W.step=0;wizard()};
     inlineManual(["setup.api_client","setup.zdx_role","setup.zpa_customer_id"],"How to create the API client (and the rest of Connect)",()=>wizard());
-    $("#wqs")&&($("#wqs").onclick=async()=>{const b=$("#wqs");b.disabled=true;$("#wmsg").innerHTML="";
-      try{const r=await api("/api/quickstart",{existing:true,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
-        $("#wsec").value="";$("#wqlog2").style.display="block";await runJob(r.job,$("#wqlog2"));await load();W.checks=null;W.plan=null;W.opts=null;W.step=4;wizard()}
-      catch(e){$("#wmsg").innerHTML=note(e.message,"bad");b.disabled=false}});
-    $("#wcd")&&($("#wcd").onclick=async()=>{try{await api("/api/connect/claude-desktop",{});await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
+    $("#wcd")&&($("#wcd").onclick=async()=>{try{await api("/api/connect/claude-desktop",{});await load();if(fresh)return quick($("#wcd"));W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
     $("#wcopyrole").onclick=async()=>{try{await navigator.clipboard.writeText(W.role);$("#wcopyrole").textContent="Copied ✓"}catch(e){download(`role-spec-${c.id}.md`,W.role,"text/markdown")}};
     $("#wdlrole").onclick=()=>download(`role-spec-${c.id}.md`,W.role,"text/markdown");
     $("#wshowrole").onclick=()=>{const p=$("#wrole");p.style.display=p.style.display=="none"?"block":"none"};
-    bindNav(async()=>{$("#wmsg").innerHTML='<div class="notice">Signing in…</div>';
+    bindNav(async()=>{if(fresh)return quick($("#wnext"),{vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
+      $("#wmsg").innerHTML='<div class="notice">Signing in…</div>';
       try{await api("/api/connect",{slot,vanity_domain:$("#wvan").value,cloud:$("#wcloud").value,customer_id:($("#wcustid")||{}).value,client_id:$("#wcid").value,secret:$("#wsec").value});
         $("#wsec").value="";await load();W.step=2;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }
   else if(W.step==2){
-    const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), scope=s["zpa.scope"]||"scim", mk=s["identity.pilot"]||(+s["identity.test_users"]>0?"test":"existing");
+    const s=c.settings, zia=has("zia")||has("zcc")||has("casb"), mk=s["identity.pilot"]||(+s["identity.test_users"]>0?"test":"existing");
     st.innerHTML=head(2,"Pilot users","Who will test during the POV? Every rule the kit creates applies to them and no one else.")+
       `<div class="form">
         ${zia||has("zpa")?`<span class="lbl">Who tests</span><div>
@@ -785,53 +841,18 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
           <div id="wwho" class="hint"></div></div>
       </div>
       <div id="wsum" class="notice" style="margin-top:12px"></div>
-      <details style="margin-top:10px"><summary class="muted" style="cursor:pointer">More options: sign-in provider, sites not decrypted, rule placement</summary><div class="form" style="margin-top:8px">
-        <span class="lbl">Identity provider</span><select id="s_identity.idp"><option value="">Detect it</option>${["okta","entra","ping","duo","google","onelogin"].map(x=>`<option ${s["identity.idp"]==x?"selected":""}>${x}</option>`).join("")}</select>
-        ${has("zia")?`<span class="lbl">Sign-in sites not decrypted</span><input type="text" id="s_identity.bypass_domains" value="${esc((s["identity.bypass_domains"]||[]).join(", "))}" placeholder="leave empty to use the IdP's own sites">
-        <span class="lbl">Rule placement</span><div><label class="chk"><input type="radio" name="s_placement" value="top" ${s.placement!="bottom"?"checked":""}>Above the customer's rules</label> <label class="chk"><input type="radio" name="s_placement" value="bottom" ${s.placement=="bottom"?"checked":""}>Below them</label></div>`:""}
-      </div></details>
-      ${has("zpa")?`<div class="group-h">Private Access (ZPA)</div><div class="form">
-        <span class="lbl">POV app name</span><input type="text" id="s_zpa.app_name" value="${esc(s["zpa.app_name"]||"")}" placeholder="leave empty to use the kit's test app">
-        <span class="lbl">Its domains or IPs</span><input type="text" id="s_zpa.domains" value="${esc((s["zpa.domains"]||[]).join(", "))}" placeholder="empty: the connectors' template also starts a small test app">
-        <span class="lbl">TCP ports</span><input type="text" id="s_zpa.tcp_ports" value="${esc((s["zpa.tcp_ports"]||["443"]).join(", "))}">
-        <span class="lbl">Pilot users in ZPA</span><div><label class="chk"><input type="radio" name="s_zpa.scope" value="scim" ${scope!="saml"?"checked":""}>A SCIM group</label> <label class="chk"><input type="radio" name="s_zpa.scope" value="saml" ${scope=="saml"?"checked":""}>A SAML attribute</label></div>
-        <span class="lbl">SCIM group <span class="muted">(if not the pilot group)</span></span><input type="text" id="s_zpa.group" value="${esc(s["zpa.group"]||"")}">
-        <span class="lbl">SAML attribute and value</span><div class="row" style="gap:8px"><input type="text" id="s_zpa.saml_attribute" value="${esc(s["zpa.saml_attribute"]||"")}" placeholder="memberOf" style="flex:1"><input type="text" id="s_zpa.saml_value" value="${esc(s["zpa.saml_value"]||"")}" placeholder="pov-pilots" style="flex:1"></div></div>
-        <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Privileged Remote Access and App Protection (used when PA-PRA-01 or PA-APP-03 is chosen in Success criteria)</summary><div class="form" style="margin-top:8px">
-        <span class="lbl">PRA server <span class="muted">(what admins reach)</span></span><div class="row" style="gap:8px"><input type="text" id="s_zpa.pra_server" value="${esc(s["zpa.pra_server"]||"")}" placeholder="jump1.acme.internal" style="flex:2"><select id="s_zpa.pra_protocol">${["RDP","SSH"].map(x=>`<option ${(s["zpa.pra_protocol"]||"RDP")==x?"selected":""}>${x}</option>`).join("")}</select><input type="text" id="s_zpa.pra_port" value="${esc(s["zpa.pra_port"]||"")}" placeholder="3389 or 22" style="width:90px"></div>
-        <span class="lbl">PRA portal domain</span><input type="text" id="s_zpa.pra_portal" value="${esc(s["zpa.pra_portal"]||"")}" placeholder="pra.acme.com (the customer adds its CNAME after Apply)">
-        <span class="lbl">ZPA certificate <span class="muted">(name)</span></span><input type="text" id="s_zpa.certificate" value="${esc(s["zpa.certificate"]||"")}" placeholder="empty: one that covers the portal's domain; App Protection on an HTTPS app needs one too">
-        </div></details>`:""}
-      ${has("casb")?`<div class="group-h">SaaS security</div><div class="form"><span class="lbl">Connected SaaS tenant</span><input type="text" id="s_casb.tenant" value="${esc(s["casb.tenant"]||"")}" placeholder="leave empty if there's only one"></div>`:""}
-      <div id="wmsg"></div>`+nav(true,true,"Save ›");
+      <div id="wmsg"></div>`+nav(true,true,"Save and review ›");
     pilotPicker(s);testAccounts();
     bindNav(async()=>{const vals={};
       $$("#wstage [id^='s_']").forEach(el=>{vals[el.id.slice(2)]=el.value});
       if($("#wnewusers"))vals["identity.create_users"]=$("#wnewusers").checked?"yes":"no";
       const pm=($$("input[name='s_identity.pilot']").find(x=>x.checked)||{}).value;if(pm&&pm!="test")vals["identity.test_users"]="0";
       ["placement","zpa.scope","identity.pilot"].forEach(k=>{const r=$$(`input[name='s_${k}']`).find(x=>x.checked);if(r)vals[k]=r.value});
-      try{await api("/api/settings",{values:vals});await load();W.checks=null;W.step=3;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
-  }
-  else if(W.step==3){
-    st.innerHTML=head(3,"Preflight","Read-only checks of this computer, each product, and the pilot users across products. Nothing is written.")+
-      `<div id="wdoing"></div><div id="wchecks">${W.checks?preflightHTML(W.checks):'<div class="notice">Running the checks…</div>'}</div><div id="wpeople"></div><div id="wgate"></div>`;
-    const draw=async()=>{const fails=W.checks.filter(x=>x.status=="fail");$("#wchecks").innerHTML=preflightHTML(W.checks);
-      const passed=await gate($("#wpeople"),"preflight",{title:"Steps for people before the change list",listTitle:"In the Zscaler console",
-        intro:"These need a person in the Zscaler console. Until they're done, some checks above can't pass, or a product sits out the change list.",redraw:()=>draw()});
-      $("#wgate").innerHTML=(fails.length?note(`${fails.length} thing${fails.length>1?"s":""} to fix first (often in the Pilot users step), then run the checks again.`,"bad"):"")+
-        (!passed&&!fails.length?note("Some steps for people above are still open. You can continue: they stay on the list, and the parts that need them wait.","warn"):"")+
-        `<div class="row" style="margin-top:14px"><button id="wback">‹ Back</button><button id="wrerun">Run checks again</button><button id="wcopy" title="Checks only. No secrets.">Copy report</button><button class="primary" id="wnext" ${fails.length?"disabled":""}>Continue ›</button></div>`;
-      bindNav(async()=>{if(!passed)await moveOn("preflight");W.step=4;wizard()});$("#wrerun").onclick=()=>{W.fresh=true;run()};
-      $("#wcopy").onclick=async()=>{const t=reportText(W.checks);try{await navigator.clipboard.writeText(t);$("#wcopy").textContent="Copied ✓"}catch(e){download("pov-preflight.txt",t,"text/plain")}}};
-    const run=async()=>{$("#wchecks").innerHTML='<div class="notice">Running the checks (read-only)…</div>';$("#wgate").innerHTML="";
-      try{W.checks=(await liveJob("/api/preflight",$("#wdoing"),"What it’s doing now")).checks;wsteps();
-        // the steps for people the API can see: check them now, so ones already done tick themselves
-        try{await runJob((await api("/api/manual/check",{stage:"preflight"})).job,document.createElement("div"))}catch(e){}
-        draw()}catch(e){$("#wchecks").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}};
-    W.checks?draw():run();
+      try{await api("/api/settings",{values:vals});await load();W.checks=null;W.step=4;wizard()}catch(e){$("#wmsg").innerHTML=note(e.message,"bad")}});
   }
   else if(W.step==4&&seMode()){
-    st.innerHTML=head(4,"Apply to the tenant","What the kit will make in "+esc(c.customer)+"’s tenant, for the pilot users only, then you apply it. Your sign-off is recorded as it applies; each object goes in the ledger, so teardown removes exactly them. (Need the customer to approve first? <a href=\"#\" id=\"wtocust2\">Switch to customer approval</a>.)")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Reading the tenant (read-only) and working out what to make…</div></div>';
+    if(W.fresh)W.mchecked=null;
+    st.innerHTML=head(4,"Review & apply","What the kit will make in "+esc(c.customer)+"’s tenant, for the pilot users only, then you apply it. Your sign-off is recorded as it applies; each object goes in the ledger, so teardown removes exactly them. (Need the customer to approve first? <a href=\"#\" id=\"wtocust2\">Switch to customer approval</a>.)")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Reading the tenant (read-only) and working out what to make…</div></div>';
     $("#wtocust2").onclick=async e=>{e.preventDefault();await api("/api/settings",{values:{approval:"customer"}});await load();wizard()};
     try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now",{reuse:W.fresh?0:10});W.fresh=false;W.plan=r;const ch=await api("/api/changes",{});await load();wsteps();
       const acts=r.items.filter(i=>i.action=="customer_action"),pend=ch.pending,made=ch.made.filter(m=>m.state!="deleted");
@@ -840,7 +861,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
       const blocked=r.checks.some(x=>x.status=="fail");
       const pendTable=pend.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th></tr>${pend.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(title(i.product))} · ${kindOf(i)}</div></td><td>${esc(i.affects)}</td></tr>`).join("")}</table></div>`:`<p class="muted">Everything in the plan is already in the tenant.</p>`;
-      $("#wplan").innerHTML=`${readAt(r)}${problemsHTML(r.checks)}
+      $("#wplan").innerHTML=`${readAt(r)}${problemsHTML(r.checks)}<div id="wpeople"></div>${optsHTML(c,r.checks)}
         ${blocked&&pend.length?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">What Apply will make once these are fixed · ${pend.length}</summary>${pendTable}</details>`:
           `<div class="group-h">${pend.length?`To make now · ${pend.length}`:"Nothing new to make"}</div>${pendTable}`}
         ${pend.length&&!r.checks.some(x=>x.status=="fail")?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="wby2" placeholder="Your name (recorded as the sign-off)" value="${esc(by)}" style="width:260px"><button class="primary" id="wapply2">Apply ${pend.length} change${pend.length==1?"":"s"} ›</button></div>`:""}
@@ -849,28 +870,31 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         ${r.notes.length?`<details style="margin-top:8px"><summary class="muted" style="cursor:pointer">Notes (${r.notes.length})</summary><ul class="muted">${r.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul></details>`:""}
         <div class="group-h">Changes made · ${made.length}</div>
         ${made.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th><th>Made</th></tr>${made.map(m=>`<tr><td><b>${esc(m.name)}</b><div class="muted" style="font-size:12px">${esc(title(m.product))} · ${kindOf(m)}${m.state=="adopted"?" · built by hand, adopted":""}</div>${m.why?`<div style="font-size:12.5px">${esc(m.why)}</div>`:""}</td><td>${esc(m.affects)}</td><td class="muted" style="font-size:12px">${esc(String(m.at||"").slice(0,16).replace("T"," "))}</td></tr>`).join("")}</table></div><p class="hint">Teardown (Handover) removes all of them.</p>`:'<p class="muted">Nothing yet.</p>'}
-        <div class="row" style="margin-top:12px"><button id="wopen">Open the printable list ↗</button></div>`+nav(true,!!made.length,"Finish setup ›");
-      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindProblems();
+        <div class="row" style="margin-top:12px"><button id="wopen">Open the printable list ↗</button></div>`+nav(true,!!made.length,"Get ready to test ›");
+      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindProblems();bindOpts();peopleGate();
       bindNav(()=>{W.step=7;wizard()});
       $("#wapply2")&&($("#wapply2").onclick=async()=>{const b=$("#wapply2");b.disabled=true;$("#wlog2").style.display="block";const nm=$("#wby2").value.trim();try{if(nm)localStorage.setItem("pov.exby",nm)}catch(_){}
+        if(W.gpassed===false)await moveOn("preflight");
         try{const res=await runJob((await api("/api/apply-direct",{by:nm})).job,$("#wlog2"));await load();
           $("#wafter2").innerHTML=note(`Applied: ${res.made.length} object${res.made.length==1?"":"s"} made. Next: the steps for people.`,"good");setTimeout(()=>{W.step=7;wizard()},1200)}
         catch(e){$("#wafter2").innerHTML=note(e.message,"bad");b.disabled=false}});
     }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
   }
   else if(W.step==4){
-    st.innerHTML=head(4,"The change list","Everything the kit will create, who it affects, and the changes only the customer makes. Walk the customer's admin through it; any change after approval needs a new approval.")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Making the change list from the tenant (read-only)…</div></div>';
+    if(W.fresh)W.mchecked=null;
+    st.innerHTML=head(4,"Review & apply","Everything the kit will create, who it affects, and the changes only the customer makes. Walk the customer's admin through it; any change after approval needs a new approval.")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Making the change list from the tenant (read-only)…</div></div>';
     try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now",{reuse:W.fresh?0:10});W.fresh=false;W.plan=r;await load();wsteps();
       const creates=r.items.filter(i=>i.action!="customer_action"), acts=r.items.filter(i=>i.action=="customer_action");
       const byP={};for(const i of creates)(byP[i.product]=byP[i.product]||[]).push(i);
       const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
       $("#wplan").innerHTML=`${readAt(r)}<div class="stat" style="margin:6px 0 10px"><div><b>${creates.length}</b>objects to create</div><div><b>${acts.length}</b>customer actions</div><div><b style="font:600 15px var(--mono);margin-top:4px">${esc(r.hash.slice(0,16))}</b>change list</div></div>
-        ${problemsHTML(r.checks)}
+        ${problemsHTML(r.checks)}<div id="wpeople"></div>${optsHTML(c,r.checks)}
         ${Object.entries(byP).map(([p,is])=>`<div class="group-h">${esc(title(p))} · ${is.length}</div><div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th><th>Criteria</th></tr>${is.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(KIND[i.kind]||i.kind.replace(/_/g," "))}${i.placement?" · placed at the "+esc(i.placement):""}${i.action=="create_or_adopt"?" · or built by hand and adopted":""}</div>${i.why?`<div style="font-size:12.5px">${esc(i.why)}</div>`:""}</td><td>${esc(i.affects)}</td><td>${i.criteria.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</td></tr>`).join("")}</table></div>`).join("")}
         ${acts.length?`<div class="group-h">Changes only the customer makes</div><ul>${acts.map(a=>`<li><b>${esc(a.name)}</b><div class="muted" style="font-size:12.5px">${esc(a.why)}</div></li>`).join("")}</ul>`:""}
         ${r.notes.length?`<div class="group-h">Notes</div><ul class="muted">${r.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`:""}
         <div class="row" style="margin-top:12px"><button id="wopen">Open the customer page ↗</button><span class="hint">Printable, with a signature line.</span></div>`+nav(true,true,"Continue to approval ›");
-      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindProblems();bindNav();
+      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindProblems();bindOpts();peopleGate();
+      bindNav(async()=>{if(W.gpassed===false)await moveOn("preflight");W.step=5;wizard()});
     }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
   }
   else if((W.step==5||W.step==6)&&seMode()){W.step=4;return wizard()}
@@ -880,7 +904,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     const bySE=(c.settings.approval||"se")=="se";
     let seBy="";try{seBy=localStorage.getItem("pov.exby")||""}catch(e){}
     st.innerHTML=head(5,bySE?"Review":"Approval",bySE?"You review this exact change list and sign it off. The kit records who and when, and Apply refuses any plan that differs from it.":"The customer approves this exact change list. The kit records who and when, and apply refuses any plan that differs from it.")+
-      (c.plan?`<p>Change list <code>${esc(c.plan.hash.slice(0,16))}</code>: ${c.plan.creates} objects, ${c.plan.items-c.plan.creates} customer actions.</p>`:note("Make the change list first (step 5).","bad"))+
+      (c.plan?`<p>Change list <code>${esc(c.plan.hash.slice(0,16))}</code>: ${c.plan.creates} objects, ${c.plan.items-c.plan.creates} customer actions.</p>`:note("Make the change list first (Review & apply).","bad"))+
       (ok?note(`Approved by ${c.approval.by} on ${c.approval.at.slice(0,10)}.`,"good"):bySE?
        `<div class="form"><span class="lbl">Reviewed by</span><input type="text" id="wby" placeholder="Your name" value="${esc(seBy)}">
         <span class="lbl">Note <span class="muted">(optional)</span></span><textarea id="wnote" placeholder="e.g. scope agreed with the customer on the kickoff call"></textarea></div>
@@ -909,16 +933,16 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   else if(W.step==6){
     const ok=c.approval&&c.plan&&c.approval.hash==c.plan.hash, appliedN=(c.ledger.owned||0)+(c.ledger.adopted||0);
     st.innerHTML=head(6,"Apply","The kit reads the tenant again, checks it still makes the approved change list, then creates each object, recording it in the ledger as it goes. Safe to run again: anything already made is skipped.")+
-      (ok?"":note("The change list isn't approved yet (step 6).","bad"))+
+      (ok?"":note("The change list isn't approved yet (Sign-off).","bad"))+
       (appliedN?note(`${appliedN} POV objects are in the ledger.`,"good"):"")+
       `<div class="row" style="margin-top:6px"><button class="primary" id="wapply" ${ok?"":"disabled"}>${appliedN?"Apply again (fills in anything missing)":`Apply to ${esc(c.customer)}'s tenant`}</button></div>
-      <div class="log" id="wlog" style="display:none"></div><div id="wafter"></div><div id="wnav">${nav(true,!!appliedN,"Finish setup ›")}</div>`;
+      <div class="log" id="wlog" style="display:none"></div><div id="wafter"></div><div id="wnav">${nav(true,!!appliedN,"Get ready to test ›")}</div>`;
     bindNav();
     $("#wapply").onclick=async()=>{const b=$("#wapply");b.disabled=true;$("#wlog").style.display="block";
       try{await runJob((await api("/api/apply",{})).job,$("#wlog"));await load();wsteps();
         $("#wafter").innerHTML='<div class="notice">Checking the result…</div>';
         const checks=await runJob((await api("/api/status",{})).job,document.createElement("div"));
-        $("#wnav").innerHTML="";$("#wafter").innerHTML='<div class="group-h">Status after apply</div>'+checksHTML(checks)+nav(true,true,"Finish setup ›");bindNav()}
+        $("#wnav").innerHTML="";$("#wafter").innerHTML='<div class="group-h">Status after apply</div>'+checksHTML(checks)+nav(true,true,"Get ready to test ›");bindNav()}
       catch(e){const m=/Use prefix (\S+) on the Apply step/.exec(e.message);
         $("#wafter").innerHTML=note(e.message,"bad")+(m?`<div class="row" style="gap:10px;margin-top:8px"><button class="primary" id="wuseprefix">Use prefix ${esc(m[1])} for this POV</button><span class="hint">Renames this POV's planned objects. Then review the new change list and approve it again; nothing is in the tenant yet.</span></div>`:"");
         $("#wuseprefix")&&($("#wuseprefix").onclick=async()=>{try{await api("/api/settings",{values:{prefix:m[1]}});await load();W.step=4;wizard()}catch(err){$("#wafter").insertAdjacentHTML("beforeend",note(err.message,"bad"))}})}
@@ -926,29 +950,30 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   }
   else if(W.step==7){
     const appliedN=(c.ledger.owned||0)+(c.ledger.adopted||0);
-    st.innerHTML=head(7,"Finish setup","The POV's objects are in the tenant. These steps need a person, in this order; the kit checks each one it can see. When they're done, the POV is ready to test.")+
-      (appliedN?"":note("Apply first (step 7): these steps follow it.","bad"))+`<div id="wfin"></div><div id="wfintools"></div><div id="wfinnav"></div>`;
+    st.innerHTML=head(7,"Get ready to test","The POV's objects are in the tenant. First the steps that need a person, in order (the kit checks each one it can see), then what the pilot devices need.")+
+      (appliedN?"":note("Apply first (Review & apply): these steps follow it.","bad"))+`<div id="wfin"></div><div id="wready"></div><div id="wall"></div><div id="wfinnav"></div>`;
     if(!appliedN){$("#wfinnav").innerHTML=nav(true,false);bindNav();return}
-    if(has("zcc")||has("zia")){const dev=await api("/api/device");
-      $("#wfintools").innerHTML=`<div class="group-h" style="margin-top:16px">For the pilot devices</div>`+deviceHTML(dev)+(has("zpa")?`<p class="hint">The App Connector templates and the provisioning key are on Next steps → ZPA App Connectors (open it from the list on the left).</p>`:"");
-      bindDevice(dev,()=>wizard())}
     const draw=async()=>{const passed=await gate($("#wfin"),"finish",{title:"After Apply",listTitle:"In order",
         intro:"Entitlements, passwords, connectors and pilot devices: the things Zscaler's API can't do.",redraw:()=>draw()});
       await load();wsteps();
-      const left=((await api("/api/manual")).steps||[]).filter(x=>x.stage=="finish"&&x.status=="open").length;
-      $("#wfinnav").innerHTML=(passed?note("Setup is finished: the POV is ready to test. Next steps has the probe pack, the traffic generator and the rest.","good"):
-        note(`${left} step${left==1?"":"s"} for people still open. You can go on: they stay on the checklist, and the tests that need them wait.`,"warn"))+nav(true,true,"Next steps ›");
-      bindNav(async()=>{if(!passed)await moveOn("finish");W.step=8;wizard()})};
-    await draw();
+      const man=(await api("/api/manual")).steps,left=man.filter(x=>x.stage=="finish"&&x.status=="open").length,other=man.filter(x=>x.stage!="finish");
+      $("#wall").innerHTML=other.length?`<details id="wallsteps" style="margin-top:18px" ${W.allsteps?"open":""}><summary class="muted" style="cursor:pointer">The other steps for people (${other.filter(x=>x.status!="done").length} open: before Apply and at the end)</summary>${manualHTML(other)}</details>`:"";
+      if(W.allsteps){W.allsteps=false;setTimeout(()=>{const m=$("#manualtop");m&&m.scrollIntoView({behavior:"smooth"})},300)}
+      bindManual(()=>draw());
+      $("#wfinnav").innerHTML=(passed?note("Setup is finished: the POV is ready to test.","good"):
+        note(`${left} step${left==1?"":"s"} for people still open. You can go on: they stay on the checklist, and the tests that need them wait.`,"warn"))+nav(true,true,"Go to Success criteria ›");
+      bindNav(async()=>{if(!passed)await moveOn("finish");$$("#tabs button").find(x=>x.dataset.t=="criteria").click()})};
+    await draw();await readyCards(c,$("#wready"));
   }
-  else if(W.step==8){
-    let plan=null;try{plan=(await api("/api/plan")).plan}catch(e){}
-    const man=(await api("/api/manual")).steps;
+  }catch(e){st.innerHTML=note(e.message,"bad")+nav(W.step>0,false);bindNav()}
+}
+
+
+// Get ready to test: what the pilot devices and the SE need once the steps for people are under way
+async function readyCards(c,host){
     const dev=await api("/api/device");
     const users=c.test_users?(await api("/api/users")).users:[];
-    st.innerHTML=head(8,"Next steps","What's left for the customer, and the things to hand to the pilot devices.")+
-      manualHTML(man)+
-      `<div class="group-h">For the pilot devices and you</div>`+deviceHTML(dev)+`<div class="cards">
+    host.innerHTML=`<div class="group-h" style="margin-top:18px">For the pilot devices and you</div>`+deviceHTML(dev)+`<div class="cards">
         <div class="card"><h4>Probe pack for pilot devices</h4><p class="muted" style="margin:4px 0 10px">The tests for the criteria the customer chose, and what the traffic generator sends for them. The device setup installs it with the POV probe (no keys, nothing in the tenant). After the criteria change, send the new pack: <code>pov-probe pack install &lt;file&gt;</code>, then <code>pov-probe test</code>.</p><button id="npack">Download probe pack</button><div id="npstat"></div></div>
         ${has("zia")?`<div class="card"><h4>ZIA traffic generator</h4><p class="muted" style="margin:4px 0 10px">Real traffic from a pilot device (web categories, SaaS, GenAI, EICAR and phishing test pages, fake card numbers, file types, DNS, unusual ports), so the customer's ZIA dashboards, Insights and Shadow IT show the POV's policy at work. Each round sends nothing unless ip.zscaler.com confirms traffic goes through Zscaler. On a pilot device with the POV probe (the setup above installs it):</p>
           <pre class="log" style="white-space:pre-wrap">pov-probe traffic check                  # is this device in the POV's tenant, as a pilot user?
@@ -970,9 +995,7 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
             ${c.mcp.actions_consent?note(`${c.mcp.actions_consent.by} agreed to changes through the change list on ${c.mcp.actions_consent.at.slice(0,10)}.`,"good"):`<div class="row" style="gap:8px"><input type="text" id="nactby" placeholder="Who at the customer agreed (name, title)" style="flex:1"><button id="nactok">Record agreement</button></div>`}
             ${c.mcp.actions_consent?(c.mcp.actions_installed?`${note("In Claude Desktop as "+c.mcp.actions_entry+". Quit and reopen Claude Desktop to load it.","good")}<button id="nactrm">Remove the changes connector</button>`:`<button id="nactin" style="margin-top:6px">Add the changes connector to Claude Desktop</button>`):""}</div>`:""}<div id="nmcpmsg"></div></div>
         ${users.length?`<div class="card"><h4>Test users</h4>${users.map(u=>`<div class="row" style="gap:8px;margin:4px 0"><code>${esc(u.email)}</code><button data-n="${esc(u.n)}" class="nuser">Show password</button></div><div id="nuser${esc(u.n)}"></div>`).join("")}</div>`:""}
-      </div>`+nav(true,true,"Go to Success criteria ›");
-    bindNav(()=>{$$("#tabs button").find(b=>b.dataset.t=="criteria").click()});
-    bindManual(()=>wizard());
+      </div>`;
     bindDevice(dev,()=>wizard());
     $("#ntrcs")&&($("#ntrcs").onclick=async()=>{try{const r=await api("/api/traffic/cloudshare",{});download(r.name,r.text,"text/plain");
       $("#ntrmsg").innerHTML=note(`Saved ${r.name}. Copy it to the CloudShare Windows pilot and, once Client Connector is signed in as a pilot user, run in PowerShell: powershell -ExecutionPolicy Bypass -File .\\${r.name}. Traffic then runs every 30 minutes while the pilot user is signed in to Windows. After the criteria change, download it again and re-run it.`,"good")}catch(e){$("#ntrmsg").innerHTML=note(e.message,"bad")}});
@@ -989,7 +1012,7 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
       const lines=[`# On each App Connector machine (Rocky Linux 9), after the blueprint's 'prepare':`,
         `curl -fsSL ${u}/zpov-connector.sh | sudo bash -s -- enroll '${k}'${testApp?" <test app address>":""}`];
       if(testApp)lines.push("","# The test app's address: on the test app machine, run  ip -4 addr  (or see the CloudShare machine details).");
-      lines.push("","# On the Windows pilot device: Next steps > Set up a pilot device > Windows, one-line command, then add:","#   -Msi C:\\ZPOV\\<the installer file>");
+      lines.push("","# On the Windows pilot device: Get ready to test > Set up a pilot device > Windows, one-line command, then add:","#   -Msi C:\\ZPOV\\<the installer file>");
       $("#nkeyv").innerHTML=`<pre class="log" style="white-space:pre-wrap;margin-top:8px">${esc(lines.join("\n"))}</pre><div class="hint">The key is the POV's secret: paste it only into the connector machines. Building the blueprint once: see CLOUDSHARE.md in the kit's docs.</div>`});
     $("#nkey")&&($("#nkey").onclick=async()=>{const v=(await api("/api/reveal",{what:"zpa-key"})).value;$("#nkeyv").innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span><div class="hint">Paste it into the stack's ProvisioningKey field; don't save it anywhere else.</div>`});
     const mcpGo=async b=>{try{const r=await api("/api/mcp",b);if(b.what=="config"){await navigator.clipboard.writeText(JSON.stringify(r.config,null,2)).catch(()=>download(`mcp-${c.id}.json`,JSON.stringify(r.config,null,2),"application/json"));$("#nmcpmsg").innerHTML=note("Copied: no secret in it.","good");return}await load();wizard()}catch(e){$("#nmcpmsg").innerHTML=note(e.message,"bad")}};
@@ -1001,11 +1024,7 @@ pov-probe traffic schedule --every 30    # a round every 30 minutes (--remove st
     $("#nactin")&&($("#nactin").onclick=()=>mcpGo({what:"actions_install"}));
     $("#nactrm")&&($("#nactrm").onclick=()=>mcpGo({what:"actions_remove"}));
     $$(".nuser").forEach(b=>b.onclick=async()=>{const v=(await api("/api/reveal",{what:"test-user",n:b.dataset.n})).value;$("#nuser"+b.dataset.n).innerHTML=`<span class="secret">${esc(v||"(not in the keychain)")}</span>`});
-    $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});
-  }
-  }catch(e){st.innerHTML=note(e.message,"bad")+nav(W.step>0,false);bindNav()}
-}
-
+    $$("#nag button").forEach(b=>b.onclick=async()=>{$("#nagmsg").textContent="Switching…";try{const r=await api("/api/aiguard-policy",{profile:b.dataset.p});$$("#nag button").forEach(x=>x.classList.toggle("on",x===b));$("#nagmsg").textContent=r.message}catch(e){$("#nagmsg").textContent=e.message}});}
 
 /* ---------------- the probe pack and what still needs a run ---------------- */
 function probeStatusHTML(ps){
@@ -1074,7 +1093,7 @@ async function gate(el,stageName,opts){
   $("#gskip")&&($("#gskip").onclick=async()=>{try{await api("/api/manual/skip",{stage:stageName,by:$("#gby").value,why:$("#gwhy").value});await load();again()}catch(e){$("#gmsg").innerHTML=note(e.message,"bad")}});
   return G.passed}
 
-// the steps for people that belong to the screen being shown, right there instead of only at Next steps
+// the steps for people that belong to the screen being shown, right there instead of only at Get ready to test
 async function inlineManual(keys,title,redraw){
   try{const m=(await api("/api/manual")).steps.filter(x=>keys.includes(x.key));if(!m.length)return;
     const box=document.createElement("div");box.id="winline";box.innerHTML=manualHTML(m,{compact:true,title});
@@ -1225,7 +1244,7 @@ let AGCAL={tests:{},summary:{}};
 const CALCHIP={rewritten:["reworded","Reworded so it triggers in this tenant (internal note: the customer sees the test as it runs)"],swapped:["swapped","Replaced by another test for the same detectors"],missed:["won't trigger","No version triggered the expected detectors in this tenant"],ok:["✓ triggers","Checked: triggers its detectors in this tenant"]};
 async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
   if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
-  if(!c.settings.products.includes("aiguard")){w.innerHTML='<div class="panel"><h2>AI Guard</h2><p class="muted">AI Guard isn\'t in this POV\'s products. Add it on Setup → Start a POV (Step by step), then make the change list again.</p></div>';return}
+  if(!c.settings.products.includes("aiguard")){w.innerHTML='<div class="panel"><h2>AI Guard</h2><p class="muted">AI Guard isn\'t in this POV\'s products. Add it on Setup → Connect (a POV with AI Guard in its products), then make the change list again.</p></div>';return}
   try{AG=await api("/api/aiguard")}catch(e){w.innerHTML=note(e.message,"bad");return}
   try{AGCAL=await api("/api/aiguard/calibrate",{state:true})}catch(e){AGCAL={tests:{},summary:{}}}
   if(!AGR.users)AGR.users=new Set(AG.pov_users.slice(0,3));

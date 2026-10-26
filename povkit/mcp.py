@@ -287,7 +287,7 @@ def status(pov):
     inst = (pov.cfg.get("mcp") or {}).get("installed")
     if not inst:
         return mk("mcp", "Claude Desktop read-only access", INFO, "not set up",
-                  "Optional: Next steps > Ask Claude about this tenant (record the customer's agreement, then Add to "
+                  "Optional: Get ready to test > Ask Claude about this tenant (record the customer's agreement, then Add to "
                   "Claude Desktop).")
     s, why = slot(pov)
     acts = (pov.cfg.get("mcp") or {}).get("actions_installed")

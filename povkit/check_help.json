@@ -257,7 +257,7 @@
   "what": "Whether Claude Desktop on this laptop has the POV's read-only access to the customer's tenant (through Zscaler's own MCP server).",
   "why": "Optional. With it you can ask Claude Desktop things like 'why was Jane blocked?' or 'what did the pilot group use today?' during the POV. It can read but never change anything, and it's removed at handover.",
   "verify": [
-   "Next steps > Ask Claude about this tenant shows the customer's agreement and 'In Claude Desktop as ...'.",
+   "Get ready to test > Ask Claude about this tenant shows the customer's agreement and 'In Claude Desktop as ...'.",
    "Claude Desktop lists the server after you quit and reopen it."
   ],
   "fix": [
@@ -285,7 +285,7 @@
   "what": "The POV's end date, and whether POV objects are still in the tenant.",
   "why": "A POV that ends with its objects still in the customer's tenant leaves rules nobody owns. The kit warns in the last week and fails after the end date.",
   "verify": [
-   "Setup > Start a POV > More options shows the end date; Status lists the objects still in the tenant."
+   "Setup > Connect > More options shows the end date; Status lists the objects still in the tenant."
   ],
   "fix": [
    "Extending: `pov-kit set ends YYYY-MM-DD` (or the settings).",
@@ -303,13 +303,13 @@
    "Give the API client view access to ZIA's authentication settings (role spec), then Run checks again.",
    "Or ignore it: this check only informs."
   ],
-  "retest": "Preflight > Run checks again."
+  "retest": "Review & apply > Read the tenant again."
  },
  "id-testusers": {
   "what": "Where the POV's test users are created: in ZIA's own user list, or in ZIdentity when the tenant keeps its users there.",
   "why": "Test users let the POV run without the customer's real accounts. Their passwords are generated and kept only in this laptop's keychain.",
   "verify": [
-   "Next steps > Test users lists them, with Show password.",
+   "Get ready to test > Test users lists them, with Show password.",
    "In the console, search for Users: each is named with the POV's prefix."
   ],
   "fix": [
@@ -401,7 +401,7 @@
    "Search the console for App Connectors: two in the POV's group show Connected."
   ],
   "fix": [
-   "Deploy them (Finish setup > Deploy the POV's App Connectors); allow 10 to 15 minutes; they need outbound TCP 443."
+   "Deploy them (Get ready to test > Deploy the POV's App Connectors); allow 10 to 15 minutes; they need outbound TCP 443."
   ],
   "retest": "Status > Check now."
  },
@@ -414,7 +414,7 @@
   "fix": [
    "Give the client a view-only ZDX role (the step for people 'Give the API client a ZDX role')."
   ],
-  "retest": "Preflight > Run checks again."
+  "retest": "Review & apply > Read the tenant again."
  },
  "zdx-app": {
   "what": "Whether ZDX already monitors an app the POV can deep-trace.",
@@ -425,7 +425,7 @@
   "fix": [
    "Monitor an app in ZDX (Microsoft 365 or Zoom are typical), or pick one with `pov-kit set zdx.app NAME`."
   ],
-  "retest": "Preflight > Run checks again."
+  "retest": "Review & apply > Read the tenant again."
  },
  "zdx-users": {
   "what": "Whether the kit knows the pilot users, to find their devices in ZDX.",
@@ -436,7 +436,7 @@
   "fix": [
    "Name the pilot users, or apply the POV's test accounts, then run the checks again."
   ],
-  "retest": "Preflight > Run checks again."
+  "retest": "Review & apply > Read the tenant again."
  },
  "zdx-devices": {
   "what": "Whether pilot devices report to ZDX (in the last 24 hours).",
@@ -445,7 +445,7 @@
    "ZDX lists each pilot device."
   ],
   "fix": [
-   "Set up the pilot devices (Finish setup); Client Connector with ZDX reports within an hour."
+   "Set up the pilot devices (Get ready to test); Client Connector with ZDX reports within an hour."
   ],
   "retest": "Status > Check now."
  },
@@ -465,10 +465,10 @@
   "what": "The steps only the customer can do (in the change list), and which aren't confirmed yet.",
   "why": "Their criteria can't pass until they're done.",
   "verify": [
-   "Setup > Finish setup and Next steps > Steps for people show each, with its check."
+   "Setup > Get ready to test shows each, with its check."
   ],
   "fix": [
-   "Open Finish setup and check or mark each one."
+   "Open Get ready to test and check or mark each one."
   ],
   "retest": "Status > Check now."
  }

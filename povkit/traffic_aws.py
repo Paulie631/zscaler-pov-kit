@@ -1,6 +1,6 @@
 """CloudFormation template for a POV traffic generator on AWS: a Windows pilot device that sends ZIA test traffic.
 
-`pov-kit traffic aws` (or the console: Next steps > Traffic generator) writes a template filled in for this POV (cloud,
+`pov-kit traffic aws` (or the console: Get ready to test > Traffic generator) writes a template filled in for this POV (cloud,
 user domain, pilot user). Upload it in the CloudFormation console: no AWS CLI or AWS keys on your laptop. One stack
 holds everything; deleting the stack removes it all.
 
@@ -238,7 +238,7 @@ def for_pov(pov, pilot_user=None, every=30, per_type=4, schedule=True):
     from .core import KitError
     cloud = device_setup.cloud(pov)
     if not cloud:
-        raise KitError("Set the Zscaler cloud first (Next steps > Set up a pilot device > Detect).")
+        raise KitError("Set the Zscaler cloud first (Get ready to test > Set up a pilot device > Detect).")
     users = device_setup.users(pov)
     user = (pilot_user or (users[0] if users else "")).strip().lower()
     if not user:
@@ -301,7 +301,7 @@ def cloudshare_script(pov, every=30):
         raise KitError("The traffic generator is for ZIA, which isn't in this POV.")
     cloud = device_setup.cloud(pov)
     if not cloud:
-        raise KitError("Set the Zscaler cloud first (Next steps > Set up a pilot device > Detect).")
+        raise KitError("Set the Zscaler cloud first (Get ready to test > Set up a pilot device > Detect).")
     every = max(15, min(int(every), 1440))
     pack = base64.b64encode(json.dumps(evidence.probe_pack(pov), separators=(",", ":")).encode()).decode()
     name = f"zpov-traffic-{pov.id}.ps1"

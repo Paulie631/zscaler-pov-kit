@@ -4,7 +4,7 @@
 #   curl -fsSL https://github.com/Paulie631/zscaler-pov-kit/releases/latest/download/zcc-setup.sh | bash -s -- \
 #     --cloud zscalertwo --domain acme.com --user jane
 #
-# The POV console's Next steps > Set up a pilot device gives this line filled in, or a script file with the POV's
+# The POV console's Get ready to test > Set up a pilot device gives this line filled in, or a script file with the POV's
 # probe pack inside. What it does:
 #   1. gets the Client Connector installer (the kit's pinned copy of Zscaler's installer app, or --pkg FILE from your
 #      tenant's Platform Releases page: the .pkg, or the installer .app, zipped or not) and installs it only if its

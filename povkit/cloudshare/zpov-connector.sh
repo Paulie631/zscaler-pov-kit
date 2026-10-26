@@ -42,7 +42,7 @@ EOF
   ;;
 enroll)
   KEY="${1:-}"; APP_IP="${2:-}"
-  [ ${#KEY} -ge 20 ] || fail "Give the POV's provisioning key: POV console > Next steps > ZPA App Connectors > Show the key."
+  [ ${#KEY} -ge 20 ] || fail "Give the POV's provisioning key: POV console > Get ready to test > ZPA App Connectors > Show the key."
   rpm -q zpa-connector >/dev/null || fail "Run 'prepare' first."
   systemctl stop zpa-connector 2>/dev/null || true
   rm -f /opt/zscaler/var/*

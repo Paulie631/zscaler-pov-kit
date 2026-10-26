@@ -47,7 +47,7 @@ def guide(pov):
         keys.append(("setup", "setup.zdx_role"))
     if "zpa" in pov.products:
         keys.append(("setup", "setup.zpa_customer_id"))
-    # before the change list exists, the steps Preflight waits on (they come back as customer actions in the plan)
+    # before the change list exists, the steps Review & apply waits on (they come back as customer actions in the plan)
     keys += [("customer", k) for k, need in (("zia.ca.malware", "zia"), ("casb.ca.tenant", "casb")) if need in pov.products]
     for i in plan:
         if i["action"] == "customer_action":
@@ -90,7 +90,7 @@ def guide(pov):
     return out
 
 
-# where the setup flow stops for each step, and the order the Finish setup step walks them in
+# where the setup flow stops for each step, and the order the Get ready to test step walks them in
 STAGES = ("connect", "preflight", "finish", "end")
 STAGE_H = {"connect": "To connect the POV kit", "preflight": "Before the change list",
            "finish": "After the POV's objects are created", "end": "When the POV ends"}

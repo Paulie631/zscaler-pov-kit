@@ -96,7 +96,7 @@ def base_criteria():
     try:
         from .products import base
     except ImportError as e:
-        raise DeviceError("This device doesn't have the POV's tests yet. In the POV console: Setup > Finish setup > "
+        raise DeviceError("This device doesn't have the POV's tests yet. In the POV console: Setup > Get ready to test > "
                           "Set up a pilot device > 2. Run the tests: copy that command and paste it here.") from e
     crit = [c for c in base.load_catalog() if c.get("probe")]
     crit = [dict(c, probe=[s for s in c["probe"] if not any("{" in str(v) and "{b64}" not in str(v) for v in s.values())])

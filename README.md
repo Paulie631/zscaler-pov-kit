@@ -52,24 +52,19 @@ overview for the customer's security team, and a one-page quick start, as Word a
 ./pov-kit gui                                      # .\pov-kit.cmd gui on Windows
 ```
 
-The console opens in your browser (this computer only). Its **Setup** tab walks through eight steps, like the demo
-kit's wizard:
+The console opens in your browser (this computer only). Its **Setup** tab has four steps:
 
-1. **Start a POV**: customer, products, prefix, end date, and one API client (recommended) or two.
-2. **Connect**: copy the role spec for the customer's admin, then enter the vanity domain, client ID and secret
-   (straight to the keychain).
-3. **Pilot users**: the pilot group (or Hosted DB test users), their emails, the IdP, and per-product details such as
-   the ZPA app and whether ZPA scopes by SCIM group or SAML attribute.
-4. **Preflight**: read-only checks of every product and of the pilot users across products, and the steps for people
-   needed before the change list (each with How to verify; Continue waits for them, or Continue anyway is recorded).
-5. **Change list**: everything the kit will create, who it affects, and what only the customer does.
-6. **Approval**: who approved this exact change list, recorded here or by the customer on the change-list page
-   (it has an approval form that saves a file you import).
-7. **Apply**: live progress, then a status check.
-8. **Finish setup**: the steps for people after Apply, in order, with the admin or sent to them, and pilot device
-   setup.
-9. **Next steps**: customer actions, the probe pack, the ZPA connector template (AWS or Azure) and key, the AI Guard
-   profile, test users' sign-ins.
+1. **Connect**: customer and products, then the API client (vanity domain, client ID and secret, straight to the
+   keychain). **Quick start** signs in, reads the tenant (read-only) and fills in the rest. No client yet? Leave it
+   empty to get the role spec for the customer's admin. **More options**: lab rehearsal, prefix, end date, two clients.
+2. **Pilot users**: who tests — the customer's group, people you name, or test accounts the kit makes.
+3. **Review & apply**: read-only checks with each problem's fix, the steps for people needed before the change list,
+   the change list (what the kit will create, who it affects, what only the customer does), the POV options it needs
+   (ZPA app, SCIM or SAML scope, PRA, SaaS tenant, IdP, rule placement) only when it needs them, then your sign-off and
+   Apply. With customer approval switched on, Sign-off (recorded here or on the change-list page's approval form) and
+   Apply are their own steps.
+4. **Get ready to test**: the steps for people after Apply, in order, with the admin or sent to them, pilot device
+   setup, the probe pack, the ZPA connector template (AWS or Azure) and key, the AI Guard profile, test users' sign-ins.
 
 **Status** compares the tenant with what was approved (and fixes drift on POV objects only) and holds the safety net
 (end date, encrypted backups, reminders), **Success criteria** runs the API proofs, imports probe results, records

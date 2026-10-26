@@ -472,7 +472,7 @@ def check(cloud=None, log=None, sess=None):
     z = zcc_running()
     add("gen-zcc", "Client Connector running", "ok" if z else ("info" if z is None else "warn"),
         "" if z else "couldn't see it" if z is None else "no Zscaler process found",
-        "" if z else "Install Client Connector (Next steps → Set up a pilot device) and sign in as a pilot user.")
+        "" if z else "Install Client Connector (Get ready to test → Set up a pilot device) and sign in as a pilot user.")
     try:
         via, clouds = via_zscaler(s)
         want = (cloud or "").lower()

@@ -68,13 +68,13 @@ waits for the next scan.
 2. Use **Zscaler's own template** (CloudFormation, launched or downloaded from that page). Don't write the role by
    hand: Zscaler's template carries the tenant's trust settings (the external ID).
 3. The cloud admin deploys it in the test account and finishes the onboarding in the Zscaler console.
-4. Mark the step done in the POV console (Setup › Next steps, or Status) once the account shows as connected.
+4. Mark the step done in the POV console (Setup › Get ready to test, or Status) once the account shows as connected.
 
 ## B. Deploy the seed stack
 
 **Get the template**, from either:
 
-- the POV console: **Setup › Next steps › Seed stack for AI-SPM and DSPM**, tick the options, **Download the seed
+- the POV console: **Setup › Get ready to test › Seed stack for AI-SPM and DSPM**, tick the options, **Download the seed
   stack** (it saves `zpov-seed-<pov>.json`); or
 - the command line: `pov-kit seed template [--mcp] [--public-decoy] [--out FILE]`.
 

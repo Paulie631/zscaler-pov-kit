@@ -14,14 +14,14 @@
 
 ## Once
 
-- Prove the kit in your own lab tenant: **Setup → Start a POV**, tick **More options → This is my own lab tenant**,
+- Prove the kit in your own lab tenant: **Setup → Connect**, tick **More options → This is my own lab tenant**,
   **Quick start**, then **Logs → Lab tools → Run the self-test**.
 - Then **Status → Safety net:** turn on encrypted backups (a synced folder and a passphrase in your password manager)
   and daily reminders. (The panel appears once a POV exists.)
 
 ## Rehearse first (recommended)
 
-Before your first customer POV, run one end to end in your own lab tenant: Start a POV → **More options** → tick
+Before your first customer POV, run one end to end in your own lab tenant: Connect → **More options** → tick
 **This is my own lab tenant**. The **POV checklist** under the tabs then becomes a rehearsal: it adds the checks that
 are easiest to get wrong in the field (self-test, backups, the Claude Desktop connectors, a pilot device, the traffic
 generator, teardown). Mark each step **Worked** or **Problem…** with a note, and send the **rehearsal report** to the
@@ -35,32 +35,33 @@ The console opens in **Simple view**: the main path only. **Advanced view** (top
 client options, CloudShare and AWS traffic generators, AI Guard test users and rounds, Claude-drafted tests, and
 letting Claude Desktop make changes.
 
-1. **Before the kickoff:** Setup → Start a POV: customer and products, then **Step by step** → Connect → **Copy the
-   role spec** for the customer's admin.
-2. **At the kickoff, on Connect:** the API client they created (with ZPA, the customer ID: Administration → API →
-   Legacy API → Private Access API → Copy ID), then **Quick start from here**. The kit fills in the rest from the tenant,
-   read-only, runs preflight and opens the change list. Fix anything under **Needs you**; products not ready yet are
-   **added later** without holding up the rest.
-3. **Change list → Sign-off:** review it, walk the admin through it, and sign it off yourself. If the account needs the
-   customer's formal approval, choose **Ask the customer to approve instead** on Sign-off.
-4. **Apply:** watch it run, then check the status. **Finish setup** then walks the steps for people that follow Apply
-   (entitlement, connectors, pilot devices), with the admin or sent to them; the POV is ready to test once they're
-   done. Preflight does the same for the steps before the change list.
-5. **Who tests** (Pilot users, any time): a group they have, people you name, or test accounts. A change means a new
-   approval.
-6. **Next steps:** every step for people (with instructions and checks), **Set up a pilot device** (one line per device;
-   never your own work laptop), the ZPA connector template or CloudShare commands.
-7. **Success criteria:** configuration is checked automatically; import probe results; anything you showed live, mark
+Setup has four steps: **Connect → Pilot users → Review & apply → Get ready to test**.
+
+1. **Before the kickoff (Connect):** customer and products. Leave the API client fields empty and click **Quick start**:
+   the kit creates the POV and shows the **role spec** to send to the customer's admin.
+2. **At the kickoff (Connect):** the API client they created (with ZPA, the customer ID: Administration → API →
+   Legacy API → Private Access API → Copy ID), then **Quick start**. The kit signs in, reads the tenant (read-only),
+   fills in the defaults and lands on Review & apply.
+3. **Pilot users** (any time): who tests — a group they have, people you name, or test accounts. A change means a new
+   change list.
+4. **Review & apply:** problems are listed with their fixes (**Fixed it: check again**), then the steps for people
+   needed before the change list, then the change list itself. Options a criterion needs (the ZPA app, PRA, the SaaS
+   tenant, the identity provider, rule placement) show here only when they're needed. Walk the admin through it, type
+   your name and **Apply**. Products not ready yet are **added later** without holding up the rest.
+5. **Get ready to test:** the steps for people that follow Apply (entitlement, connectors, pilot devices), with the
+   admin or sent to them, **Set up a pilot device** (one line per device; never your own work laptop), the probe pack,
+   the ZPA connector template or CloudShare commands, and the rest. The POV is ready to test once the steps are done.
+6. **Success criteria:** configuration is checked automatically; import probe results; anything you showed live, mark
    **Demonstrated**. Then build the report.
-8. **Handover:** **Executive summary** (customer and internal versions, as Word and PowerPoint), then export to
-   Terraform, or remove the POV, before its end date. Later, **Delete…** on Start a POV
+7. **Handover:** **Executive summary** (customer and internal versions, as Word and PowerPoint), then export to
+   Terraform, or remove the POV, before its end date. Later, **Delete…** on Connect
    forgets it on your laptop, once it has checked nothing is left in the tenant.
 
-**The SE applies directly** (the default): Setup's **Apply** step shows what the kit will make (pilot users only) and
+**The SE applies directly** (the default): **Review & apply** shows what the kit will make (pilot users only) and
 the **Changes made** so far; type your name and Apply. Your sign-off is recorded as it applies, and every object is in
 the ledger, so teardown removes exactly them. Use cases (**Accept and make it in the tenant**), AI Guard proxy setup
 (**Save**) and demo switches go straight in too. A customer that must approve changes first: **Switch to customer
-approval** on the Apply step, and the change-list page and Sign-off come back.
+approval** on Review & apply, and the change-list page, Sign-off and Apply come back as their own steps.
 
 ## Live demos
 

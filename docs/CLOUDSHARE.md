@@ -40,17 +40,17 @@ Nothing here touches a Zscaler tenant except enrolling the connectors with the P
 ## Each POV (about 15 minutes)
 
 1. Start a new environment from the **Zscaler POV lab** blueprint.
-2. In the POV console, apply the POV with ZPA in it, then **Next steps → ZPA App Connectors → CloudShare commands**.
+2. In the POV console, apply the POV with ZPA in it, then **Get ready to test → ZPA App Connectors → CloudShare commands**.
    It shows the command for the connectors with the POV's provisioning key filled in. Paste the key only there.
 3. On the test app machine, note its address (`ip -4 addr`, or CloudShare's machine details). On **each connector**,
    run the command from step 2 with that address at the end. It enrolls the connector, and points
    `pov-app.zpov.internal` at the test app on that connector.
-4. On the Windows pilot: **Next steps → Set up a pilot device → Windows → Download the setup script** (it has the
+4. On the Windows pilot: **Get ready to test → Set up a pilot device → Windows → Download the setup script** (it has the
    POV's probe pack inside), copy it to the machine, and in PowerShell opened as administrator run
    `powershell -ExecutionPolicy Bypass -File .\<the script> -Msi C:\ZPOV\<the installer file>`. Sign in as the
    pilot user; the POV's tests run once traffic goes through Zscaler, and the results land on the Desktop.
    (The one-line command works too, without the tests: run the probe afterwards with the probe pack.)
-   For traffic on the customer's dashboards all through the POV: **Next steps → ZIA traffic generator → CloudShare
+   For traffic on the customer's dashboards all through the POV: **Get ready to test → ZIA traffic generator → CloudShare
    Windows pilot script**. Copy it to the pilot and run `powershell -ExecutionPolicy Bypass -File .\<the script>`.
    It installs this POV's probe pack, checks the device is in the POV's tenant, and sends a round every 30 minutes
    while the pilot user is signed in to Windows. Download and run it again after the criteria change.

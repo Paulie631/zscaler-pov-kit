@@ -386,7 +386,8 @@ class ZCC(Product):
         return [check("zcc-present", "POV Client Connector profiles", WARN if (missing or gone) else OK,
                       "; ".join(filter(None, [f"not created or adopted: {', '.join(missing)}" if missing else "",
                                               f"deleted in the portal: {', '.join(gone)}" if gone else ""]))
-                      or f"all {len(want)}", "Build them by hand (Finish setup has the steps and exact names), then Status > Fix drift adopts them."
+                      or f"all {len(want)}", "Build them by hand (Get ready to test has the steps and exact names), then "
+                      "Status > Fix drift adopts them."
                       if (missing or gone) else "", fixable=bool(missing))]
 
     def teardown(self, t, pov, ledger, log):

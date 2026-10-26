@@ -233,7 +233,7 @@ def make_plan(pov, snaps, log=None):
 
 def plan(pov, tenant_for, log=None, reuse_minutes=0):
     """reuse_minutes: plan from the last tenant reading when it's this recent and nothing was applied or changed in
-    the POV's settings since (the setup steps, moments after Preflight or Quick start read it). 0 always reads."""
+    the POV's settings since (the setup steps, moments after Quick start or a setup step read it). 0 always reads."""
     return _plan(pov, tenant_for, log, reuse_minutes=reuse_minutes)[:4]
 
 
@@ -282,7 +282,7 @@ def make_now(pov, tenant_for, uc_id, seen_hash, by, log=lambda *a: None):
     if h != seen_hash:
         raise KitError("The tenant or the change list changed since you reviewed it. Review it again, then make it.")
     if any(c["status"] == FAIL for c in checks):
-        raise KitError("The checks found problems, so nothing was changed. Fix them first (Setup › Preflight).")
+        raise KitError("The checks found problems, so nothing was changed. Fix them first (Setup › Review & apply).")
     cl = ChangeList(pov.dir)
     a = cl.approval()
     if not (a and a["hash"] == h):
@@ -341,7 +341,7 @@ def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
     items, notes, h, checks, snaps = _plan(pov, reads, log, only=set(only) if only else None)
     bad = [c["label"] for c in checks if c["status"] == FAIL]
     if bad:
-        raise KitError("Saved, but not applied: the checks found problems (" + "; ".join(bad[:3]) + "). Setup › Preflight.")
+        raise KitError("Saved, but not applied: the checks found problems (" + "; ".join(bad[:3]) + "). Setup › Review & apply.")
     cl = ChangeList(pov.dir)
     a = cl.approval()
     if not (a and a["hash"] == h):
@@ -434,7 +434,7 @@ def status(pov, tenant_for, fix=False, log=lambda lvl, msg: None):
     open_actions = [i for i in items if i["action"] == "customer_action"]
     if open_actions:
         checks.append(check("customer-actions", "Customer actions to confirm", INFO,
-                            "; ".join(i["name"] for i in open_actions), "Setup > Finish setup (all of them: Next steps > Steps for "
+                            "; ".join(i["name"] for i in open_actions), "Setup > Get ready to test (all of them: Steps for "
                             "people): check or mark each one."))
     if fix:
         if not a or digest(items) != a["hash"]:

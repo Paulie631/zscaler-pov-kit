@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.99
+- **Setup is four steps: Connect → Pilot users → Review & apply → Get ready to test** (with customer approval on, Sign-off and Apply follow Review & apply as before).
+- **Connect** starts or continues a POV and connects it in one screen. Quick start is the one way in: it signs in, fills in the rest from the tenant (read-only) and opens Review & apply. No API client yet? Leave it empty: the kit starts the POV and shows the role spec for the customer's admin.
+- **No separate Preflight.** Review & apply reads the tenant, shows each problem with its fix, and the steps for people before Apply, above the change list. This computer's keychain is checked there too.
+- **Pilot users is just who tests.** ZPA app and ports, PRA and App Protection, the SaaS tenant, the identity provider, sites not decrypted and rule placement move to **POV options** on Review & apply: folded away with the kit's defaults, open when one is needed (PRA chosen without a server, or a fix points there). PRA fields only show when PA-PRA-01 or PA-APP-03 is chosen.
+- **Get ready to test** replaces Finish setup and Next steps: the steps for people after Apply, then pilot device setup, the probe pack, traffic generator, App Connectors, seed stack, AI Guard policy and Ask Claude, with the other steps for people folded below.
+- Help text, the checklist and the guides use the new step names.
+
 ## 0.9.98
 - **Ask Claude rides out a brief AI Guard proxy hiccup.** When the proxy answers 502/503/504 (or Claude is overloaded, 529), the kit asks again twice, a few seconds apart, and the log says so. If it still fails, the message says what the code means and what to try, instead of a bare "HTTP 502:".
 

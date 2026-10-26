@@ -3,7 +3,7 @@
 A product's API proof (or the AI Guard test runner) reports what it found in one line: "'ZPOV: Block gambling' is
 disabled; ZIA puts www.bet365.com in SPORTS, not in the rule's categories". explain() splits that into its problems
 and, for each, says why it happens and how to fix it. Some fixes the console can do from the same place ('action'):
-fixdrift (Status > Fix drift, only the POV's own objects), finish (Setup > Finish setup), policy (AI Guard > Policy),
+fixdrift (Status > Fix drift, only the POV's own objects), finish (Setup > Get ready to test), policy (AI Guard > Policy),
 runner (AI Guard > Test runner), pilot (Setup > Pilot users), changes (Setup > Change list).
 """
 from __future__ import annotations
@@ -38,7 +38,7 @@ RULES = [
     # ---- ZPA
     (r"(?P<k>\d+) of (?P<m>\d+) POV connectors connected",
      "ZPA reaches the POV's app only through its App Connectors, and fewer than two are connected.",
-     ["Deploy them: Setup > Finish setup > Deploy the POV's App Connectors (AWS, Azure or CloudShare).",
+     ["Deploy them: Setup > Get ready to test > Deploy the POV's App Connectors (AWS, Azure or CloudShare).",
       "Connectors take 10 to 15 minutes to enroll and need outbound TCP 443.",
       "Already deployed? On the connector machine, check the zpa-connector service is running."], "finish"),
     (r"broad customer rules: (?!none)",
@@ -49,20 +49,20 @@ RULES = [
     # ---- devices and users
     (r"(?P<k>\d+) of (?P<m>\d+) pilot devices registered|name the pilot users",
      "The kit can't find a pilot device registered in Client Connector for the pilot users yet.",
-     ["Set up a pilot device: Setup > Finish setup > Set up a pilot device, and sign in as a pilot user.",
+     ["Set up a pilot device: Setup > Get ready to test > Set up a pilot device, and sign in as a pilot user.",
       "Signed in but not counted? Check the user signs in with the address the kit knows (Pilot users)."], "finish"),
     (r"(?P<k>\d+) of 2 POV profiles",
      "The POV's Client Connector profiles aren't in the portal yet (the API sometimes refuses to create them).",
-     ["Build them by hand with the exact names: Setup > Finish setup > Build the POV's Client Connector profiles.",
+     ["Build them by hand with the exact names: Setup > Get ready to test > Build the POV's Client Connector profiles.",
       "Then Status > Fix drift adopts them."], "finish"),
     (r"(?P<k>\d+) of (?P<m>\d+) pilot devices report ZDX scores",
      "ZDX scores come from pilot devices running Client Connector with ZDX. Some (or all) haven't reported yet.",
-     ["Check the pilot devices are set up and signed in (Finish setup).",
+     ["Check the pilot devices are set up and signed in (Get ready to test).",
       "ZDX must be on in the app profile they use; scores appear within an hour of first use.",
       "A device that's off or asleep stops reporting."], "finish"),
     (r"SaaS scan configuration|findings appear after the first scan",
      "No scan has run on the connected SaaS tenant yet.",
-     ["Connect a SaaS tenant if there isn't one (Finish setup or the steps for people).",
+     ["Connect a SaaS tenant if there isn't one (Get ready to test or the steps for people).",
       "The first scan can take hours on a large tenant: check again later."], "finish"),
     # ---- AI Guard
     (r"handled by policy '(?P<p>[^']+)', not the POV's",
@@ -145,7 +145,7 @@ def explain(detail, status="fail"):
         out.append({"problem": str(detail), "why": "The check found the setup isn't complete yet." if status ==
                     "incomplete" else "The check found the tenant doesn't match what this criterion needs.",
                     "fix": ["Open the criterion's evidence below for what was found.",
-                            "Status > Check now shows drift on the POV's objects; Setup > Finish setup lists what's "
+                            "Status > Check now shows drift on the POV's objects; Setup > Get ready to test lists what's "
                             "left for people."], "action": None})
     return out
 

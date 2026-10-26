@@ -439,7 +439,7 @@ def prepare(pov, tenant_for, uid, log=lambda *a: None, by="SE"):
         why += [f"{SHORT.get(x, x)}: {r}" for x, r in ((snaps.get("_waiting") or {}).items()) if x in still and r
                 and not any(str(r) in w for w in why)]
         raise KitError(f"{', '.join(SHORT.get(x, x) for x in still)} still can't be read, so Claude would only write "
-                       "directions again. " + (" ".join(why[:3]) if why else "Check Setup › Connect and Preflight."))
+                       "directions again. " + (" ".join(why[:3]) if why else "Check Setup › Connect and Review & apply."))
     names = ", ".join(SHORT.get(x, x) for x in (list(pov.products)))
     log("info", f"Asking Claude {ai.ROUTES[ai.route_name()]} again, with the tenant read")
     return refine(pov, snaps, uid, AUTO_FEEDBACK.format(products=names), by=by)

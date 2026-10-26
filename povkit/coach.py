@@ -57,7 +57,7 @@ def steps(pov):
         add("apply", "Apply", applied, "Creates the POV's objects, each recorded so teardown removes exactly them.",
             "step:6")
     o, t = _manual(pov, "finish")
-    add("finish", "Finish setup (steps for people)", applied and o == 0,
+    add("finish", "Get ready to test (steps for people)", applied and o == 0,
         f"{t - o} of {t} done" if t else "Nothing for people to do after Apply.", "step:7")
     rows = evidence.evaluate(pov) if applied else []
     if prods & {"zia", "zcc", "zpa", "zdx", "eai"}:
