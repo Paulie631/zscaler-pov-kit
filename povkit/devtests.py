@@ -135,6 +135,66 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None, on_device
             "switched": sorted(v.get("name", k) for k, v in switched.items()), "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
 
 
+# ---------------------------------------------------------------- readiness
+def readiness(pov, device=None, zcc=None, facts=None, gate=None):
+    """Before Run: can the tests run where they're pointed, and will the results count? Read-only, a few seconds.
+    -> {"ready": bool, "checks": [{"id", "label", "state": ok|bad|warn|skip, "detail", "fix"}]}
+
+    A "bad" check stops Run; "warn" lets it run with a caveat. zcc/facts/gate are for tests."""
+    checks = []
+
+    def add(cid, label, state, detail="", fix=""):
+        checks.append({"id": cid, "label": label, "state": state, "detail": detail, "fix": fix})
+    pack = evidence.probe_pack(pov)
+    if device:
+        from . import devlink
+        row = next((d for d in devlink.devices(pov) if d["id"] == device), None)
+        if row and row.get("online"):
+            add("linked", "Linked device online", "ok", f"{row.get('name') or 'device'}"
+                + (f" · {row['user']}" if row.get("user") else "") + f" · asked for work {row['seen']}s ago")
+        else:
+            add("linked", "Linked device online", "bad", "The device hasn't asked for work in the last minute.",
+                "On the device, run the link command again and leave its window open.")
+        add("tenant", "In the POV's tenant as the pilot user", "skip",
+            "The linked device checks this itself before any test.")
+    else:
+        running = probe.zcc_running() if zcc is None else zcc
+        add("zcc", "Client Connector running", "ok" if running else "bad",
+            "" if running else "No Client Connector process on this computer.",
+            "" if running else "Open Client Connector and sign in as the pilot user, or pick a linked device.")
+        try:
+            f = probe.zscaler_facts() if facts is None else facts
+            if f.get("through"):
+                add("through", "Traffic goes through Zscaler", "ok",
+                    " · ".join(x for x in (f.get("datacenter"), f.get("cloud")) if x))
+            else:
+                add("through", "Traffic goes through Zscaler", "bad", "ip.zscaler.com says this traffic isn't.",
+                    "Turn on Internet Security in Client Connector, then Check again.")
+        except Exception as e:   # noqa: BLE001
+            add("through", "Traffic goes through Zscaler", "warn", f"ip.zscaler.com didn't answer ({type(e).__name__}).")
+        if any(c["id"] == "IS-TEN-01" for c in pack["criteria"]):
+            from . import device as _device
+            try:
+                (gate or _device.gate)(pack["criteria"])
+                add("tenant", "In the POV's tenant as the pilot user", "ok", "The POV's own check page is blocked here.")
+            except _device.DeviceError:
+                add("tenant", "In the POV's tenant as the pilot user", "bad",
+                    "The POV's own check page isn't blocked, so this isn't the POV's tenant or the pilot user.",
+                    "Sign in to Client Connector as the pilot user. A work laptop on its company's Zscaler can't be "
+                    "a pilot device.")
+            except Exception as e:   # noqa: BLE001
+                add("tenant", "In the POV's tenant as the pilot user", "warn", f"Couldn't check ({type(e).__name__}).")
+        else:
+            add("tenant", "In the POV's tenant as the pilot user", "skip", "This POV has no tenant check (IS-TEN-01).")
+    sw = pov.cfg.get("switches") or {}
+    if sw:
+        add("policy", "Policy as planned", "warn", "Switched for the demo: " + ", ".join(
+            v.get("name", k) for k, v in sw.items()) + ". Results won't count as evidence.", "Put back as planned.")
+    else:
+        add("policy", "Policy as planned", "ok", "Results will count as evidence.")
+    return {"ready": not any(c["state"] == "bad" for c in checks), "checks": checks, "device": device or None}
+
+
 # ---------------------------------------------------------------- demo switches
 # which device tests each of the template's rules decides (a switch changes what those tests should see)
 RULE_TESTS = {

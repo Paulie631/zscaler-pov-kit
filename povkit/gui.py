@@ -832,6 +832,8 @@ def api(method, path, body, q):
         p = current()
         if body.get("helpers"):
             return 200, devtests.helpers(p)
+        if body.get("ready"):   # the readiness strip: can the tests run there, and will they count?
+            return 200, devtests.readiness(p, body.get("device") or None)
         if body.get("detail"):   # one result, opened: the rule, category, connection facts, history, logs
             return 200, devtests.detail(p, body["detail"], tf(p, "discovery"), body.get("result"))
         if body.get("policy"):   # demo switches: the POV's own rules, switched in front of the customer

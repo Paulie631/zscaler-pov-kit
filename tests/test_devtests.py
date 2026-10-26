@@ -69,3 +69,26 @@ def test_show_and_open_here(pov, monkeypatch):
     with pytest.raises(KitError):
         devtests.open_here(pov, "not-a-test")
     assert devtests.show({"type": "dlp_post", "expect": "block"})["copy"].count("Card number") == 6
+
+
+def test_readiness(pov, monkeypatch):
+    fake(monkeypatch)                                                           # the POV's check page is blocked here
+    ok = devtests.readiness(pov, zcc=True, facts={"through": True, "datacenter": "NYC3", "cloud": "zscalertwo.net"})
+    st = {c["id"]: c["state"] for c in ok["checks"]}
+    assert ok["ready"] and st == {"zcc": "ok", "through": "ok", "tenant": "ok", "policy": "ok"}
+    fake(monkeypatch, outcome=lambda sp: "allow")                              # a work laptop on another tenant
+    bad = devtests.readiness(pov, zcc=False, facts={"through": False})
+    st = {c["id"]: c for c in bad["checks"]}
+    assert not bad["ready"] and st["zcc"]["state"] == st["through"]["state"] == st["tenant"]["state"] == "bad"
+    assert all(st[k]["fix"] for k in ("zcc", "through", "tenant"))
+    pov.cfg["switches"] = {"zia.url_filtering.block-gambling": {"name": "Block gambling"}}
+    fake(monkeypatch)
+    sw = devtests.readiness(pov, zcc=True, facts={"through": True})
+    pol = next(c for c in sw["checks"] if c["id"] == "policy")
+    assert sw["ready"] and pol["state"] == "warn" and "Block gambling" in pol["detail"]   # runs, but won't count
+
+
+def test_readiness_linked_device(pov):
+    r = devtests.readiness(pov, device="nope")
+    st = {c["id"]: c["state"] for c in r["checks"]}
+    assert not r["ready"] and st["linked"] == "bad" and st["tenant"] == "skip"
