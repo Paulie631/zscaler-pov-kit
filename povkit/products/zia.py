@@ -82,19 +82,29 @@ SSL_ACTIONS = {   # from the demo kit, checked against a live tenant
 
 # demo switches: the actions a POV rule may be switched to in front of a customer (its own rule; nothing else)
 SWITCHABLE = {"url_filtering": ["BLOCK", "CAUTION", "ISOLATE", "ALLOW"], "ssl": ["DECRYPT", "DO_NOT_DECRYPT"],
-              "dlp": ["BLOCK", "ALLOW"], "cloud_app_control": ["BLOCK", "CAUTION", "ALLOW"]}
+              "dlp": ["BLOCK", "ALLOW"], "cloud_app_control": ["BLOCK", "CAUTION", "ALLOW"],
+              "firewall": ["BLOCK_RESET", "ALLOW"], "dns": ["BLOCK", "ALLOW"],
+              "file_type": ["BLOCK", "CAUTION", "ALLOW"], "sandbox": ["QUARANTINE", "ALLOW_SCAN"]}
 ACTION_LABEL = {("url_filtering", "BLOCK"): "Block", ("url_filtering", "CAUTION"): "Caution",
                 ("url_filtering", "ISOLATE"): "Isolate", ("url_filtering", "ALLOW"): "Allow",
                 ("ssl", "DECRYPT"): "Inspect", ("ssl", "DO_NOT_DECRYPT"): "Don't inspect",
                 ("dlp", "BLOCK"): "Block", ("dlp", "ALLOW"): "Allow (log only)",
                 ("cloud_app_control", "BLOCK"): "Block", ("cloud_app_control", "CAUTION"): "Caution",
-                ("cloud_app_control", "ISOLATE"): "Isolate", ("cloud_app_control", "ALLOW"): "Allow"}
+                ("cloud_app_control", "ISOLATE"): "Isolate", ("cloud_app_control", "ALLOW"): "Allow",
+                ("firewall", "BLOCK_RESET"): "Block", ("firewall", "ALLOW"): "Allow",
+                ("dns", "BLOCK"): "Block", ("dns", "ALLOW"): "Allow",
+                ("file_type", "BLOCK"): "Block", ("file_type", "CAUTION"): "Caution", ("file_type", "ALLOW"): "Allow",
+                ("sandbox", "QUARANTINE"): "Hold for the verdict", ("sandbox", "ALLOW_SCAN"): "Allow and scan"}
 
 
 def planned_action(it):
     a = it["body"].get("action")
     if it["kind"] == "ssl":
         return (a or {}).get("type")
+    if it["kind"] == "file_type":
+        return it["body"].get("filtering_action")
+    if it["kind"] == "sandbox":
+        return it["body"].get("first_time_operation")
     if it["kind"] == "cloud_app_control":
         acts = it["body"].get("actions") or []
         verb = str(acts[0]).split("_", 1)[0] if acts else "BLOCK"
@@ -938,8 +948,12 @@ class ZIA(Product):
                 body["request_methods"] = ["CONNECT", "GET", "HEAD"] if to == "CAUTION" else ALL_METHODS
         elif kind == "ssl":
             body["action"] = json.loads(json.dumps(SSL_ACTIONS[to]))
-        elif kind == "dlp":
+        elif kind in ("dlp", "firewall", "dns"):
             body["action"] = to
+        elif kind == "file_type":
+            body["filtering_action"] = to
+        elif kind == "sandbox":
+            body["first_time_operation"] = to
         elif kind == "cloud_app_control":
             want = [[f"{to}_AI_ML_WEB_USE"]] if to == "ISOLATE" else [[f"{to}_AI_ML_WEB_USE", f"{to}_AI_ML_ACCESS"]]
             apps, acts, why = pick_actions(t, it["rule_type"], body.get("applications") or [], want)

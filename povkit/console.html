@@ -176,6 +176,8 @@ button.sm{padding:3px 9px;font-size:12.5px}
 .dtrow.bad{background:var(--warn-bg)}.dtrow.err{background:var(--bad-bg)}
 .dtrow .dti{margin-top:1px}.dtbody{flex:1;min-width:0}.dtline{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 @media (max-width:700px){.dtrunbar{position:static}.rdy{white-space:normal}.dttests{padding-left:8px}}
+.dtpolin{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:5px 0 0;font-size:12.5px}.dtpolname{font-weight:500}
+.dtseg button{padding:2px 9px;font-size:12px}.dtswmsg{font-size:12px}
 .dtrow .dtdet{background:var(--panel);border-radius:8px;padding:2px 10px 8px;margin-top:6px}
 </style>
 </head>
@@ -1559,7 +1561,7 @@ $("#crfile").onchange=async e=>{const f=e.target.files[0];if(!f)return;
 $("#crreport").onclick=async()=>{try{await api("/api/report",{});window.open(`/report?t=${encodeURIComponent(TOKEN)}`,"_blank")}catch(e){$("#crmsg").innerHTML=note(e.message,"bad")}};
 
 /* ---------------- Device tests: the pilot-device tests run from here, and guided demos ---------------- */
-let DTautoShow=(()=>{try{return localStorage.getItem("pov.autoshow")!=="0"}catch(_){return true}})(),DTopenRes=new Set(),DTdet={},DTrecheck={},DTdev="",DTL=null,DTLtimer=null,DTP={switches:[],switched:false},DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null,DTfilter="all",DTopenCrit=new Set(),DTqueue=new Set(),DTev=new Set(),DTready=null,DTreadyAt=0,DTreadyDev=null;
+let DTautoShow=(()=>{try{return localStorage.getItem("pov.autoshow")!=="0"}catch(_){return true}})(),DTopenRes=new Set(),DTdet={},DTrecheck={},DTdev="",DTL=null,DTLtimer=null,DTP={switches:[],switched:false},DT=null,DTsel=new Set(),DTTAB="runner",DTjob=null,DTres=[],DTpolling=null,DTfilter="all",DTopenCrit=new Set(),DTqueue=new Set(),DTev=new Set(),DTready=null,DTreadyAt=0,DTreadyDev=null,DTone=new Set(),DTswMsg={};
 async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.innerHTML='<div class="panel"><p class="muted">Start a POV first.</p></div>';return}
   try{DT=await api("/api/devtests",{})}catch(e){w.innerHTML=note(e.message,"bad");return}
   try{DTP=await api("/api/devtests",{policy:true})}catch(_){DTP={switches:[],switched:false}}
@@ -1600,17 +1602,26 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
   const count=()=>{const n=selN();$("#dtrun").textContent=`Run ${n} test${n==1?"":"s"}`;$("#dtshowall").textContent=`Show ${n==1?"it":"them"}, step by step`;
     $("#dtselnote").textContent=`${n} of ${all.length} tests selected · ${DT.criteria.length} criteria`;gateRun()};
   // the Run button waits for the readiness check: a "bad" check stops it, with the reason on the button's title
-  const gateRun=()=>{const b=$("#dtrun"),s=$("#dtshowall");if(!b)return;const busy=!!DTjob,n=selN(),bad=DTready&&!DTready.ready;
+  const gateRun=()=>{const b=$("#dtrun"),s=$("#dtshowall");if(!b)return;const busy=!!DTjob||DTone.size>0,n=selN(),bad=DTready&&!DTready.ready;
     b.disabled=s.disabled=busy||!n||bad||DTready===null;
     b.title=s.title=bad?"Fix what the readiness check found first":DTready===null?"Checking the device first…":!n?"Pick some tests":""};
   const resOf=id=>{const i=DTres.findIndex(r=>r.id==id);return i<0?null:{r:DTres[i],i}};
-  const stOf=(id)=>{const x=resOf(id);if(x)return x.r.pass?"ok":String(x.r.outcome).startsWith("error")?"err":"bad";return DTqueue.has(id)?(DTjob?"wait":"skip"):"none"};
+  const stOf=(id)=>{if(DTone.has(id))return "wait";const x=resOf(id);if(x)return x.r.pass?"ok":String(x.r.outcome).startsWith("error")?"err":"bad";return DTqueue.has(id)?(DTjob?"wait":"skip"):"none"};
   const ICON={ok:'<span class="dti ok" title="As expected">✓</span>',bad:'<span class="dti bad" title="Not as expected">✕</span>',err:'<span class="dti err" title="Error">!</span>',
     wait:'<span class="dti wait" title="Running or queued">◌</span>',skip:'<span class="dti" title="Not run (stopped)">–</span>',none:'<span class="dti" title="Not run yet">○</span>'};
   const critSt=g=>{const s=g.tests.map(t=>stOf(t.id));return s.includes("wait")?"wait":s.includes("err")?"err":s.includes("bad")?"bad":s.length&&s.every(x=>x=="ok")?"ok":"none"};
-  const testRow=t=>{const x=resOf(t.id),r=x&&x.r,st=stOf(t.id),open=r&&DTopenRes.has(r.id);
+  // the POV rules that decide a test, switchable right on its row (switching never re-runs: press Run)
+  const rulesOf=id=>(DTP.switches||[]).filter(x=>(x.tests||[]).includes(id));
+  const polInline=(t,x)=>{const exp=(x.expects||{})[x.current],m=DTswMsg[x.key];
+    return `<div class="dtpolin"><span class="muted">Policy</span> <span class="dtpolname" title="${esc(x.kind+" · applies to "+(x.affects||"the pilot group"))}">${esc(x.name.replace(/^[A-Z][A-Z0-9-]*:\s*/,""))}</span>
+      <div class="seg dtseg">${x.choices.map(c=>`<button class="dtsw ${c.id==x.current?"on":""}" data-k="${esc(x.key)}" data-to="${esc(c.id)}" title="${c.id==x.planned?"The planned action":"Switch to "+esc(c.label)+((x.expects||{})[c.id]?": the test then expects "+esc(x.expects[c.id]):"")}">${esc(c.label)}${c.id==x.planned?" •":""}</button>`).join("")}</div>
+      ${x.current!=x.planned&&exp?`<span class="badge b-warn" title="Switched for the demo: results don't count as evidence until it's put back">now expects ${esc(exp)}</span>`:""}
+      ${m?`<span class="dtswmsg ${m.bad?"t-bad":"muted"}">${esc(m.text)}</span>`:""}</div>`};
+  const testRow=t=>{const x=resOf(t.id),r=x&&x.r,st=stOf(t.id),open=r&&DTopenRes.has(r.id),busy=!!DTjob||DTone.size>0,notReady=DTready&&!DTready.ready;
     return `<div class="dtrow ${st}" data-t="${esc(t.id)}"><label class="dtpick"><input type="checkbox" class="dtt" data-t="${esc(t.id)}" ${DTsel.has(t.id)?"checked":""}></label>${ICON[st]}
-      <div class="dtbody"><div class="dtline"><span>${esc(t.text)}</span>${r?`<span class="badge b-${r.pass?"ok":st=="err"?"fail":"warn"}">${r.pass?"as expected":"got "+esc(r.outcome)}</span>`:""}${r&&r.ms!=null?`<span class="muted" style="font-size:12px">${esc(r.ms)} ms</span>`:""}</div>
+      <div class="dtbody"><div class="dtline"><span>${esc(r&&r.text||t.text)}</span>${r&&!DTone.has(t.id)?`<span class="badge b-${r.pass?"ok":st=="err"?"fail":"warn"}">${r.pass?"as expected":"got "+esc(r.outcome)}</span>`:""}${r&&r.ms!=null&&!DTone.has(t.id)?`<span class="muted" style="font-size:12px">${esc(r.ms)} ms</span>`:""}
+        <span style="flex:1"></span><button class="dtrun1 sm" data-t="${esc(t.id)}" ${busy||notReady||DTready===null?"disabled":""} title="${notReady?"Fix what the readiness check found first":"Run just this test"}">${DTone.has(t.id)?"Running…":r?"Run again":"Run"}</button></div>
+      ${rulesOf(t.id).map(x=>polInline(t,x)).join("")}
       ${r&&r.switched?`<div class="hint" style="margin:2px 0 0"><b>Demo switch:</b> ${esc(r.switched)}, so this run expects ${esc(r.spec&&r.spec.expect||"")}.</div>`:""}
       ${r&&!r.pass&&r.detail?`<div class="hint" style="margin:2px 0 0">${esc(r.detail)}</div>`:""}
       ${r?`<div class="row" style="gap:6px;margin-top:4px">${t.open?`<button class="dtopen sm" data-t="${esc(t.id)}">${DTdev?"Show it on the device ↗":"Show it ↗"}</button>`:""}<button class="dtdetbtn sm" data-i="${x.i}">${open?"Hide details ▴":(r.pass?"Details ▾":"Details, policy, check again ▾")}</button>${r.show&&r.show.look&&t.open?`<span class="hint" style="margin:0">${esc(r.show.look)}</span>`:""}</div>`:""}
@@ -1641,6 +1652,11 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
   stick();window.removeEventListener("resize",window._dtstick||(()=>{}));window._dtstick=stick;window.addEventListener("resize",stick);
   async function checkReady(){DTready=null;gateRun();drawReady();const dev=DTdev;
     try{DTready=await api("/api/devtests",{ready:true,device:dev});DTreadyAt=Date.now();DTreadyDev=dev}catch(e){DTready={ready:true,checks:[{id:"x",label:"Readiness check",state:"warn",detail:e.message}]}}
+    drawReady();gateRun();if(typeof draw=="function")draw()}
+  // a switch or put-back changes only the policy check: no need to check the device again
+  function policyCheck(){if(!DTready||!DTready.checks)return;const on=(DTP.switches||[]).filter(x=>x.current!=x.planned);
+    DTready.checks=DTready.checks.map(c=>c.id!="policy"?c:on.length?{id:"policy",label:"Policy as planned",state:"warn",
+      detail:"Switched for the demo: "+on.map(x=>x.name).join(", ")+". Results won't count as evidence.",fix:"Put back as planned."}:{id:"policy",label:"Policy as planned",state:"ok",detail:"Results will count as evidence."});
     drawReady();gateRun()}
   const RIC={ok:"✓",bad:"✕",warn:"!",skip:"–"};
   function drawReady(){const el=$("#dtready");if(!el)return;
@@ -1661,7 +1677,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     const pm=/^HTTP (\d+)(?::\s*(.*))?$/.exec(String(r.detail||"")),pp=pm&&pm[2]?pm[2].split("·").map(x=>x.trim()):null;
     const pg=pm?{status:pm[1],title:pp?pp[0]:"",text:pp?pp.slice(1).join(" · "):""}:null;
     return `<div style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
-      ${(d.rules||[]).length?`<div class="lbl">The POV rule that decides it</div>${d.rules.map(x=>polRow(x)+`<div class="hint" style="margin:0 0 6px">Applies to ${esc(x.affects||"the pilot group")} · planned: ${esc((x.choices.find(c=>c.id==x.planned)||{}).label||x.planned)}. Switch it and the test re-runs every 15 seconds for up to 2 minutes until the result changes.</div>`).join("")}`:'<div class="hint">No POV rule switch for this test (it isn’t one of the template’s rules).</div>'}
+      ${(d.rules||[]).length?`<div class="lbl">The POV rule that decides it</div>${d.rules.map(x=>polRow(x)+`<div class="hint" style="margin:0 0 6px">Applies to ${esc(x.affects||"the pilot group")} · planned: ${esc((x.choices.find(c=>c.id==x.planned)||{}).label||x.planned)}. Switch it, then Run the test again (allow about a minute for the change to reach the cloud).</div>`).join("")}`:'<div class="hint">No POV rule switch for this test (it isn’t one of the template’s rules).</div>'}
       <div class="row" style="gap:8px;margin:6px 0">${r.open?`<button class="dtopen" data-t="${esc(r.id)}">${DTdev?"Show it on the linked device ↗":"Show it in the browser ↗"}</button>`:""}<button class="dtre" data-i="${i}">Check again</button><button class="dtreu" data-i="${i}">Check until it changes</button>${r.open?`<label class="chk" style="font-size:13px"><input type="checkbox" class="dtautoshow" ${DTautoShow?"checked":""}> open it in the browser when it changes</label>`:""}<span class="dtrestat muted" data-i="${i}" style="font-size:13px">${rc?esc(rc):""}</span></div>
       <table style="width:100%;font-size:13px;margin-top:6px">
         ${kv("Zscaler’s category",cat.error?`<span class="muted">${esc(cat.error)}</span>`:(cat.categories||[]).map(esc).join(", ")+((cat.security||[]).length?` · <b>security:</b> ${cat.security.map(esc).join(", ")}`:""))}
@@ -1712,7 +1728,14 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       $("#dtshowfail")&&($("#dtshowfail").onclick=e=>{e.preventDefault();$('#dtfilter button[data-f="failed"]').click()});load()}
     catch(e){$("#dtmsg").innerHTML=note(e.message,"bad")}finally{DTjob=null;$("#dtstop").disabled=true;$("#dtstop").textContent="Stop";draw()}};
   $("#dtstop").onclick=()=>{if(DTjob){api("/api/job/stop",{id:DTjob});$("#dtstop").disabled=true;$("#dtstop").textContent="Stopping…"}};
+  async function runOne(id){if(DTjob||DTone.size)return;DTone.add(id);DTopenRes.delete(id);draw();gateRun();
+    try{const rs=[];const r=await follow((await api("/api/devtests",{device:DTdev,run:true,ids:[id]})).job,x=>rs.push(x));
+      if(rs[0]){const k=DTres.findIndex(x=>x.id==id);k>=0?DTres[k]=rs[0]:DTres.push(rs[0]);delete DTdet[id]}
+      rulesOf(id).forEach(x=>delete DTswMsg[x.key]);
+      (r.evidence||[]).forEach(c=>DTev.add(c));$("#dtmsg").innerHTML="";load()}
+    catch(e){$("#dtmsg").innerHTML=note(e.message,"bad")}finally{DTone.delete(id);draw();gateRun()}}
   w.onclick=async e=>{const sw=e.target.closest(".dtsw");if(sw){e.preventDefault();doSwitch(sw);return}
+    const one=e.target.closest(".dtrun1");if(one){e.preventDefault();runOne(one.dataset.t);return}
     const b=e.target.closest(".dtopen");if(!b)return;e.preventDefault();b.disabled=true;
     try{await api("/api/devtests",{device:DTdev,open:b.dataset.t})}catch(x){b.insertAdjacentHTML("afterend",note(x.message,"bad"))}finally{setTimeout(()=>b.disabled=false,1500)}};
   const polRow=x=>`<div class="row" style="gap:10px;align-items:center;flex-wrap:wrap;margin:6px 0"><span style="min-width:220px">${esc(x.name)} <span class="muted" style="font-size:12px">· ${esc(x.kind)} · ${x.criteria.map(esc).join(", ")}</span></span>
@@ -1723,13 +1746,15 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
     $$(".dtputback2").forEach(b=>b.onclick=putBack);
     $$(".dtpol[data-t]").forEach(el=>{const rel=sw.filter(x=>x.tests.includes(el.dataset.t));el.innerHTML=rel.length?`<div style="margin:6px 0 2px"><b>Policy for this test</b> <span class="muted" style="font-size:12px">(switch it, then Check again)</span></div>${rel.map(polRow).join("")}`:""});
     if(msg)$$("#dtpolmsg,.dtpolmsg").forEach(el=>el.innerHTML=msg)};
-  async function doSwitch(b){const was=b.textContent;$$(".dtsw").forEach(x=>x.disabled=true);b.textContent="Switching…";
-    const inRes=b.closest(".dtdet");const ri=inRes?+inRes.dataset.i:-1;
-    try{const r=await api("/api/devtests",{switch:b.dataset.k,to:b.dataset.to});DTP=r;drawPol(note(r.message,"good"));checkReady();
-      if(ri>=0){Object.keys(DTdet).forEach(k=>DTdet[k]&&DTdet[k].rules&&(DTdet[k].rules=DTdet[k].rules.map(x=>(DTP.switches||[]).find(y=>y.key==x.key)||x)));recheck(ri,true)}}
-    catch(x){b.textContent=was;drawPol(note(x.message,"bad"))}finally{$$(".dtsw").forEach(x=>x.disabled=false)}}
+  async function doSwitch(b){const was=b.textContent,key=b.dataset.k;$$(".dtsw").forEach(x=>x.disabled=true);b.textContent="Switching…";
+    try{const r=await api("/api/devtests",{switch:key,to:b.dataset.to});DTP=r;
+      const x=(DTP.switches||[]).find(y=>y.key==key),lbl=x?(x.choices.find(c=>c.id==x.current)||{}).label:"";
+      DTswMsg[key]={text:`${lbl}${x&&x.current==x.planned?" (as planned)":""}: ${key.startsWith("zpa.")?"applied in ZPA":"ZIA activated"}. Allow about a minute, then Run.`};
+      Object.keys(DTdet).forEach(k=>DTdet[k]&&DTdet[k].rules&&(DTdet[k].rules=DTdet[k].rules.map(y=>(DTP.switches||[]).find(z=>z.key==y.key)||y)));
+      drawPol(note(r.message,"good"));policyCheck();draw()}
+    catch(x){b.textContent=was;DTswMsg[key]={text:x.message,bad:true};drawPol(note(x.message,"bad"));draw()}finally{$$(".dtsw").forEach(x=>x.disabled=false)}}
   async function putBack(){$$("#dtputback,.dtputback2").forEach(x=>x.disabled=true);
-    try{const r=await api("/api/devtests",{putback:true});DTP=r;drawPol(note(r.message,"good"));checkReady()}catch(x){drawPol(note(x.message,"bad"))}
+    try{const r=await api("/api/devtests",{putback:true});DTP=r;DTswMsg={};drawPol(note(r.message,"good"));policyCheck();draw()}catch(x){drawPol(note(x.message,"bad"))}
     finally{$$("#dtputback,.dtputback2").forEach(x=>x.disabled=false)}}
   $("#dtputback").onclick=putBack;drawPol();
   const ago=n=>n<60?`${n}s ago`:n<3600?`${Math.round(n/60)} min ago`:`${Math.round(n/3600)} h ago`;

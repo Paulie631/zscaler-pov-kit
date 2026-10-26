@@ -159,3 +159,47 @@ def test_sandbox_quarantine_page_and_pdf():
     assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF") and b"POV sandbox test r1" in pdf
     assert pdf != probe.unique_pdf("r1")   # a new hash every run
     _ = io
+
+
+def test_more_switches_firewall_dns_filetype_sandbox(pov, tenant, tenant_for, monkeypatch):
+    from povkit import probe
+    pov.cfg["criteria"] = ["IS-TEN-01", "IS-FW-01", "IS-DNS-01", "IS-DNS-02", "IS-FTC-01", "IS-SBX-01"]
+    pov.save()
+    applied(pov, tenant_for)
+    pol = {x["key"]: x for x in devtests.policy(pov)["switches"]}
+    fw, dns, doh = pol["zia.firewall.block-pov-ports"], pol["zia.dns.block-marijuana-dns"], pol["zia.dns.block-dns-over-https"]
+    ftc, sbx = pol["zia.file_type.block-exe-downloads"], pol["zia.sandbox.sandbox-never-seen-files"]
+    assert [c["label"] for c in fw["choices"]] == ["Block", "Allow"] and fw["planned"] == "BLOCK_RESET"
+    assert len(fw["tests"]) == 1 and fw["expects"] == {"BLOCK_RESET": "block", "ALLOW": "open"}   # 2222, not 8080
+    assert dns["expects"]["ALLOW"] == "resolved" and doh["expects"]["ALLOW"] == "allow"
+    assert ftc["expects"] == {"BLOCK": "block", "CAUTION": "caution", "ALLOW": "allow"}
+    assert sbx["planned"] == "QUARANTINE" and sbx["expects"]["ALLOW_SCAN"] == "allow"
+    devtests.switch(pov, tenant, fw["key"], "ALLOW")
+    devtests.switch(pov, tenant, ftc["key"], "CAUTION")
+    devtests.switch(pov, tenant, sbx["key"], "ALLOW_SCAN")
+    assert tenant.by_name("firewall", "ZPOV: Block POV ports")["action"] == "ALLOW"
+    assert tenant.by_name("file_type", "ZPOV: Block EXE downloads")["filtering_action"] == "CAUTION"
+    assert tenant.by_name("sandbox", "ZPOV: Sandbox never-seen files")["first_time_operation"] == "ALLOW_SCAN"
+    monkeypatch.setattr(probe, "run_spec", lambda sp, rid, s: {"spec": sp, "outcome": sp["expect"],
+                                                              "expect": sp["expect"], "pass": True, "detail": ""})
+    seen = []
+    devtests.run(pov, fw["tests"] + ftc["tests"], on_result=seen.append)
+    assert {r["spec"]["expect"] for r in seen} == {"open", "caution"} and all(r.get("switched") for r in seen)
+    assert set(devtests.put_back(pov, tenant)) >= {fw["name"], ftc["name"], sbx["name"]}
+    assert tenant.by_name("firewall", "ZPOV: Block POV ports")["action"] == "BLOCK_RESET"
+
+
+def test_zpa_access_rule_switch(pov_all, tenant, tenant_for):
+    applied(pov_all, tenant_for)
+    pol = {x["key"]: x for x in devtests.policy(pov_all)["switches"]}
+    acc = pol["zpa.access_rule"]
+    assert acc["planned"] == "ALLOW" and [c["label"] for c in acc["choices"]] == ["Allow", "Block"]
+    assert acc["tests"] and acc["expects"] == {"ALLOW": "open", "DENY": "closed"}
+    assert devtests.switch(pov_all, tenant, "zpa.access_rule", "DENY") == "DENY"
+    rule = next(r for r in tenant.store["zpa.policies"] if r["name"] == acc["name"])
+    assert rule["action"] == "DENY"
+    assert devtests.policy(pov_all)["switched"]
+    devtests.put_back(pov_all, tenant)
+    assert next(r for r in tenant.store["zpa.policies"] if r["name"] == acc["name"])["action"] == "ALLOW"
+    with pytest.raises(KitError):
+        devtests.switch(pov_all, tenant, "zpa.app_segment", "DENY")

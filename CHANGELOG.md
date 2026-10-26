@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.88
+- **Run each device test on its own.** Every test in Device tests › Test runner has its own **Run** button (Run again once it has a result); the whole list still runs from the run bar. A test run alone counts as evidence when its criterion has just that one test.
+- **Change the policy right on the test.** The POV rule that decides a test sits on its row with its actions (the planned one marked •): switch it and the row says what the test now expects ("now expects caution"); then press Run. Switching never re-runs by itself. While a rule is switched, results don't count as evidence; **Put back as planned** restores everything.
+- **More rules can be switched:** the firewall rule for the POV ports (Block / Allow), DNS Control (the category rule and DNS over HTTPS: Block / Allow), file type control for executables (Block / Caution / Allow), Cloud Sandbox's first-time action (Hold for the verdict / Allow and scan), and the ZPA access rule for the POV app (Allow / Block). Each switches only the POV's own rule, for the pilot group.
+
 ## 0.9.87
 - **Device tests › Test runner is one list.** Each criterion is a single line (title first, the ID small beside it, ◆ for a differentiator), and each test's result lands on its own row as it runs: ✓ as expected, ✕ not as expected, ! error. Failures open in place with what came back, **Show it**, and details, policy and Check again. Criteria fold away; anything not as expected opens by itself. A criterion recorded as evidence says so.
 - **A readiness check before Run.** Before anything runs, the console checks the device: Client Connector running, traffic going through Zscaler (with the data centre), the pilot user in the POV's tenant, and the policy as planned. Run waits until those pass, and each failed check says how to fix it. A linked device shows whether it's online (it checks the tenant itself). **Check again** re-runs it.

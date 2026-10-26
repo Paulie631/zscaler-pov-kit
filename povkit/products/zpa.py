@@ -500,6 +500,61 @@ class ZPA(Product):
                            "then run Apply again.")
         t.link("zpa.pra_app", "zpa", "pra_app", aid, it["name"])
 
+    # ---------------------------------------------------------------- demo switches (the POV's own access rule only)
+    SWITCH_KEYS = ("zpa.access_rule",)
+    SWITCH_LABEL = {"ALLOW": "Allow", "DENY": "Block"}
+
+    def switches(self, pov):
+        """The POV access rule, switchable between Allow and Block (Deny) in front of the customer.
+        -> [{key, name, kind, criteria, planned, current, choices}]"""
+        from ..core.changelist import ChangeList
+        try:
+            plan = ChangeList(pov.dir).plan()
+        except Exception:   # noqa: BLE001
+            return []
+        led, now = ledger_of(pov), (pov.cfg.get("switches") or {})
+        out = []
+        for it in plan.get("items", []):
+            if it["key"] not in self.SWITCH_KEYS or not led.find(it["key"]):
+                continue
+            planned = str(it["body"].get("action") or "allow").upper()
+            out.append({"key": it["key"], "name": it["name"], "kind": "ZPA access rule", "affects": it.get("affects", ""),
+                        "criteria": it.get("criteria", []), "planned": planned,
+                        "current": (now.get(it["key"]) or {}).get("to") or planned,
+                        "choices": [{"id": c, "label": self.SWITCH_LABEL[c]} for c in ("ALLOW", "DENY")]})
+        return out
+
+    def switch(self, t, pov, ledger, key, to, log=lambda *a: None):
+        """Switches the POV access rule's action (to='planned' puts it back). Only the ledger's own rule, only its
+        action. ZPA has no activation: it applies within a minute. -> the action now in place"""
+        import json
+        import time
+        from ..core.changelist import ChangeList
+        it = next((i for i in ChangeList(pov.dir).plan().get("items", []) if i["key"] == key), None)
+        sw = {x["key"]: x for x in self.switches(pov)}
+        if not it or key not in sw:
+            raise KitError("That isn't one of the POV rules that can be switched.")
+        planned = sw[key]["planned"]
+        to = planned if to in (None, "", "planned") else str(to).upper()
+        if to not in self.SWITCH_LABEL:
+            raise KitError(f"'{it['name']}' can be: Allow or Block.")
+        e = ledger.find(key)
+        live = self.live_object(t, e)
+        if not live:
+            raise KitError(f"'{it['name']}' is gone from ZPA. Status > Fix drift recreates it.")
+        body = json.loads(json.dumps(it["body"]))
+        body["action"] = to
+        t.update(e, live, "zpa.policies", "update_access_rule_v2", e["id"], **body)
+        st = pov.cfg.setdefault("switches", {})
+        if to == planned:
+            st.pop(key, None)
+        else:
+            st[key] = {"to": to, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "name": it["name"]}
+        pov.save()
+        log("ok", f"{it['name']}: {self.SWITCH_LABEL[to]}{' (as planned)' if to == planned else ''}. ZPA applies it "
+                  "within a minute; Client Connector may need Update Policy")
+        return to
+
     # ---------------------------------------------------------------- live objects, drift, teardown
     def live_object(self, t, entry):
         k = KINDS[entry["kind"]]

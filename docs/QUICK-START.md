@@ -67,6 +67,9 @@ approval** on the Apply step, and the change-list page and Sign-off come back.
   (✓ as expected, ✕ not, ! error), with failures opened in place. Before Run, a readiness check confirms Client
   Connector is running, traffic goes through Zscaler, the device is the pilot user in the POV's tenant and the policy is as
   planned; Run waits until it passes. The run bar stays in view, with a filter for what wasn't as expected.
+  Each test has its own **Run** button, and the POV rule that decides it sits on its row: switch it (Block, Caution,
+  Allow, Isolate, Inspect, Hold for the verdict…) and press Run again to show the change. Switching never re-runs by
+  itself, and results while the policy is switched don't count as evidence until it's put back.
 - **AI Guard tab › Guided demos** and **Device tests tab › Guided demos**: short stories with what to say and a Run
   button. Device tests run on the computer running the console, which must be a pilot device signed in as the pilot
   user.

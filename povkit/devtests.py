@@ -82,9 +82,9 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None, on_device
     crit, sid_of = [], {}
     sw = switched_expect(pov)
     for cid, title, sid, sp in chosen:
-        hit = next(((name, exp) for key, (name, exp) in sw.items() if rule_matches(key, sp)), None)
+        hit = next(((name, to) for key, (name, to) in sw.items() if rule_matches(key, sp)), None)
         if hit:   # the policy is switched for the demo: the test expects what the switch does
-            sp = dict(sp, expect=hit[1], switched=hit[0])
+            sp = dict(sp, expect=expect_for(hit[1], sp), switched=hit[0])
         if not crit or crit[-1]["id"] != cid:
             h = next((c.get("hash") for c in pack["criteria"] if c["id"] == cid), None)
             crit.append({"id": cid, "title": title, "probe": [], "hash": h})
@@ -196,7 +196,8 @@ def readiness(pov, device=None, zcc=None, facts=None, gate=None):
 
 
 # ---------------------------------------------------------------- demo switches
-# which device tests each of the template's rules decides (a switch changes what those tests should see)
+# which device tests each of the template's rules decides (a switch changes what those tests should see):
+# (test type, needles in its URL or host), or a function of the test's spec
 RULE_TESTS = {
     "zia.url_filtering.block-gambling": ("http", ["bet365", "pokerstars"]),
     "zia.url_filtering.block-anonymizers": ("http", []),
@@ -208,43 +209,75 @@ RULE_TESTS = {
     "zia.cloud_app_control.allow-genai": ("http", ["chatgpt.com"]),
     "zia.cloud_app_control.isolate-genai": ("http", ["perplexity.ai"]),
     "zia.dlp.block-card-numbers": ("dlp_post", [""]),
+    "zia.file_type.block-exe-downloads": ("http", ["7zr.exe"]),
+    "zia.sandbox.sandbox-never-seen-files": ("sandbox_file", [""]),
+    "zia.dns.block-marijuana-dns": ("dns", ["leafly"]),
+    "zia.dns.block-dns-over-https": ("http", ["dns.google/dns-query"]),
+    # the firewall rule blocks the POV ports only (the template's network service): 8080 isn't one of them
+    "zia.firewall.block-pov-ports": lambda sp: sp.get("type") == "tcp" and "portquiz" in str(sp.get("host"))
+    and int(sp.get("port") or 0) in POV_PORTS,
+    # the POV app's access rule decides whether the app answers; the closed-port test (TCP 22) is the segment's
+    "zpa.access_rule": lambda sp: sp.get("type") == "tcp" and "portquiz" not in str(sp.get("host"))
+    and sp.get("expect") == "open",
 }
+POV_PORTS = {23, 2222, 4444, 8888}
 EXPECT_FOR = {"BLOCK": "block", "CAUTION": "caution", "ISOLATE": "isolate", "ALLOW": "allow",
-              "DECRYPT": "Zscaler", "DO_NOT_DECRYPT": "not-Zscaler"}
+              "DECRYPT": "Zscaler", "DO_NOT_DECRYPT": "not-Zscaler", "BLOCK_RESET": "block",
+              "QUARANTINE": "quarantine", "ALLOW_SCAN": "allow", "DENY": "closed"}
+
+
+def expect_for(to, sp):
+    """What a test should see when its rule does `to`."""
+    if to in ("ALLOW", "ALLOW_SCAN"):
+        return {"tcp": "open", "dns": "resolved"}.get(sp.get("type"), "allow")
+    return EXPECT_FOR.get(to, str(to).lower())
 
 
 def rule_matches(key, sp):
-    kind, needles = RULE_TESTS.get(key, (None, []))
-    where = str(sp.get("url") or sp.get("host") or "")
+    m = RULE_TESTS.get(key)
+    if callable(m):
+        return bool(m(sp))
+    kind, needles = m or (None, [])
+    where = str(sp.get("url") or sp.get("host") or sp.get("name") or "")   # a DNS test names what it looks up
     return sp.get("type") == kind and any(n in where for n in needles)
 
 
-def switched_expect(pov):
-    """{rule key: (label, expected outcome)} for the rules switched away from the plan."""
+def _label(key, to):
     from .products.zia import ACTION_LABEL
-    out = {}
-    for key, v in (pov.cfg.get("switches") or {}).items():
-        kind = key.split(".")[1] if key.count(".") >= 2 else ""
-        label = ACTION_LABEL.get((kind, v["to"]), v["to"].title())
-        out[key] = (f"{v.get('name', key)} switched to {label}", EXPECT_FOR.get(v["to"], v["to"].lower()))
-    return out
+    from .products.zpa import ZPA
+    if key.startswith("zpa."):
+        return ZPA.SWITCH_LABEL.get(to, str(to).title())
+    kind = key.split(".")[1] if key.count(".") >= 2 else ""
+    return ACTION_LABEL.get((kind, to), str(to).title())
+
+
+def switched_expect(pov):
+    """{rule key: (label, action now)} for the rules switched away from the plan."""
+    return {key: (f"{v.get('name', key)} switched to {_label(key, v['to'])}", v["to"])
+            for key, v in (pov.cfg.get("switches") or {}).items()}
+
+
+SWITCH_PRODUCTS = ("zia", "zpa")
 
 
 def policy(pov):
-    """The POV rules that can be switched in a demo, each with the device tests it changes."""
+    """The POV rules that can be switched in a demo, each with the device tests it changes and what each of its
+    actions makes those tests expect."""
     from .products import get
-    if "zia" not in pov.products:
-        return {"switches": [], "switched": False}
-    sw = get("zia").switches(pov)
-    tests = {}
-    for cid, _, sid, _ in _specs(pov):
-        tests.setdefault(cid, []).append(sid)
+    sw = [x for p in SWITCH_PRODUCTS if p in pov.products for x in get(p).switches(pov)]
     specs = _specs(pov)
+    tests = {}
+    for cid, _, sid, _ in specs:
+        tests.setdefault(cid, []).append(sid)
     for x in sw:
         if x["key"] in RULE_TESTS:
             x["tests"] = [sid for _, _, sid, sp in specs if rule_matches(x["key"], sp)]
         else:   # a use case's rule: the tests of its criteria
             x["tests"] = [t for c in x["criteria"] for t in tests.get(c, [])]
+        sp1 = next((sp for _, _, sid, sp in specs if sid in x["tests"]), {})
+        x["expects"] = {c["id"]: expect_for(c["id"], sp1) for c in x["choices"]} if x["key"] in RULE_TESTS else {}
+        if x["planned"] in x["expects"] and sp1.get("expect"):
+            x["expects"][x["planned"]] = sp1["expect"]   # as planned: the catalog's own expectation
     return {"switches": sw, "switched": any(x["current"] != x["planned"] for x in sw)}
 
 
@@ -254,7 +287,10 @@ def switch(pov, tenant, key, to, log=lambda *a: None):
     from . import lifecycle
     led = lifecycle.ledger(pov)
     t = LedgerTenant(tenant, led, [])
-    now = get("zia").switch(t, pov, led, key, to, log)
+    product = key.split(".", 1)[0]
+    if product not in SWITCH_PRODUCTS or product not in pov.products:
+        raise KitError("That isn't one of the POV rules that can be switched.")
+    now = get(product).switch(t, pov, led, key, to, log)
     pov.log("policy", f"demo switch: {key} -> {now}")
     return now
 
