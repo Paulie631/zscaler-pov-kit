@@ -80,6 +80,7 @@ class FakeTenant:
         self.scim = [{"id": "sg1", "name": "POV Pilot"}, {"id": "sg2", "name": "Everyone"}]
         self.zdx_devices = [{"id": "d1", "name": "PILOT-LAPTOP-1", "userEmail": "jane@acme.com"}]
         self.saas_tenants = [{"tenantId": 55, "tenantName": "Acme M365"}]
+        self.org_domains = []          # ZIA orgInformation's domains (none by default: the users' emails give it)
 
     def _id(self):
         self.next_id += 1
@@ -90,6 +91,10 @@ class FakeTenant:
         write = not re.match(r"(list|get|search|status)", method)
         if write:
             self.writes.append((resource, method, a, copy.deepcopy(kw)))
+        if resource == "organization_information" and method == "get_organization_information":
+            if self.org_domains is None:
+                raise KitError("403 Forbidden")
+            return {"orgId": 1, "name": "Acme", "domains": list(self.org_domains)}
         if resource == "activate":
             if method == "status":
                 return {"status": self.activation}

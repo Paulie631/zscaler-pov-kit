@@ -128,8 +128,13 @@ UNSTAMPED = {"department", "user_group", "user", "nss_feed"}   # ZIA keeps 'comm
 TEST_PW = "zia-test-user-{n}"
 
 
-def test_domain(t):
-    """The email domain this tenant's users use (from the demo kit's tenant_domain)."""
+ZS_DOMAIN = re.compile(r"zscaler|zslogin|zscloud", re.I)
+
+
+def tenant_domains(t):
+    """The tenant's own email domains, most used first: the domains ZIA has for the organisation (orgInformation),
+    ranked by how many users have each, then any other domain the users' emails have (the demo kit's tenant_domain).
+    Zscaler's own domains are left out. Read-only. -> [str]"""
     from collections import Counter
     seen = Counter()
     try:
@@ -138,9 +143,23 @@ def test_domain(t):
         rows = []
     for u in rows:
         v = str(g(u, "email") or "")
-        if "@" in v and not re.search(r"zscaler|zslogin|zscloud", v.split("@", 1)[1], re.I):
+        if "@" in v and not ZS_DOMAIN.search(v.split("@", 1)[1]):
             seen[v.split("@", 1)[1].lower()] += 1
-    return seen.most_common(1)[0][0] if seen else None
+    try:
+        org = t.call("organization_information", "get_organization_information")
+        org = org[0] if isinstance(org, list) and org else org
+        listed = [str(d).strip().lower() for d in (g(org, "domains") or []) if str(d).strip()]
+    except Exception:
+        listed = []   # no access to orgInformation: the users' emails still give one
+    listed = [d for d in dict.fromkeys(listed) if not ZS_DOMAIN.search(d)]
+    rank = {d: i for i, d in enumerate(listed)}
+    ordered = sorted(listed, key=lambda d: (-seen[d], rank[d]))
+    return ordered + [d for d, _ in seen.most_common() if d not in rank]
+
+
+def test_domain(t):
+    """The email domain this tenant's users use: the first of tenant_domains()."""
+    return next(iter(tenant_domains(t)), None)
 
 
 def check_password(pw):

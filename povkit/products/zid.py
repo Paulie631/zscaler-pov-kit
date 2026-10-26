@@ -117,8 +117,8 @@ def choose_test_login(pov, dom, is_taken, made=False):
 
 def name_lookup(t, pov):
     """For the Pilot users step: is a test account email already in the tenant, as someone else's? Read-only.
-    -> (is_taken(email), made: this POV already made its test accounts, domain)"""
-    from .zia import ledger_of, test_domain
+    -> (is_taken(email), made: this POV already made its test accounts, domain, domains the tenant has)"""
+    from .zia import ledger_of, tenant_domains
     led = ledger_of(pov)
     if enabled(pov.cfg):   # the accounts go in ZIdentity, on <vanity>.zslogin.net
         def is_taken(em):
@@ -126,7 +126,8 @@ def name_lookup(t, pov):
             hit = next((r for r in rows if zid_login(r) == em), None)
             own = led.find(f"zid.user.{slug(em)}")
             return bool(hit) and not (own and own["id"] == str(g(hit, "id")))
-        return is_taken, any(e["kind"] == "user" for e in led.active("zid")), zid_domain(pov.cfg)
+        dom = zid_domain(pov.cfg)
+        return is_taken, any(e["kind"] == "user" for e in led.active("zid")), dom, [dom] if dom else []
     mine = {str(e["id"]) for e in led.active("zia") if e["kind"] == "user"}
     seen = {}
 
@@ -135,8 +136,9 @@ def name_lookup(t, pov):
         if local not in seen:
             seen[local] = items(t.call("user_management", "list_users", query_params={"search": local}))
         return any(str(g(u, "email") or "").lower() == em and str(g(u, "id")) not in mine for u in seen[local])
-    dom = ident(pov.cfg).get("test_domain") or test_domain(t)
-    return is_taken, bool(mine), dom
+    found = tenant_domains(t)
+    dom = ident(pov.cfg).get("test_domain") or next(iter(found), None)
+    return is_taken, bool(mine), dom, found
 
 
 def test_emails(cfg, dom=None):

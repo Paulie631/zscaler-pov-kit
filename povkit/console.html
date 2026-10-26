@@ -67,6 +67,11 @@ textarea{width:100%;min-height:64px;resize:vertical}
 .form input[type=text],.form input[type=password],.form textarea,.form select{width:100%}
 .lbl{font-size:12px;color:var(--muted)}
 .hint{font-size:12px;color:var(--muted);margin-top:6px}
+.wtwrap{overflow-x:auto;max-width:680px}.wttable{width:100%;border-collapse:collapse;font-size:13px}
+.wttable th{text-align:left;font-weight:600;font-size:12px;color:var(--muted);padding:6px 10px;border-bottom:1px solid var(--line)}
+.wttable td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.wttable code.wtmail{font:13px var(--mono);color:var(--ink);background:none;padding:0;white-space:nowrap}
+.wttable .badge{font-family:inherit;font-size:12px}.wttable .pw{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .muted{color:var(--muted)}
 .kicker{font:600 11px var(--mono);letter-spacing:.08em;color:var(--muted);margin-bottom:6px}
 h3{margin:0 0 6px;font-size:19px;letter-spacing:-.01em}
@@ -647,16 +652,17 @@ async function testAccounts(){const el=$("#wtacct");if(!el)return;let TA=null;
   const draw=msg=>{if(!TA){el.innerHTML='<div class="muted" style="font-size:13px">Loading the accounts…</div>';return}
     const made=TA.accounts.some(a=>a.made),zid=TA.where=="zidentity",bad=login()&&!/^[a-z0-9][a-z0-9._-]{0,38}[a-z0-9]$/.test(login());
     const rows=Array.from({length:n()},(_,i)=>{const k=i+1,a=TA.accounts.find(x=>x.n==k)||{n:k},email=`${login()}-${k}@${dom()||"…"}`;
-      return `<div class="wtrow"><div class="row" style="gap:8px;align-items:center;flex-wrap:wrap"><code class="wtmail">${esc(email)}</code>${a.made?'<span class="badge b-ok">created</span>':'<span class="badge b-info">created at Apply</span>'}
-          ${zid?'':a.password?'<span class="badge b-ok">password in the keychain</span>':'<span class="badge b-info">password generated at Apply</span>'}</div>
-        ${zid?'<div class="hint" style="margin:4px 0 0">Set its password in ZIdentity after Apply (Administration › Users).</div>':`<div class="row" style="gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px">${a.password?'<button class="sm wtshow" data-n="'+k+'">Show</button>':""}
-          <button class="sm wtgen" data-n="${k}">${a.password?"Generate a new one":"Generate now"}</button> <button class="sm wttype" data-n="${k}">Type one…</button><span class="wtout" data-n="${k}"></span></div>
-          <div class="wtform" data-n="${k}" style="display:none;margin-top:6px"><input type="password" class="wtpw" data-n="${k}" placeholder="New password" autocomplete="new-password" style="width:220px"> <button class="sm wtsave" data-n="${k}">Save</button>
-          <div class="hint" style="margin:2px 0 0">8+ characters with an upper-case letter, a lower-case letter, a digit and a special character.</div></div>`}</div>`}).join("");
-    el.innerHTML=`${TA.checking?'<div class="hint" style="margin:0 0 6px">Checking the tenant for account names already in use (read-only)…</div>':""}${TA.why&&!typed()?note(TA.why,"info"):""}${TA.check_error?`<div class="hint" style="margin:0 0 6px">Couldn’t check the tenant for names in use yet (${esc(TA.check_error)}). Preflight checks again.</div>`:""}<div class="lbl" style="margin:0 0 4px">The accounts</div>${rows}
-      ${!dom()?'<div class="hint" style="margin:4px 0 0">The domain is found at Preflight (the one the tenant’s users have), or type it above.</div>':""}
+      const pw=zid?'<span class="muted">Set in ZIdentity after Apply</span>'
+        :`<div class="pw"><span class="muted">${a.password?"Saved in keychain":"Made at Apply"}</span>${a.password?`<button class="sm wtshow" data-n="${k}">Show</button>`:""}
+          <button class="sm wtgen" data-n="${k}" title="${a.password?"Replace it with a new random password":"Make a random password now"}">${a.password?"New":"Generate"}</button><button class="sm wttype" data-n="${k}">Type…</button><span class="wtout" data-n="${k}"></span></div>`;
+      return `<tr><td><code class="wtmail">${esc(email)}</code></td><td>${pw}</td><td>${a.made?'<span class="badge b-ok">Created</span>':'<span class="badge b-info">Created at Apply</span>'}</td></tr>`+
+        (zid?"":`<tr class="wtform" data-n="${k}" style="display:none"><td colspan="3"><div class="pw"><input type="password" class="wtpw" data-n="${k}" placeholder="New password" autocomplete="new-password" style="width:220px"> <button class="sm wtsave" data-n="${k}">Save</button></div>
+          <div class="hint" style="margin:4px 0 0">8+ characters with an upper-case letter, a lower-case letter, a digit and a special character.</div></td></tr>`)}).join("");
+    el.innerHTML=`${TA.checking?'<div class="hint" style="margin:0 0 6px">Checking the tenant for names already in use (read-only)…</div>':""}${TA.why&&!typed()?note(TA.why,"info"):""}${TA.check_error?`<div class="hint" style="margin:0 0 6px">Couldn’t check the tenant yet (${esc(TA.check_error)}). Preflight checks again.</div>`:""}
+      <div class="wtwrap"><table class="wttable"><thead><tr><th>Account</th><th>Password</th><th>Status</th></tr></thead><tbody>${rows}</tbody></table></div>
       ${bad?note("Use 2 to 40 lower-case letters, digits, dots, dashes or underscores.","bad"):""}
       ${made?'<div class="hint" style="margin:4px 0 0">These accounts already exist in the tenant, so their name stays as it is until teardown.</div>':""}${msg||""}`;
+    const nn=$("#wtnoun");if(nn)nn.textContent=n()==1?"test account":"test accounts";
     const li=$("#s_identity\\.test_login");if(li&&made){li.readOnly=true;li.value=TA.login==TA.default_login?"":TA.login;li.title="Already created: the name stays until teardown"}
     $$(".wttype").forEach(b=>b.onclick=()=>{const f=$(`.wtform[data-n="${b.dataset.n}"]`);f.style.display=f.style.display=="none"?"":"none";f.querySelector("input").focus()});
     const save=async(k,pw,b)=>{b.disabled=true;try{TA=await api("/api/test-accounts",{n:+k,password:pw});draw(note(`Password ${pw?"saved":"generated"} for account ${k}${(TA.accounts.find(x=>x.n==+k)||{}).made?" and set in ZIA":""}. It’s in your keychain; Show reveals it.`,"good"))}
@@ -671,8 +677,21 @@ async function testAccounts(){const el=$("#wtacct");if(!el)return;let TA=null;
   const li=$("#s_identity\\.test_login");if(li&&TA.auto){li.value="";li.placeholder=TA.login}   // the kit's pick shows as the placeholder
   TA.checking=true;draw();
   try{const r=await api("/api/test-accounts",{check:true});TA=r;if(li&&TA.auto&&!li.value.trim())li.placeholder=TA.login;
-    const di=$("#s_identity\\.test_domain");if(di&&!di.value.trim()&&TA.domain)di.placeholder=TA.domain}catch(e){TA.checking=false;TA.check_error=e.message}
-  draw()}
+  }catch(e){TA.checking=false;TA.check_error=e.message}
+  fillDomain();draw();
+  /* The domain: filled from the tenant (its domains, most used first; a dropdown when it has several), kept editable */
+  function fillDomain(){const di=$("#s_identity\\.test_domain"),sel=$("#wtdomsel"),tag=$("#wtdomtag"),hint=$("#wtdomhint");if(!di)return;
+    const doms=(TA.domains||[]).filter(Boolean),own=di.value.trim(),fromT='<span class="badge b-info" title="Read from the tenant">from tenant</span>';
+    di.placeholder="example.com";
+    if(TA.where=="zidentity"&&TA.domain){di.value=TA.domain;di.readOnly=true;di.title="ZIdentity accounts sign in on the tenant's zslogin.net domain";
+      tag.innerHTML='<span class="badge b-info">ZIdentity</span>';return}
+    if(doms.length>1&&(!own||doms.includes(own.toLowerCase()))){
+      sel.innerHTML=doms.map(d=>`<option value="${esc(d)}">${esc(d)}</option>`).join("")+'<option value="">Other…</option>';
+      sel.value=own?own.toLowerCase():doms[0];di.value=sel.value;sel.style.display="";di.style.display="none";tag.innerHTML=fromT;
+      sel.onchange=()=>{const other=!sel.value;di.style.display=other?"":"none";di.value=sel.value;tag.innerHTML=other?"":fromT;if(other)di.focus();draw()};return}
+    if(!own&&doms.length){di.value=doms[0];tag.innerHTML=fromT;di.addEventListener("input",()=>{tag.innerHTML=""},{once:true});return}
+    if(!own&&!doms.length&&!TA.check_error)hint.innerHTML="Couldn’t read the tenant’s domain. Type the one its users sign in with."}
+}
 async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.current;
   try{
   if(W.step==0){
@@ -752,10 +771,12 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
           <div id="wcreate" style="margin:6px 0 0 26px;${mk=="create"?"":"display:none"}"><label class="chk"><input type="checkbox" id="wnewusers" ${s["identity.create_users"]=="yes"?"checked":""}>Also create the users who don't exist in ZIdentity yet <span class="muted">(lab tenants; you set their passwords in ZIdentity)</span></label></div>
           ${zia?`<label class="opt"><input type="radio" name="s_identity.pilot" value="test" ${mk=="test"?"checked":""}><span><b>Test accounts</b> <span class="muted">(labs, or to start before they pick anyone)</span><br><span class="muted">The kit creates them and removes them at the end. <a href="#" class="whow" data-h="test">How this works</a></span><span class="hint whowt" id="whow-test" style="display:none">Like the SE demo kit: a group, a department and the users in ZIA, with passwords in this computer's keychain (Next steps → Test users). If the tenant keeps its users in ZIdentity, they're made there instead, on <code>${esc((c.settings.vanity_domain||"vanity").replace(/\.zslogin\.net$/,""))}.zslogin.net</code>, where you set their passwords.</span></span></label>
           <div id="wtestopt" style="margin:6px 0 0 26px;${mk=="test"?"":"display:none"}">
-            <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap"><input type="number" id="s_identity.test_users" min="1" max="10" value="${esc(s["identity.test_users"]||1)}" style="width:64px"> test accounts named
-              <input type="text" id="s_identity.test_login" value="${esc(s["identity.test_login"]||"")}" placeholder="${esc(c.prefix.toLowerCase())}-pilot" style="width:160px" autocomplete="off" spellcheck="false"><span class="muted">-1, -2…</span> at
-              <input type="text" id="s_identity.test_domain" value="${esc(s["identity.test_domain"]||"")}" placeholder="the tenant's domain" style="width:190px"></div>
-            <div class="hint" style="margin:4px 0 0">The kit checks the tenant and picks names nobody has. Type your own to use it instead.</div>
+            <div class="row" style="gap:6px;align-items:center;flex-wrap:wrap"><input type="number" id="s_identity.test_users" min="1" max="10" value="${esc(s["identity.test_users"]||1)}" style="width:64px"> <span id="wtnoun">test accounts</span> named
+              <input type="text" id="s_identity.test_login" value="${esc(s["identity.test_login"]||"")}" placeholder="${esc(c.prefix.toLowerCase())}-pilot" style="width:160px" autocomplete="off" spellcheck="false"><span class="muted">-1, -2…</span> @
+              <select id="wtdomsel" style="display:none;max-width:220px" aria-label="Domain"></select>
+              <input type="text" id="s_identity.test_domain" value="${esc(s["identity.test_domain"]||"")}" placeholder="Reading the tenant…" style="width:190px" autocomplete="off" spellcheck="false">
+              <span id="wtdomtag"></span></div>
+            <div class="hint" id="wtdomhint" style="margin:4px 0 0">Names are checked against the tenant so nobody else has them.</div>
             <div id="wtacct" style="margin-top:8px"></div></div>`:""}
         </div>`:""}
         <span class="lbl wpilot">People <span class="muted">(with a group: optional, to check they're in it)</span></span><div class="wpilot">

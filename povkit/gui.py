@@ -1010,7 +1010,7 @@ def api(method, path, body, q):
             from .core.guard import ReadOnlyTenant
             from .products import zid as _zid
             try:
-                is_taken, made, dom = _zid.name_lookup(ReadOnlyTenant(tf(p, "discovery")), p)
+                is_taken, made, dom, domains = _zid.name_lookup(ReadOnlyTenant(tf(p, "discovery")), p)
             except KitError as e:
                 return 200, dict(test_accounts(p), checked=False, check_error=str(e)[:200])
             if dom:
@@ -1020,7 +1020,7 @@ def api(method, path, body, q):
                 res.update(domain=dom, domain_from="tenant")
                 for a_ in res["accounts"]:
                     a_["email"] = a_["email"].replace("@…", "@" + dom)
-            return 200, dict(res, checked=bool(dom))
+            return 200, dict(res, checked=bool(dom), domains=domains)
         if body.get("n") is not None:   # a password before apply: kept in the keychain, used when apply makes it
             from .products import zia as _zia
             led = lifecycle.ledger(p)
