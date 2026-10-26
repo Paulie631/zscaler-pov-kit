@@ -392,12 +392,17 @@ the commands from **Next steps → ZPA App Connectors → CloudShare commands**.
 
 ### Competitive land mines
 
-Success criteria › **Competitive land mines** lists five vendor-neutral differentiators, each proved by tests in the
-customer's own tenant (inspecting all traffic, one agent on any network, invisible private apps, unknown files held for
-the sandbox verdict, AI security live). Propose them at scoping: **Add the bake-off pack** puts their criteria in the
-POV, and **Vendor sheet for the customer** is a printable scoresheet asking every vendor to show the same things.
-Customer-facing text never names a competitor; the SE notes per competitor are drafts to verify with competitive
-intelligence and never leave the console. Confirm IS-SSL-03 (TLS on a non-standard port) in your lab first.
+Success criteria › **Competitive land mines** lists nine vendor-neutral differentiators, each proved by tests in the
+customer's own tenant (every port inspected, apps outside the browser, encrypted DNS, unknown files held for the
+sandbox verdict, large files inspected, invisible private apps, hop-by-hop experience, AI security live, one agent on
+any network). Propose them at scoping: **Add the bake-off pack** puts their criteria in the POV, and **Vendor sheet for
+the customer** is a printable scoresheet asking every vendor to show the same things.
+
+The SE view shows, per competitor (Prisma Access, Netskope, Cisco, Cloudflare, Microsoft, Fortinet, Check Point, Cato),
+a stance (gap, parity, strong or unknown) with the competitor's own public docs cited for every gap, plus independent
+test results. Customer-facing text never names a competitor, and the SE notes never leave the console. Tests marked
+*lab check* (IS-SSL-03 TLS on a non-standard port, IS-DNS-02 DNS over HTTPS, IS-DLP-03 a 60 MB file) depend on
+Zscaler settings or licenses: run them once in your lab before proposing them.
 
 ### The step-by-step path
 
