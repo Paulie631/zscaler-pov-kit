@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.102
+- **You can see what the kit is doing while it runs.** A small bar, bottom right, appears whenever one of the POV's jobs runs (Apply, the change list, reading the tenant, Ask Claude…): what it is, how long it's taken, its latest step, and Show the log for all of it.
+- **A busy POV waits instead of refusing.** "Make it in the tenant" and Ask Claude, started while another job runs, follow that job's progress in place, then carry on by themselves (was: "This POV's apply is still running").
+- **Fix: AI/ML Cloud App Control rules that block uploads.** ZIA refuses DENY_AI_ML_UPLOAD unless ALLOW_AI_ML_WEB_USE is in the same rule (seen with "Marketing can use ChatGPT but can't upload files"). The change list now adds it, and Apply adds any action ZIA says a rule also needs ("If X is specified, then Y must also be specified") and tries again.
+
 ## 0.9.101
 - **Pilot users reads easily.** The step is one column, so nothing is squeezed. Test accounts have labeled fields (How many · Name · Domain), and each account is a card: its address, whether it's in the tenant yet, where its password is, and plain buttons (Show/Hide, New random password, Type my own…). A shown password sits on one line with a Copy button.
 

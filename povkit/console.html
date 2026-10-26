@@ -25,6 +25,10 @@ body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system
 header{display:flex;align-items:center;gap:14px;padding:12px 24px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5;flex-wrap:wrap}
 header h1{font-size:16px;margin:0;font-weight:650;letter-spacing:-.01em}
 header .meta{color:var(--muted);font-size:13px}
+.busybar{position:fixed;right:16px;bottom:16px;width:min(460px,calc(100vw - 32px));z-index:30;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.14);padding:10px 12px;font-size:13px}
+.busybar .t{display:flex;align-items:center;gap:8px}.busybar .last{color:var(--muted);margin-top:4px;font-family:var(--mono);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.busybar .log{max-height:220px;margin-top:8px;display:block}
+.spin{width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex:none}@keyframes spin{to{transform:rotate(360deg)}}
 header .sp{flex:1}
 nav.tabs{display:flex;gap:4px;padding:0 24px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:53px;z-index:4;overflow-x:auto}
 nav.tabs button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:10px 14px;background:none;color:var(--muted);font-weight:600;white-space:nowrap}
@@ -198,6 +202,7 @@ button.sm{padding:3px 9px;font-size:12.5px}
 </style>
 </head>
 <body class="simple">
+<div id="busybar" class="busybar" style="display:none" role="status" aria-live="polite"><div class="t"><span class="spin"></span><b class="lab"></b><span class="sp" style="flex:1"></span><a href="#" id="busytog">Show the log</a></div><div class="last"></div><div class="log"></div></div>
 <header>
   <h1>Zscaler POV Console</h1>
   <span class="meta" id="hpov">No POV yet</span>
@@ -488,6 +493,36 @@ function agResBind(el,r,rerun){el.querySelectorAll(".agrs button").forEach(b=>b.
     try{const x=await api("/api/aiguard/detector",{side:g.dataset.s,detector:g.dataset.d,action:b.dataset.a});g.querySelectorAll("button").forEach(y=>y.classList.toggle("on",y===b));
       if(AGPOL&&AGPOL.state[g.dataset.s])AGPOL.state[g.dataset.s][g.dataset.d]=b.dataset.a;AG.custom=x.custom;AG.profile="custom";agPolDraw();m.textContent=x.message+" Run it again in about 30 seconds."}catch(err){m.textContent=err.message}});
   const rb=el.querySelector(".agrsrun");rb&&(rb.onclick=e=>{e.stopPropagation();rerun(r)})}
+/* What's running: a small bar, bottom right, whenever a job of this POV runs (apply, the change list, Ask Claude…),
+   with its latest step, how long it's taken and the full log on request */
+const JOBLABEL={apply:"Apply",plan:"Making the change list",preflight:"Reading the tenant",quickstart:"Quick start",status:"Checking status",
+  usecase:"Use case",propose:"Asking Claude",criteria:"Success criteria",teardown:"Teardown",manual:"Checking the steps for people",devtests:"Device tests"};
+const jobLabel=k=>JOBLABEL[k]||JOBLABEL[String(k).split(/[-_ ]/)[0]]||String(k).replace(/[-_]/g," ").replace(/^./,c=>c.toUpperCase());
+let BUSY={id:null,open:false};
+async function busyPoll(){const bar=$("#busybar");if(!bar||document.hidden)return;
+  let j=null;try{j=(await api("/api/jobs/running")).job}catch(e){}
+  if(!j){bar.style.display="none";BUSY.id=null;return}
+  if(j.id!=BUSY.id){BUSY={id:j.id,open:false}}
+  const m=Math.floor(j.secs/60),sec=j.secs%60;
+  bar.style.display="";bar.querySelector(".lab").textContent=`${jobLabel(j.kind)}: running · ${m?m+" min ":""}${sec} s`;
+  bar.querySelector(".last").textContent=j.last||"Starting…";
+  const lg=bar.querySelector(".log");lg.style.display=BUSY.open?"block":"none";
+  if(BUSY.open){const r=await api(`/api/job?id=${j.id}&since=0`);lg.innerHTML=r.lines.slice(-60).map(l=>`<div class="${esc(l.level)}">${esc(l.t)}  ${esc(l.msg)}</div>`).join("");lg.scrollTop=lg.scrollHeight}}
+setInterval(busyPoll,1500);
+document.addEventListener("click",e=>{const b=e.target.closest&&e.target.closest("#busytog");if(!b)return;e.preventDefault();BUSY.open=!BUSY.open;b.textContent=BUSY.open?"Hide the log":"Show the log";busyPoll()});
+// a job refused because another of this POV's jobs is running: follow that one into `el`, then say so (true) so the
+// caller can start its own
+async function waitBusy(err,el){if(!/is still running/.test(err&&err.message||""))return false;
+  let j=null;try{j=(await api("/api/jobs/running")).job}catch(e){}
+  if(!j)return true;
+  const box=document.createElement("div");box.innerHTML=`<div class="notice" style="margin-top:8px"><span class="spin" style="display:inline-block;vertical-align:-2px;margin-right:6px"></span>Waiting for the ${esc(jobLabel(j.kind).toLowerCase())} that's already running, then carrying on…</div><div class="log" style="display:block"></div>`;
+  el.appendChild(box);try{await runJob(j.id,box.querySelector(".log"))}catch(e){}
+  box.querySelector(".notice").innerHTML=`The ${esc(jobLabel(j.kind).toLowerCase())} finished. Carrying on.`;return true}
+// start a job and follow it in `el`, waiting first for one already running
+async function followJob(path,body,el){for(let i=0;i<4;i++){let id;
+    try{id=(await api(path,body)).job}catch(e){if(await waitBusy(e,el.parentNode||el))continue;throw e}
+    return runJob(id,el)}
+  throw new Error("Another job kept running. Try again in a moment.")}
 async function runJob(id,el){let since=0;el.innerHTML="";
   for(;;){const j=await api(`/api/job?id=${id}&since=${since}`);
     for(const l of j.lines){const d=document.createElement("div");d.className=l.level;d.textContent=`${l.t}  ${l.msg}`;el.appendChild(d);el.scrollTop=el.scrollHeight}
@@ -1616,7 +1651,7 @@ function ucCard(u){const s=u.spec,t=s.test,st={proposed:"info",accepted:"ok",dir
       ${u.status=="discarded"?`<button class="ucact" data-id="${esc(u.id)}" data-s="proposed">Restore</button>`:""}
     </div><div class="ucmk" data-id="${esc(u.id)}"></div></div>`}
 async function ucMake(id,el,auto){el.innerHTML='<div class="notice" style="margin-top:10px">Checking the tenant and making the change list (about a minute)…</div><div class="log" style="display:block"></div>';
-  let P;try{P=await runJob((await api("/api/usecase/make",{id,preview:true})).job,el.querySelector(".log"))}catch(e){el.innerHTML=note(e.message,"bad");return}
+  let P;try{P=await followJob("/api/usecase/make",{id,preview:true},el.querySelector(".log"))}catch(e){el.innerHTML=note(e.message,"bad");return}
   const li=xs=>`<ul style="margin:4px 0 0 18px;padding:0">${xs.map(i=>`<li><b>${esc(i.name)}</b> <span class="muted">· ${esc(i.product.toUpperCase())} ${esc(i.kind.replace(/_/g," "))}${i.affects?" · affects "+esc(i.affects):""}</span></li>`).join("")}</ul>`;
   const se=P.mode=="se";let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
   el.innerHTML=`<div class="card" style="margin-top:10px;border-left:4px solid var(--accent)"><b>Make ${esc(id)} in the tenant</b>
@@ -1634,10 +1669,10 @@ async function ucMake(id,el,auto){el.innerHTML='<div class="notice" style="margi
   q(".mkgo")&&(q(".mkgo").onclick=async()=>{if(se&&!P.approved&&!(q(".mkrev").checked&&q(".mkby").value.trim())){q(".mkmsg").innerHTML=note("Tick the box and type your name for the sign-off.");return}
     q(".mkgo").disabled=true;const nm=se&&!P.approved?q(".mkby").value.trim():"";try{if(nm)localStorage.setItem("pov.exby",nm)}catch(_){}
     q(".mkmsg").innerHTML='<div class="log" style="display:block"></div>';
-    try{const n=await runJob((await api("/api/usecase/make",{id,hash:P.hash,by:nm})).job,q(".mkmsg .log"));q(".mkmsg").insertAdjacentHTML("beforeend",note(`Done: ${id} is in the tenant (ZIA changes activated). Run its tests from Device tests to prove it.`,"good"));load()}
+    try{const n=await followJob("/api/usecase/make",{id,hash:P.hash,by:nm},q(".mkmsg .log"));q(".mkmsg").insertAdjacentHTML("beforeend",note(`Done: ${id} is in the tenant (ZIA changes activated). Run its tests from Device tests to prove it.`,"good"));load()}
     catch(e){q(".mkmsg").insertAdjacentHTML("beforeend",note(e.message,"bad"));q(".mkgo").disabled=false}})}
 $("#ucask").onclick=async()=>{const b=$("#ucask");b.disabled=true;$("#uclog").style.display="block";$("#ucmsg").innerHTML="";
-  try{await runJob((await api("/api/usecase/propose",{prompt:$("#ucprompt").value,fresh:!!($("#ucfresh")&&$("#ucfresh").checked)})).job,$("#uclog"));$("#ucprompt").value="";usecases()}
+  try{await followJob("/api/usecase/propose",{prompt:$("#ucprompt").value,fresh:!!($("#ucfresh")&&$("#ucfresh").checked)},$("#uclog"));$("#ucprompt").value="";usecases()}
   catch(e){$("#ucmsg").innerHTML=note(e.message,"bad")}finally{b.disabled=false}};
 
 /* ---------------- status ---------------- */

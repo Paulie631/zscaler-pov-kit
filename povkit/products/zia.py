@@ -293,7 +293,22 @@ def pick_actions(t, rule_type, apps, choices):
         return [], None, f"the tenant offers no action like {choices[0][0]} for {', '.join(apps)}"
     actions, kept = max(groups.items(), key=lambda kv: len(kv[1]))
     dropped = [a for a in apps if a not in kept]
-    return kept, list(actions), (f"left out {', '.join(dropped)} (no matching actions)" if dropped else "")
+    acts = with_companions(rule_type, list(actions), available_actions(t, rule_type, kept[0]) if kept else None)
+    return kept, acts, (f"left out {', '.join(dropped)} (no matching actions)" if dropped else "")
+
+
+ALSO_NEEDS = re.compile(r"If (\w+) is specified, then (\w+) must also be specified", re.I)
+
+
+def with_companions(rule_type, actions, avail=None):
+    """ZIA refuses an AI/ML rule that denies one activity (upload, share...) without saying the app itself stays
+    usable: 'If DENY_AI_ML_UPLOAD is specified, then ALLOW_AI_ML_WEB_USE must also be specified.' Add it."""
+    out = list(actions)
+    if rule_type == "AI_ML" and not any(a.startswith("ALLOW_AI_ML_WEB_USE") for a in out):
+        partial = [a for a in out if re.match(r"(DENY|BLOCK)_AI_ML_", a) and not re.search(r"_(WEB_USE|ACCESS)$", a)]
+        if partial and (not avail or "ALLOW_AI_ML_WEB_USE" in avail):
+            out.append("ALLOW_AI_ML_WEB_USE")
+    return out
 
 
 class ZIA(Product):
@@ -733,16 +748,25 @@ class ZIA(Product):
         tries = (range(1, (taken[-1] if taken else 0) + 2) if it.get("placement") != "bottom"
                  else [(taken[-1] if taken else 0) + 1])
         args = (it["rule_type"],) if k.get("typed") else ()
-        last = None
+        last, body = None, dict(it["body"])
         for order in tries:
-            try:
-                return t.create(it["key"], k["res"], k["add"], *args, **dict(it["body"], order=order))
-            except GuardError:
-                raise
-            except KitError as e:
-                if not re.search(r"order|rank|predefined", str(e), re.I):
+            for _ in range(3):   # ZIA names an action the rule also needs: add it and ask again
+                try:
+                    return t.create(it["key"], k["res"], k["add"], *args, **dict(body, order=order))
+                except GuardError:
                     raise
-                last = e
+                except KitError as e:
+                    m = ALSO_NEEDS.search(str(e))
+                    acts = list(body.get("actions") or [])
+                    if it["kind"] == "cloud_app_control" and m and m[2].upper() not in acts:
+                        body["actions"] = acts + [m[2].upper()]
+                        if pov:
+                            pov.log("apply", f"{it['name']}: ZIA needs {m[2].upper()} with {m[1].upper()}; added it")
+                        continue
+                    if not re.search(r"order|rank|predefined", str(e), re.I):
+                        raise
+                    last = e
+                    break
         raise last
 
     def apply(self, t, pov, items_, log):

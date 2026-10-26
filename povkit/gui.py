@@ -181,10 +181,11 @@ def start_job(kind, work, streams=False):
     pid = povs.CURRENT.read_text(encoding="utf-8").strip() if povs.CURRENT.exists() else None
     busy = running(pid) if pid else None
     if busy:
-        raise KitError(f"This POV's {busy} is still running. Wait for it to finish (the Logs tab shows it).")
+        raise KitError(f"This POV's {busy} is still running. The console shows what it's doing and carries on when it "
+                       "finishes.")
     jid = uuid.uuid4().hex[:8]
     job = JOBS[jid] = {"kind": kind, "pov": pid, "done": False, "lines": [], "result": None, "error": None,
-                       "items": [], "stop": False}
+                       "items": [], "stop": False, "started": time.time()}
 
     def log(level, msg):
         job["lines"].append({"level": level, "msg": str(msg), "t": time.strftime("%H:%M:%S")})
@@ -269,6 +270,14 @@ def api(method, path, body, q):
             return 200, state()
         if path == "/api/rolespec":
             return 200, {"text": rolespec.render(current())}
+        if path == "/api/jobs/running":   # what the console's "working" bar shows: this POV's job still running
+            pid = povs.CURRENT.read_text(encoding="utf-8").strip() if povs.CURRENT.exists() else None
+            jid, j = next(((k, v) for k, v in reversed(list(JOBS.items())) if v.get("pov") == pid and not v["done"]),
+                          (None, None))
+            if not j:
+                return 200, {"job": None}
+            return 200, {"job": {"id": jid, "kind": j["kind"], "secs": int(time.time() - j.get("started", time.time())),
+                                 "last": (j["lines"][-1]["msg"] if j["lines"] else ""), "n": len(j["lines"])}}
         if path == "/api/job":
             j = JOBS.get(q.get("id"))
             if not j:
