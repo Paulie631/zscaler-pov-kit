@@ -12,7 +12,8 @@ def test_mac_app_starts_in_the_background(tmp_path):
     launch = (app / "Contents" / "MacOS" / "launch").read_text()
     assert "open -a Terminal" not in launch and "nohup" in launch and str(tmp_path / "kit" / "pov-kit") in launch
     assert "console.log" in launch and "display dialog" in launch
-    assert subprocess.run(["bash", "-n", str(app / "Contents" / "MacOS" / "launch")]).returncode == 0
+    if not installer.windows():   # Windows' bash (WSL) can't take a Windows path
+        assert subprocess.run(["bash", "-n", str(app / "Contents" / "MacOS" / "launch")]).returncode == 0
     assert (app / "Contents" / "Resources" / "console.command").exists()          # still there, for troubleshooting
 
 
@@ -25,8 +26,12 @@ def test_second_open_reuses_the_running_console(home, monkeypatch):
     opened = []
     monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url))
     t = threading.Thread(target=lambda: gui.serve(port=8871, open_browser=False), daemon=True)
+    gui.SERVER.clear()
     t.start()
-    time.sleep(0.8)
+    for _ in range(100):   # slower to start on some CI machines
+        if gui.SERVER.get("port") and gui._running_console(gui.SERVER["port"]):
+            break
+        time.sleep(0.1)
     port = gui.SERVER["port"]
     assert gui._running_console(port)
     assert gui.serve(port=port, open_browser=True) is None and opened == [f"http://127.0.0.1:{port}/"]
