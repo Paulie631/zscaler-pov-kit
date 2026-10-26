@@ -26,7 +26,8 @@ def describe_spec(sp):
     return {"http": f"Open {sp.get('url')} → expect {word}",
             "eicar": "Download the EICAR antivirus test file → expect blocked",
             "sandbox_file": "Download a PDF no one has seen before → expect held for sandbox analysis",
-            "dlp_post": "Post 6 fake card numbers → expect blocked",
+            "dlp_post": (f"Upload {sp['size_mb']} MB with fake card numbers at the end → expect blocked" if sp.get("size_mb")
+                         else "Post 6 fake card numbers → expect blocked"),
             "tls_issuer": f"HTTPS to {sp.get('host')}" + (f" on TCP {sp['port']}" if sp.get("port") else "") + f" → expect {word}",
             "tcp": f"Connect to {sp.get('host')} on TCP {sp.get('port')} → expect {word}",
             "dns": f"Look up {sp.get('name')} (DNS) → expect {word}",

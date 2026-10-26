@@ -69,18 +69,6 @@
    "criteria": [
     "IS-URL-02"
    ]
-  },
-  {
-   "name": "Block DNS over HTTPS",
-   "action": "BLOCK",
-   "url_categories": [
-    "DNS_OVER_HTTPS"
-   ],
-   "criteria": [
-    "IS-DNS-02"
-   ],
-   "optional": true,
-   "why": "Stops lookups that hide from DNS control by going over HTTPS (browsers fall back to ordinary DNS)."
   }
  ],
  "isolation": [
@@ -273,6 +261,18 @@
     "IS-DNS-01"
    ],
    "why": "A category the web tests don't visit, so DNS blocks never hide the URL filtering results."
+  },
+  {
+   "name": "Block DNS over HTTPS",
+   "action": "BLOCK",
+   "protocols": [
+    "DOHTTPS"
+   ],
+   "criteria": [
+    "IS-DNS-02"
+   ],
+   "optional": true,
+   "why": "Blocks DNS over HTTPS for the pilot group, so lookups can't hide from DNS control (browsers fall back to ordinary DNS, which DNS control sees)."
   }
  ],
  "customer_actions": [

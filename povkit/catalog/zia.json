@@ -89,7 +89,7 @@
      "expect": "Zscaler"
     }
    ],
-   "lab_check": "Confirm in your lab tenant first that SSL inspection covers non-standard ports for Client Connector traffic (tunnel and firewall settings)."
+   "lab_check": "Needs ZIA Advanced Firewall and Administration › Advanced Settings › Auto Proxy Forwarding for Non-Defined Ports, so non-standard-port web traffic goes to the web proxy. Confirm in your lab tenant first."
   },
   {
    "id": "IS-SSL-02",
@@ -198,6 +198,25 @@
      "expect": "block"
     }
    ]
+  },
+  {
+   "id": "IS-DLP-03",
+   "phase": "v1",
+   "optional": true,
+   "title": "A large upload is still inspected for sensitive data",
+   "statement": "Sensitive data near the end of a 60 MB upload is found and blocked, so size isn't a way around data protection.",
+   "proofs": [
+    "probe"
+   ],
+   "probe": [
+    {
+     "type": "dlp_post",
+     "url": "https://httpbin.org/anything",
+     "size_mb": 60,
+     "expect": "block"
+    }
+   ],
+   "lab_check": "Zscaler DLP scans files up to 400 MB and the first 100 MB of extracted text; confirm the block in your lab tenant first."
   },
   {
    "id": "IS-DLP-02",
@@ -356,10 +375,11 @@
    "probe": [
     {
      "type": "http",
-     "url": "https://dns.google/resolve?name=example.com",
+     "url": "https://dns.google/dns-query?dns=AAABAAABAAAAAAAAB2V4YW1wbGUDY29tAAABAAE",
      "expect": "block"
     }
-   ]
+   ],
+   "lab_check": "Confirm in your lab first that the DNS over HTTPS rule blocks this query for Client Connector traffic (DNS Control needs the firewall on; SSL inspection must cover dns.google)."
   }
  ]
 }

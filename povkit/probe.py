@@ -369,10 +369,14 @@ def run_spec(spec, run_id, s):
             fmt = [c if i % 3 == 0 else " ".join(c[j:j + 4] for j in range(0, 16, 4)) if i % 3 == 1
                    else "-".join(c[j:j + 4] for j in range(0, 16, 4)) for i, c in enumerate(cards)]
             body = "Customer payment records\n" + "\n".join(f"Card number: {c}  Exp: 12/29  CVV: 123" for c in fmt)
-            r = s.post(tag(spec["url"], run_id), data=body.encode(), timeout=TIMEOUT,
+            mb = int(spec.get("size_mb") or 0)
+            if mb:   # a large upload: plain filler first, the card numbers at the very end
+                line = "Quarterly notes, nothing sensitive here. " * 2 + "\n"
+                body = line * (mb * 1024 * 1024 // len(line)) + body
+            r = s.post(tag(spec["url"], run_id), data=body.encode(), timeout=max(TIMEOUT, 120 if mb else 0),
                        headers={"Content-Type": "text/plain; charset=utf-8"})
             got = classify(r)
-            detail = f"HTTP {r.status_code}, 10 fake card numbers (plain text)"
+            detail = f"HTTP {r.status_code}, 10 fake card numbers" + (f" at the end of a {mb} MB upload" if mb else " (plain text)")
         elif kind == "tls_issuer":
             issuer = tls_issuer(spec["host"], int(spec.get("port") or 443))
             got = "Zscaler" if issuer == "Zscaler" else "not-Zscaler"

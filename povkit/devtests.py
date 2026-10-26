@@ -147,7 +147,6 @@ RULE_TESTS = {
     "zia.cloud_app_control.block-risky-genai": ("http", ["poe.com"]),
     "zia.cloud_app_control.allow-genai": ("http", ["chatgpt.com"]),
     "zia.cloud_app_control.isolate-genai": ("http", ["perplexity.ai"]),
-    "zia.url_filtering.block-dns-over-https": ("http", ["dns.google"]),
     "zia.dlp.block-card-numbers": ("dlp_post", [""]),
 }
 EXPECT_FOR = {"BLOCK": "block", "CAUTION": "caution", "ISOLATE": "isolate", "ALLOW": "allow",

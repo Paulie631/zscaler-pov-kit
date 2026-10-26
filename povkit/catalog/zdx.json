@@ -9,6 +9,17 @@
    "proofs": [
     "api"
    ]
+  },
+  {
+   "id": "DX-PATH-01",
+   "phase": "v2",
+   "optional": true,
+   "title": "A slow app is traced hop by hop, down to the cause",
+   "statement": "For a pilot user's slow app, the console shows the hop-by-hop path from the device to the app with the device's Wi-Fi, CPU and memory, and names where the delay is.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "In ZDX, open the pilot user's device: show the app's hop-by-hop path (CloudPath) and device health, then degrade the Wi-Fi or throttle the link and show the score drop pinned to that hop."
   }
  ]
 }

@@ -614,7 +614,10 @@ class ZIA(Product):
             rule("firewall", r, dict(action=r["action"], nw_services=[refs.get(x, x) for x in r["nw_services"]],
                                      enable_full_logging=True))
         for r in tpl["dns"]:
-            rule("dns", r, dict(action=r["action"], res_categories=r["res_categories"]))
+            if r.get("optional") and not any(chosen(pov, x) for x in r["criteria"]):
+                continue
+            rule("dns", r, dict(action=r["action"], **({"res_categories": r["res_categories"]} if r.get("res_categories") else {}),
+                                **({"protocols": r["protocols"]} if r.get("protocols") else {})))
 
         from .. import logfeed
         lf = logfeed.plan_item(pov, snap, P, pid)

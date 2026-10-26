@@ -64,11 +64,21 @@ def add_pack(pov):
 
 
 def se_view(pov):
-    """For the SE only: the differentiators with competitor notes (draft, unverified) and lab checks."""
+    """For the SE only: each differentiator with, per competitor, where they stand (gap, parity or strong), what
+    their own public docs say, and the cited sources; plus what Zscaler needs for the test to pass."""
     d = load()
-    notes = {x["id"]: x["se"] for x in d["differentiators"]}
-    return {"status": d["se_status"], "vendors": d["vendors"],
-            "differentiators": [dict(x, se=notes[x["id"]]) for x in for_pov(pov)]}
+    by = {x["id"]: x for x in d["differentiators"]}
+    src = d.get("sources") or {}
+    out = []
+    for x in for_pov(pov):
+        full = by[x["id"]]
+        vend = {}
+        for k, v in (full.get("se") or {}).items():
+            v = v if isinstance(v, dict) else {"stance": "unknown", "note": v, "sources": []}
+            vend[k] = dict(v, sources=[dict(src[i], id=i) for i in v.get("sources") or [] if i in src])
+        out.append(dict(x, se=vend, zscaler=full.get("zscaler") or {}))
+    return {"status": d["se_status"], "vendors": d["vendors"], "researched": d.get("researched"),
+            "independent": d.get("independent") or [], "differentiators": out}
 
 
 def sheet_html(pov):
