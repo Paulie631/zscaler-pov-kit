@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.104
+- **Deployment guide brought up to date:** starting a POV before the API client exists, network hiccups, test accounts (names nobody has, the domain from the tenant, account cards), Accept and make it in the tenant, what Claude reads, the working bar, and new troubleshooting rows (AI Guard proxy 502, DNS failures, the AI/ML upload rule, the domain not filled in).
+
 ## 0.9.103
 Faster: the kit reads the tenant less often and less each time.
 - **Cloud App Control action lookups are kept for a day** (per POV and tenant). They were about a third of every ZIA reading (one call per app per rule type) and don't change during a POV; the second reading of the day skips them all.

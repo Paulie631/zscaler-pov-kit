@@ -130,8 +130,13 @@ The **Updates** button at the top of the console tells you when a new version is
 On **Connect**, enter the vanity domain and the client ID and secret the admin created (the secret goes straight to
 your keychain; with ZPA, also the customer ID from **Administration → API → Legacy API → Private Access API → Copy
 ID**), then click **Quick start**. If you didn't start the POV beforehand (in your lab, say), the same page takes the
-customer, the products and the API client at once. With two API clients (view-only first, write access after
-approval), the apply client is entered later.
+customer, the products and the API client at once. No API client yet? Leave its fields empty and click **Quick
+start**: the kit starts the POV and shows the role spec to send the customer's admin; when they give you the client ID
+and secret, enter them on Connect and click **Connect and read the tenant**. With two API clients (view-only first,
+write access after approval), the apply client is entered later.
+
+If your laptop briefly can't reach the tenant (a Wi-Fi change, or a VPN or Client Connector reconnecting), the kit
+tries twice more on its own. If it still can't, it says so in plain words, and that nothing changed in the tenant.
 
 The kit signs in, then fills in the rest from the tenant, read-only:
 
@@ -171,10 +176,19 @@ send you, and **Import their approval file** checks it's for this exact list.
   API can't grant: where the tenant entitles chosen groups (common with Okta), the customer grants it. Apply checks the
   entitlement, stops at once if it's missing, and otherwise waits up to three minutes for ZIA to have the group; click
   **Apply** again after granting it and it carries on. With nobody named yet, the group starts with a test user.
-- **Test accounts:** 1 to 10 accounts the kit creates (`zpov-pilot-1@<domain>`…), with passwords in your keychain
-  (**Get ready to test → Test users → Show password**). If the tenant keeps its users in ZIdentity, they're made there, on
-  `<vanity>.zslogin.net`, and you set their passwords in **Administration → Authentication → Directory → Users** (a
-  domain your IdP owns, such as Okta's, can't take a ZIdentity password).
+- **Test accounts:** 1 to 10 accounts the kit creates, set in three fields: **How many**, **Name** and **Domain**.
+  - **Names nobody has:** the kit checks the tenant first (read-only). If `zpov-pilot-1` already belongs to another
+    POV or SE, this POV's accounts get its own code (`zpov-a73d-pilot-1`…) and the step says why. Type your own name to
+    use it instead (it's flagged if taken). Once the accounts exist, the name stays until teardown.
+  - **The domain** is read from the tenant: the domains ZIA has for the organization, most used first (one is filled
+    in and tagged *from tenant*; several give a dropdown plus **Other…**), falling back to the users' email domains.
+    This needs view access to ZIA's organization information, which the role spec includes.
+  - **Each account is a card** with its full address, whether it's in the tenant yet, and its password: **Generate one
+    now**, **Type my own…**, or **Show** and **Copy** it. Passwords stay in your keychain and are used when Apply makes
+    the account (or set straight away once it exists).
+  - If the tenant keeps its users in ZIdentity, they're made there, on `<vanity>.zslogin.net` (shown read-only), and
+    you set their passwords in **Administration → Authentication → Directory → Users** (a domain your IdP owns, such as
+    Okta's, can't take a ZIdentity password).
 
 A line at the bottom says exactly who the POV's rules will apply to. The identity provider (its sign-in and MFA sites
 stay out of SSL inspection), your own list of sign-in sites not to decrypt, rule placement and the ZPA and CASB details
@@ -430,8 +444,16 @@ client or the More options, Review & apply for the POV options and a new change 
   Claude (your AI Guard proxy key, found automatically if the AI Guard demo kit is on your laptop; or, without an AI
   Guard tenant, your own Anthropic API key, sent directly and not scanned), record the customer's
   agreement once (names are replaced before anything leaves your laptop, unless they agree to share them), describe
-  the use case, refine it in words, and **Add to the change list**. The customer approves the new change list before
-  Apply builds it. **Save to library** keeps what worked.
+  the use case (Ctrl/⌘+Enter asks) and refine it in words. Then **Accept and make it in the tenant**: the kit
+  shows exactly what changes, signs it off in your name and applies it, from a single reading of the tenant (with
+  customer approval switched on, the customer approves the new change list first). **Save to library** keeps what
+  worked.
+  - **What Claude reads:** the tenant reading from the last 15 minutes when nothing was applied since; otherwise only
+    the products the request is about (a ChatGPT use case reads ZIA), with the rest from the last reading. Tick **Read
+    the tenant again** to read everything fresh.
+  - **While it works:** a bar in the bottom-right corner shows any job the POV is running (Apply, the change list,
+    reading the tenant, Ask Claude), how long it's taken and its latest step; **Show the log** opens all of it. If you
+    start something while another job runs, it follows that job and carries on when it's done.
 - **Products added later:** once the fix is in (for example, the ZDX role), **Review & apply → Read the tenant again**,
   then review and apply the new change list.
 - **Ask Claude about the tenant:** with the customer's agreement, **Get ready to test → Ask Claude about this tenant → Add to
@@ -506,6 +528,10 @@ repository is public).
 | Client Connector refused the profiles, or no profile to copy | Build them from the printed spec with exactly those names, then **Status → Fix drift** adopts them |
 | ZPA connectors don't appear | Check the machines reach the internet on TCP 443 and have the POV's provisioning key; they enroll within about 15 minutes |
 | Use cases: "AI Guard blocked the request" | Your AI Guard demo policy is enforcing. Switch it to Monitor, or rephrase |
+| Use cases: "The AI Guard proxy answered HTTP 502 (Bad Gateway)" | The proxy couldn't get an answer from Claude. The kit already tried three times; wait a minute and ask again. If it persists, check the AI Guard app's LLM provider and model in the AI Guard console |
+| "This computer couldn't look up `<vanity>.zslogin.net`" | A DNS failure on your laptop; nothing reached Zscaler. Check you're online (Wi-Fi, VPN, Client Connector), then try again. If it keeps failing, check the vanity domain on Connect |
+| Apply: "If DENY_AI_ML_UPLOAD is specified, then ALLOW_AI_ML_WEB_USE must also be specified" | Fixed in 0.9.102: the kit adds the action ZIA asks for. Update the kit and apply again |
+| Pilot users: the domain isn't filled in | The API client can't read ZIA's organization information and the tenant's users have no email domain to fall back on. Add the view access from the role spec, or type the domain |
 | Status: "POV end date" FAIL | The end date passed with objects in the tenant: hand the POV over now, or agree a new date (`pov-kit set ends`) |
 | Update: "couldn't reach GitHub" | Your web policy blocks GitHub downloads: download the zip from the releases page and run its installer |
 | A console path in a step doesn't match | Zscaler renames menus between versions: use the console's **Search menu**, and tell the kit owner the path you see |

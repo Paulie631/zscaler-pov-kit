@@ -40,7 +40,7 @@ Setup has four steps: **Connect → Pilot users → Review & apply → Get ready
 1. **Before the kickoff (Connect):** customer and products. Leave the API client fields empty and click **Quick start**:
    the kit creates the POV and shows the **role spec** to send to the customer's admin.
 2. **At the kickoff (Connect):** the API client they created (with ZPA, the customer ID: Administration → API →
-   Legacy API → Private Access API → Copy ID), then **Quick start**. The kit signs in, reads the tenant (read-only),
+   Legacy API → Private Access API → Copy ID), then **Connect and read the tenant**. The kit signs in, reads the tenant (read-only),
    fills in the defaults and lands on Review & apply.
 3. **Pilot users** (any time): who tests — a group they have, people you name, or test accounts. A change means a new
    change list.
