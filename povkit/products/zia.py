@@ -883,8 +883,6 @@ class ZIA(Product):
         for it in plan.get("items", []):
             if it["product"] != "zia" or it["action"] != "create" or it["kind"] not in SWITCHABLE:
                 continue
-            if "IS-TEN-01" in it.get("criteria", []):   # the tenant check gates every device test: never switched
-                continue
             if it["key"] == "zia.ssl.bypass-sign-in":   # inspecting the IdP and MFA sites could lock users out
                 continue
             if it["kind"] == "cloud_app_control" and it.get("rule_type") != "AI_ML":
@@ -895,6 +893,8 @@ class ZIA(Product):
             choices = list(SWITCHABLE[it["kind"]])
             if it["kind"] == "url_filtering" and not it["body"].get("cbi_profile"):
                 choices.remove("ISOLATE")
+            if "IS-TEN-01" in it.get("criteria", []):   # the tenant check gates every device test: a Zscaler page
+                choices = ["BLOCK", "CAUTION"]           # (block or caution) proves the tenant; Allow would prove nothing
             if it["kind"] == "cloud_app_control" and it["body"].get("cbi_profile"):
                 choices.insert(2, "ISOLATE")
             out.append({"key": it["key"], "name": it["name"], "kind": KIND_LABEL[it["kind"]], "affects": it.get("affects", ""),

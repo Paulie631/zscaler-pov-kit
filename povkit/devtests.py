@@ -103,7 +103,9 @@ def run(pov, ids=None, log=lambda *a: None, on_result=None, stop=None, on_device
             on_result(r)
     if on_device:
         from . import devlink
-        gate_ = [c for c in pack["criteria"] if c["id"] == "IS-TEN-01"]
+        gate_ = [dict(c, probe=[next((dict(sp, expect=expect_for(to, sp)) for key, (_, to) in sw.items()
+                                      if rule_matches(key, sp)), sp) for sp in c.get("probe") or []])
+                 for c in pack["criteria"] if c["id"] == "IS-TEN-01"]   # a device on an older kit compares exactly
         res = devlink.run_on(on_device, crit, {"pov": pack.get("pov"), "pack_id": pack.get("pack_id")},
                              on_result=landed, stop=stop, gate=gate_)
         where = f"on {res.get('device') or 'a linked device'}"
@@ -199,6 +201,7 @@ def readiness(pov, device=None, zcc=None, facts=None, gate=None):
 # which device tests each of the template's rules decides (a switch changes what those tests should see):
 # (test type, needles in its URL or host), or a function of the test's spec
 RULE_TESTS = {
+    "zia.url_filtering.block-tenant-check": ("http", ["example.com"]),
     "zia.url_filtering.block-gambling": ("http", ["bet365", "pokerstars"]),
     "zia.url_filtering.block-anonymizers": ("http", []),
     "zia.url_filtering.caution-social": ("http", ["facebook"]),

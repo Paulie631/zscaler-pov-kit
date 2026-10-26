@@ -133,7 +133,9 @@ def gate(crit, run_spec=None):
         return
     import requests
     r = (run_spec or probe.run_spec)(sp, "gate", requests.Session())
-    if r["outcome"] != r["expect"]:
+    # the POV's own rule shows the pilot a Zscaler page: blocked as planned, or a caution page while the SE has
+    # switched it for a demo. Either proves this device is the POV's; an ordinary page doesn't.
+    if r["outcome"] != r["expect"] and r["outcome"] not in ("block", "caution"):
         raise DeviceError("This device isn't in the POV's tenant as a pilot user (the POV's own test page isn't "
                           "blocked here), so no tests were run. Sign in to Client Connector as the pilot user the SE "
                           "named, with Internet Security on, then run the command again. A work laptop on its "

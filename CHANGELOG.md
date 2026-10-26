@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.89
+- **The tenant check (IS-TEN-01, www.example.com) can be switched too: Block or Caution.** It was left out because every test run checks it first to confirm the device is the POV's. That check now accepts either Zscaler page (the block page, or the caution page while it's switched), so switching it no longer stops the tests. Allow isn't offered: an ordinary page can't prove the device is in the POV's tenant. A linked device is told which page to expect.
+
 ## 0.9.88
 - **Run each device test on its own.** Every test in Device tests › Test runner has its own **Run** button (Run again once it has a result); the whole list still runs from the run bar. A test run alone counts as evidence when its criterion has just that one test.
 - **Change the policy right on the test.** The POV rule that decides a test sits on its row with its actions (the planned one marked •): switch it and the row says what the test now expects ("now expects caution"); then press Run. Switching never re-runs by itself. While a rule is switched, results don't count as evidence; **Put back as planned** restores everything.

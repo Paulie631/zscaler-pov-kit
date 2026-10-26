@@ -15,7 +15,8 @@ def applied(pov, tenant_for):
 def test_switch_and_put_back(pov, tenant, tenant_for):
     applied(pov, tenant_for)
     pol = devtests.policy(pov)
-    assert not any("tenant check" in x["name"] for x in pol["switches"]) and not pol["switched"]
+    ten = next(x for x in pol["switches"] if "tenant check" in x["name"])     # Block or Caution only
+    assert [c["id"] for c in ten["choices"]] == ["BLOCK", "CAUTION"] and not pol["switched"]
     gamb = next(x for x in pol["switches"] if "gambling" in x["name"])
     assert gamb["planned"] == "BLOCK" and gamb["tests"] and {"BLOCK", "CAUTION", "ALLOW"} <= {c["id"] for c in gamb["choices"]}
     assert devtests.switch(pov, tenant, gamb["key"], "CAUTION") == "CAUTION"
@@ -203,3 +204,24 @@ def test_zpa_access_rule_switch(pov_all, tenant, tenant_for):
     assert next(r for r in tenant.store["zpa.policies"] if r["name"] == acc["name"])["action"] == "ALLOW"
     with pytest.raises(KitError):
         devtests.switch(pov_all, tenant, "zpa.app_segment", "DENY")
+
+
+def test_tenant_check_switches_between_block_and_caution(pov, tenant, tenant_for, monkeypatch):
+    from povkit import probe
+    applied(pov, tenant_for)
+    pol = {x["key"]: x for x in devtests.policy(pov)["switches"]}
+    ten = pol["zia.url_filtering.block-tenant-check"]
+    assert [c["id"] for c in ten["choices"]] == ["BLOCK", "CAUTION"] and len(ten["tests"]) == 1
+    assert ten["expects"] == {"BLOCK": "block", "CAUTION": "caution"}
+    with pytest.raises(KitError):
+        devtests.switch(pov, tenant, ten["key"], "ALLOW")                    # Allow would prove nothing
+    devtests.switch(pov, tenant, ten["key"], "CAUTION")
+    assert tenant.by_name("url_filtering", ten["name"])["action"] == "CAUTION"
+    # the device now gets a caution page for example.com: the gate still passes and the test expects caution
+    monkeypatch.setattr(probe, "run_spec", lambda sp, rid, s: {
+        "spec": sp, "outcome": "caution" if "example.com" in str(sp.get("url")) else sp["expect"],
+        "expect": sp["expect"], "pass": True, "detail": ""})
+    seen = []
+    out = devtests.run(pov, ten["tests"], on_result=seen.append)
+    assert out["total"] == 1 and seen[0]["spec"]["expect"] == "caution" and out["evidence"] == []
+    assert devtests.readiness(pov, zcc=True, facts={"through": True})["ready"]
