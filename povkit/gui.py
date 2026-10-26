@@ -493,6 +493,11 @@ def api(method, path, body, q):
 
         def make(log=None):
             items, notes, h, checks = lifecycle.plan(p, tf, log, reuse_minutes=reuse)
+            from . import manual
+            for c in checks:   # the same help Preflight shows, so the Apply step can show each fix where it is
+                hp = manual.check_help(c["id"])
+                if hp:
+                    c["help"] = hp
             return {"items": items, "notes": notes, "hash": h, "checks": checks,
                     "read_at": (p.read_json("discovery.json", {}) or {}).get("at")}
         if body.get("job"):

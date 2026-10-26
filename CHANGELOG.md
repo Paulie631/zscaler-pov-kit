@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.95
+- **The Apply step shows what's stopping it, with the fix, right there.** Instead of "The checks found problems… See Preflight", it lists each problem with what was found, the fix, the console steps where there are any, and a button to the setup step that fixes it (Open Pilot users, Open Connect, Use prefix ZPOV2…). **Fixed it: check again** reads the tenant again in place. The list of objects to make folds away until the problems are fixed. The customer-approval change list shows the same.
+- Fixes written as Terminal commands (`pov-kit set …`) now say where that setting is in Setup, with the command kept as a small aside; the test accounts' missing email domain says to type it in Pilot users › Test accounts.
+
 ## 0.9.94
 - **No more loop at Finish setup.** After Apply, the checklist pointed at Finish setup, and Finish setup wouldn't open Next steps until every step for people was done, including "pilot devices run Client Connector", which can't happen until you set up a pilot device. Now **Next steps** is always open: steps still to do stay on the checklist (and the tests that need them wait), and moving on is recorded, so the checklist moves on too. Preflight works the same way for steps for people; real check failures still stop it.
 - **After Apply, Setup goes straight to Finish setup**, instead of reading the whole tenant again to show "nothing new to make".

@@ -388,7 +388,8 @@ class ZIA(Product):
                                 else "couldn't tell the users' email domain",
                                 ("If ZIA refuses because ZIdentity owns the users, apply says so and the next change "
                                  "list makes them in ZIdentity instead." if snap["zidentity"] else "")
-                                if dom else "`pov-kit set identity.test_domain acme.com`"))
+                                if dom else "Type the accounts' email domain (acme.com, say) in Pilot users › Test accounts, "
+                                "or `pov-kit set identity.test_domain acme.com`."))
         elif not want:
             checks.append(check("zia-pilot", "Pilot group chosen", FAIL, "none yet",
                                 "The customer names an existing group of pilot users: `pov-kit set pilot_group NAME`."))

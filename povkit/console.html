@@ -370,6 +370,28 @@ async function api(path,body){
 function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div>`}
 // a read-only job shown live: each tenant read and check as it happens, folded away when done
+// what stops Apply, each with its fix, right where you are (no trip to Preflight): a button for fixes that live in a
+// setup step, the console page for the rest, and Run the checks again
+const FIXGO=[[/pilot users? step|pilot group|test accounts|Pilot users/i,2,"Open Pilot users"],[/\bConnect\b|client ID|customer ID|vanity domain|API client|secret/i,1,"Open Connect"],
+  [/More options|placement|sites not decrypted|sign-in provider/i,2,"Open Pilot users › More options"]];
+// a fix written as a Terminal command (`pov-kit set KEY value`): where that setting is in Setup
+const SETAT={pilot_group:[2,"Pilot users"],pilot_emails:[2,"Pilot users"],"identity.":[2,"Pilot users"],"zpa.":[2,"Pilot users (ZPA)"],
+  "casb.":[2,"Pilot users (SaaS security)"],customer_id:[1,"Connect"],vanity_domain:[1,"Connect"],prefix:[0,"Start a POV › More options"],ends:[0,"Start a POV › More options"]};
+function fixPlace(fix){const m=/pov-kit set ([a-z_.]+)/.exec(fix||"");if(!m)return null;
+  const k=Object.keys(SETAT).find(x=>x.endsWith(".")?m[1].startsWith(x):m[1]==x);return k?{step:SETAT[k][0],where:SETAT[k][1],key:m[1]}:null}
+function fixText(fix){const fp=fixPlace(fix);if(!fp)return esc(fix);
+  const plain=/,? or `?pov-kit set [^`]*`?/.test(fix)?fix.replace(/,? or `?pov-kit set [^`]*`?/,""):fix.replace(/`?pov-kit set [^`]*`?/,`set it in ${fp.where}`);
+  return esc(plain.replace(/\s+\.$/,"."))+` <span class="muted" style="font-size:12px">(Terminal: <code>${esc((/pov-kit set [^`]*/.exec(fix)||[""])[0])}</code>)</span>`}
+function problemsHTML(checks){const f=(checks||[]).filter(c=>c.status=="fail");if(!f.length)return "";
+  return `<div class="card wprob" style="margin:8px 0 12px;border-left:4px solid var(--bad)"><b>${f.length} thing${f.length==1?"":"s"} to fix before Apply</b> <span class="muted">Nothing has changed in the tenant.</span>
+    <ul class="checks" style="margin-top:8px">${f.map((c,i)=>{const go=FIXGO.find(([re])=>re.test((c.fix||"")+" "+c.label)),pre=/Use prefix (\S+)/.exec((c.fix||"")+" "+(c.detail||""));
+      const fp=fixPlace(c.fix);
+      return `<li><span class="ic fail">✕</span><div><b>${esc(c.label)}</b>${c.detail?`<div class="d">${esc(c.detail)}</div>`:""}${c.fix?`<div class="fx">Fix: ${fixText(c.fix)}</div>`:""}${howHTML(c.help,null,true)}
+        <div class="row" style="gap:6px;margin-top:6px">${fp?`<button class="sm wpgo" data-step="${fp.step}">Open ${esc(fp.where)} ›</button>`:go?`<button class="sm wpgo" data-step="${go[1]}">${esc(go[2])} ›</button>`:""}${pre?`<button class="sm wppre" data-p="${esc(pre[1])}">Use prefix ${esc(pre[1])}</button>`:""}</div></div></li>`}).join("")}</ul>
+    <div class="row" style="gap:8px;margin-top:6px"><button class="primary wprerun">Fixed it: check again</button><span class="hint" style="margin:0">Reads the tenant again (read-only).</span></div></div>`}
+function bindProblems(){$$(".wpgo").forEach(b=>b.onclick=()=>{W.step=+b.dataset.step;W.checks=null;wizard()});
+  $$(".wprerun").forEach(b=>b.onclick=()=>{W.fresh=true;wizard()});
+  $$(".wppre").forEach(b=>b.onclick=async()=>{b.disabled=true;try{await api("/api/settings",{values:{prefix:b.dataset.p}});await load();W.fresh=true;wizard()}catch(e){b.insertAdjacentHTML("afterend",note(e.message,"bad"))}})}
 // moving past a gate with steps for people still open: recorded as the SE's call, so the checklist moves on too
 async function moveOn(stage){let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
   try{await api("/api/manual/skip",{stage,by:by||"SE",why:"moved on in Setup; to do later"});await load()}catch(_){}}
@@ -789,9 +811,11 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
       const kindOf=i=>esc(KIND[i.kind]||i.kind.replace(/_/g," "));
       let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
-      $("#wplan").innerHTML=`${readAt(r)}${r.checks.some(x=>x.status=="fail")?note("The checks found problems; nothing can be applied until they're fixed. See Preflight.","bad"):""}
-        <div class="group-h">${pend.length?`To make now · ${pend.length}`:"Nothing new to make"}</div>
-        ${pend.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th></tr>${pend.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(title(i.product))} · ${kindOf(i)}</div></td><td>${esc(i.affects)}</td></tr>`).join("")}</table></div>`:`<p class="muted">Everything in the plan is already in the tenant.</p>`}
+      const blocked=r.checks.some(x=>x.status=="fail");
+      const pendTable=pend.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th></tr>${pend.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(title(i.product))} · ${kindOf(i)}</div></td><td>${esc(i.affects)}</td></tr>`).join("")}</table></div>`:`<p class="muted">Everything in the plan is already in the tenant.</p>`;
+      $("#wplan").innerHTML=`${readAt(r)}${problemsHTML(r.checks)}
+        ${blocked&&pend.length?`<details style="margin-top:10px"><summary class="muted" style="cursor:pointer">What Apply will make once these are fixed · ${pend.length}</summary>${pendTable}</details>`:
+          `<div class="group-h">${pend.length?`To make now · ${pend.length}`:"Nothing new to make"}</div>${pendTable}`}
         ${pend.length&&!r.checks.some(x=>x.status=="fail")?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="wby2" placeholder="Your name (recorded as the sign-off)" value="${esc(by)}" style="width:260px"><button class="primary" id="wapply2">Apply ${pend.length} change${pend.length==1?"":"s"} ›</button></div>`:""}
         <div class="log" id="wlog2" style="display:none"></div><div id="wafter2"></div>
         ${acts.length?`<div class="group-h">Changes only the customer makes</div><ul>${acts.map(a=>`<li><b>${esc(a.name)}</b><div class="muted" style="font-size:12.5px">${esc(a.why)}</div></li>`).join("")}</ul>`:""}
@@ -799,7 +823,7 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
         <div class="group-h">Changes made · ${made.length}</div>
         ${made.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th><th>Made</th></tr>${made.map(m=>`<tr><td><b>${esc(m.name)}</b><div class="muted" style="font-size:12px">${esc(title(m.product))} · ${kindOf(m)}${m.state=="adopted"?" · built by hand, adopted":""}</div>${m.why?`<div style="font-size:12.5px">${esc(m.why)}</div>`:""}</td><td>${esc(m.affects)}</td><td class="muted" style="font-size:12px">${esc(String(m.at||"").slice(0,16).replace("T"," "))}</td></tr>`).join("")}</table></div><p class="hint">Teardown (Handover) removes all of them.</p>`:'<p class="muted">Nothing yet.</p>'}
         <div class="row" style="margin-top:12px"><button id="wopen">Open the printable list ↗</button></div>`+nav(true,!!made.length,"Finish setup ›");
-      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");
+      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindProblems();
       bindNav(()=>{W.step=7;wizard()});
       $("#wapply2")&&($("#wapply2").onclick=async()=>{const b=$("#wapply2");b.disabled=true;$("#wlog2").style.display="block";const nm=$("#wby2").value.trim();try{if(nm)localStorage.setItem("pov.exby",nm)}catch(_){}
         try{const res=await runJob((await api("/api/apply-direct",{by:nm})).job,$("#wlog2"));await load();
@@ -814,12 +838,12 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       const byP={};for(const i of creates)(byP[i.product]=byP[i.product]||[]).push(i);
       const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
       $("#wplan").innerHTML=`${readAt(r)}<div class="stat" style="margin:6px 0 10px"><div><b>${creates.length}</b>objects to create</div><div><b>${acts.length}</b>customer actions</div><div><b style="font:600 15px var(--mono);margin-top:4px">${esc(r.hash.slice(0,16))}</b>change list</div></div>
-        ${r.checks.some(x=>x.status=="fail")?note("Discovery found problems; apply will refuse until they're fixed. See Preflight.","bad"):""}
+        ${problemsHTML(r.checks)}
         ${Object.entries(byP).map(([p,is])=>`<div class="group-h">${esc(title(p))} · ${is.length}</div><div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th><th>Criteria</th></tr>${is.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(KIND[i.kind]||i.kind.replace(/_/g," "))}${i.placement?" · placed at the "+esc(i.placement):""}${i.action=="create_or_adopt"?" · or built by hand and adopted":""}</div>${i.why?`<div style="font-size:12.5px">${esc(i.why)}</div>`:""}</td><td>${esc(i.affects)}</td><td>${i.criteria.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</td></tr>`).join("")}</table></div>`).join("")}
         ${acts.length?`<div class="group-h">Changes only the customer makes</div><ul>${acts.map(a=>`<li><b>${esc(a.name)}</b><div class="muted" style="font-size:12.5px">${esc(a.why)}</div></li>`).join("")}</ul>`:""}
         ${r.notes.length?`<div class="group-h">Notes</div><ul class="muted">${r.notes.map(n=>`<li>${esc(n)}</li>`).join("")}</ul>`:""}
         <div class="row" style="margin-top:12px"><button id="wopen">Open the customer page ↗</button><span class="hint">Printable, with a signature line.</span></div>`+nav(true,true,"Continue to approval ›");
-      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindNav();
+      $("#wopen").onclick=()=>window.open(`/plan?t=${encodeURIComponent(TOKEN)}`,"_blank");bindProblems();bindNav();
     }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
   }
   else if((W.step==5||W.step==6)&&seMode()){W.step=4;return wizard()}
