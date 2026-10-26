@@ -1660,7 +1660,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
       <div class="dtbody"><div class="dtline"><span>${esc(r&&r.text||t.text)}</span>${r&&!DTone.has(t.id)?`<span class="badge b-${r.pass?"ok":st=="err"?"fail":"warn"}">${r.pass?"as expected":"got "+esc(r.outcome)}</span>`:""}${r&&r.ms!=null&&!DTone.has(t.id)?`<span class="muted" style="font-size:12px">${esc(r.ms)} ms</span>`:""}
         <span style="flex:1"></span><button class="dtrun1 sm" data-t="${esc(t.id)}" ${busy||notReady||DTready===null?"disabled":""} title="${notReady?"Fix what the readiness check found first":"Run just this test"}">${DTone.has(t.id)?"Running…":r?"Run again":"Run"}</button></div>
       ${rulesOf(t.id).map(x=>polInline(t,x)).join("")}
-      ${r&&r.switched?`<div class="hint" style="margin:2px 0 0"><b>Demo switch:</b> ${esc(r.switched)}, so this run expects ${esc(r.spec&&r.spec.expect||"")}.</div>`:""}
+      ${r&&r.switched?`<div class="hint" style="margin:2px 0 0"><b>Demo switch:</b> ${esc(r.switched.replace(/^[A-Z][A-Z0-9-]*:\s*/,""))}, so this run expects ${esc(r.spec&&r.spec.expect||"")}.</div>`:""}
       ${r&&!r.pass&&r.detail?`<div class="hint" style="margin:2px 0 0">${esc(r.detail)}</div>`:""}
       ${r?`<div class="row" style="gap:6px;margin-top:4px">${t.open?`<button class="dtopen sm" data-t="${esc(t.id)}">${DTdev?"Show it on the device ↗":"Show it ↗"}</button>`:""}<button class="dtdetbtn sm" data-i="${x.i}">${open?"Hide details ▴":(r.pass?"Details ▾":"Details, policy, check again ▾")}</button>${r.show&&r.show.look&&t.open?`<span class="hint" style="margin:0">${esc(r.show.look)}</span>`:""}</div>`:""}
       ${open?`<div class="dtdet" data-i="${x.i}">${detHTML(r,x.i)}</div>`:""}</div></div>`};

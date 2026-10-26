@@ -23,18 +23,25 @@ def test_windows_launcher_hides_the_window():
 
 
 def test_second_open_reuses_the_running_console(home, monkeypatch):
-    opened = []
+    opened, errors = [], []
     monkeypatch.setattr("webbrowser.open", lambda url: opened.append(url))
-    t = threading.Thread(target=lambda: gui.serve(port=8871, open_browser=False), daemon=True)
+
+    def run():
+        try:
+            gui.serve(port=8871, open_browser=False)
+        except Exception as e:   # noqa: BLE001
+            errors.append(repr(e))
     gui.SERVER.clear()
+    t = threading.Thread(target=run, daemon=True)
     t.start()
-    for _ in range(100):   # slower to start on some CI machines
-        if gui.SERVER.get("port") and gui._running_console(gui.SERVER["port"]):
+    for _ in range(300):   # slower to start on some CI machines
+        if errors or (gui.SERVER.get("port") and gui._running_console(gui.SERVER["port"])):
             break
         time.sleep(0.1)
+    assert not errors, errors
     port = gui.SERVER["port"]
     assert gui._running_console(port)
     assert gui.serve(port=port, open_browser=True) is None and opened == [f"http://127.0.0.1:{port}/"]
     gui.quit_console()
-    t.join(5)
+    t.join(10)
     assert not t.is_alive() and not gui._running_console(port)

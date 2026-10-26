@@ -1213,8 +1213,9 @@ def restart_console():
 def _running_console(port):
     """Is this kit's console already answering on the port (opened earlier, in the background)?"""
     import urllib.request
+    direct = urllib.request.build_opener(urllib.request.ProxyHandler({}))   # localhost: never through a proxy
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=2) as r:
+        with direct.open(f"http://127.0.0.1:{port}/", timeout=2) as r:
             return b"<title>Zscaler POV Console</title>" in r.read(2000)
     except Exception:   # noqa: BLE001
         return False
