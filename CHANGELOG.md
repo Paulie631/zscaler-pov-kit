@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.9.100
+- **Network hiccups don't stop the kit, and say what happened.** When this computer can't look up the tenant's address (DNS) or the connection drops, the kit tries twice more, a few seconds apart (reads always; writes only when nothing was sent). If it still fails, the message says it's this computer's network, that nothing changed in the tenant, and what to check (online, VPN, Client Connector, then the vanity domain), instead of a raw `HTTPSConnectionPool… NameResolutionError` line.
+
 ## 0.9.99
 - **Setup is four steps: Connect → Pilot users → Review & apply → Get ready to test** (with customer approval on, Sign-off and Apply follow Review & apply as before).
 - **Connect** starts or continues a POV and connects it in one screen. Quick start is the one way in: it signs in, fills in the rest from the tenant (read-only) and opens Review & apply. No API client yet? Leave it empty: the kit starts the POV and shows the role spec for the customer's admin.
