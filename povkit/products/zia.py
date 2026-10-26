@@ -527,7 +527,10 @@ class ZIA(Product):
                         body={"name": nsname, "ports": [["dest", "tcp", str(p)] for p in ns["dest_tcp"]],
                               "description": naming.describe(pid, ns["description"])}))
 
+        from .base import chosen
         for r in tpl["url_filtering"]:
+            if r.get("optional") and not any(chosen(pov, x) for x in r["criteria"]):
+                continue
             c = keep_cats(r)
             if c:
                 rule("url_filtering", r, dict(action=r["action"], url_categories=c, protocols=["ANY_RULE"],

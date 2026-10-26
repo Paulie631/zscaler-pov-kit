@@ -21,12 +21,13 @@ def describe_spec(sp):
     t, e = sp.get("type"), sp.get("expect")
     word = {"block": "blocked", "allow": "allowed", "caution": "a caution page", "isolate": "isolated",
             "open": "open", "resolved": "resolves", "Zscaler": "inspected by Zscaler",
-            "not-Zscaler": "not inspected", "quarantine": "held for sandbox analysis"}.get(e, e or "")
+            "not-Zscaler": "not inspected", "quarantine": "held for sandbox analysis",
+            "closed": "no access"}.get(e, e or "")
     return {"http": f"Open {sp.get('url')} → expect {word}",
             "eicar": "Download the EICAR antivirus test file → expect blocked",
             "sandbox_file": "Download a PDF no one has seen before → expect held for sandbox analysis",
             "dlp_post": "Post 6 fake card numbers → expect blocked",
-            "tls_issuer": f"HTTPS to {sp.get('host')} → expect {word}",
+            "tls_issuer": f"HTTPS to {sp.get('host')}" + (f" on TCP {sp['port']}" if sp.get("port") else "") + f" → expect {word}",
             "tcp": f"Connect to {sp.get('host')} on TCP {sp.get('port')} → expect {word}",
             "dns": f"Look up {sp.get('name')} (DNS) → expect {word}",
             "zcc_running": "Client Connector is running",

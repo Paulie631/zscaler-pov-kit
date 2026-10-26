@@ -31,6 +31,25 @@
    "attest": "From a device signed in as a user outside the pilot group, the POV app doesn't open."
   },
   {
+   "id": "PA-APP-04",
+   "phase": "v2",
+   "optional": true,
+   "title": "Users reach the app, and nothing next to it",
+   "statement": "Pilot users reach only the POV app on its own ports: another port on the same server is closed to them, and the app has no address exposed to the internet.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "tcp",
+     "host": "{zpa.domain}",
+     "port": 22,
+     "expect": "closed"
+    }
+   ]
+  },
+  {
    "id": "PA-CON-01",
    "phase": "v2",
    "title": "Connector group is healthy",

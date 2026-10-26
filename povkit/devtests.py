@@ -54,6 +54,11 @@ def library(pov):
             rows.append(by[cid])
         by[cid]["tests"].append({"id": sid, "text": evidence.describe_spec(sp), "type": sp.get("type"),
                                  "open": open_url(sp), "show": show(sp)})
+    from . import competitive
+    diff = competitive.badges(pov)
+    for r in rows:
+        if r["criterion"] in diff:
+            r["differentiator"] = diff[r["criterion"]]
     have = set(by)
     stories = [dict(s, tests=[t["id"] for c in s["criteria"] if c in by for t in by[c]["tests"]])
                for s in STORIES if have & set(s["criteria"])]
@@ -142,6 +147,7 @@ RULE_TESTS = {
     "zia.cloud_app_control.block-risky-genai": ("http", ["poe.com"]),
     "zia.cloud_app_control.allow-genai": ("http", ["chatgpt.com"]),
     "zia.cloud_app_control.isolate-genai": ("http", ["perplexity.ai"]),
+    "zia.url_filtering.block-dns-over-https": ("http", ["dns.google"]),
     "zia.dlp.block-card-numbers": ("dlp_post", [""]),
 }
 EXPECT_FOR = {"BLOCK": "block", "CAUTION": "caution", "ISOLATE": "isolate", "ALLOW": "allow",

@@ -73,6 +73,25 @@
    ]
   },
   {
+   "id": "IS-SSL-03",
+   "phase": "v1",
+   "optional": true,
+   "title": "TLS on a non-standard port is inspected too",
+   "statement": "Encrypted traffic on a port other than 443 is decrypted and inspected like web traffic, so threats and data can't slip out on an unusual port.",
+   "proofs": [
+    "probe"
+   ],
+   "probe": [
+    {
+     "type": "tls_issuer",
+     "host": "tls-v1-2.badssl.com",
+     "port": 1012,
+     "expect": "Zscaler"
+    }
+   ],
+   "lab_check": "Confirm in your lab tenant first that SSL inspection covers non-standard ports for Client Connector traffic (tunnel and firewall settings)."
+  },
+  {
    "id": "IS-SSL-02",
    "phase": "v1",
    "title": "Bypassed categories are not decrypted",
@@ -320,6 +339,24 @@
      "type": "dns",
      "server": "8.8.8.8",
      "name": "www.leafly.com",
+     "expect": "block"
+    }
+   ]
+  },
+  {
+   "id": "IS-DNS-02",
+   "phase": "v1",
+   "optional": true,
+   "title": "Encrypted DNS (DNS over HTTPS) is controlled",
+   "statement": "Lookups sent over DNS-over-HTTPS, which hide from ordinary DNS controls, are stopped for the pilot group, so DNS policy can't be bypassed.",
+   "proofs": [
+    "probe",
+    "api"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://dns.google/resolve?name=example.com",
      "expect": "block"
     }
    ]

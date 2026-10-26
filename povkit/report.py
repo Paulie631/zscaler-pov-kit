@@ -160,8 +160,14 @@ def render_report(pov, rows, approval):
                  + lst("What it means", summ["value"]) + lst("Next steps", summ["next_steps"])
                  + f"<p class='meta'>Drafted by Claude from the results below, {e(summ['at'][:10])}"
                  + (" · results have changed since; ask for it again" if stale else "") + "</p>")
+    from .competitive import report_section
+    apart = report_section(pov, rows)
+    stood = ("<h2>Where Zscaler stood apart</h2>" + "".join(
+        f"<h3>{e(d['title'])} · {d['passed']} of {d['total']} proved</h3><p>{e(d['why'])}</p><ul>"
+        + "".join(f"<li><code>{e(i)}</code> {e(t)}: <span class='{st}'>{e(st)}</span></li>" for i, t, st in d["criteria"])
+        + "</ul>" for d in apart)) if apart else ""
     body = (f"<h1>Proof of value: {e(pov.cfg['customer'])}</h1>"
             f"<p class='meta'>POV {e(pov.id)} · {appr} · report {stamp} · POV kit {VERSION}</p>"
-            f"<div class='box'><b>{tally}</b>.</div>{exec_}<h2>Results</h2>"
+            f"<div class='box'><b>{tally}</b>.</div>{exec_}{stood}<h2>Results</h2>"
             f"<table><tr class='head'><th>ID</th><th>Criterion</th><th>Result</th></tr>{summary}</table>{detail}")
     return page(f"POV report · {pov.cfg['customer']}", body)

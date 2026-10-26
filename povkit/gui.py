@@ -263,6 +263,9 @@ def api(method, path, body, q):
             return 200, {"plan": cl.plan(), "approval": cl.approval()}
         if path == "/api/update":
             return 200, updater.status(force=q.get("force") == "1")
+        if path == "/api/competitive":   # SE only: drafts of competitor notes, never sent anywhere
+            from . import competitive
+            return 200, competitive.se_view(current())
         if path == "/api/criteria":
             from . import summary
             summ, stale = summary.current(current())
@@ -272,6 +275,11 @@ def api(method, path, body, q):
             for r in rows:
                 if r["status"] != "pass" and wait.get(r["criterion"]["id"]):
                     r["waiting_on"] = wait[r["criterion"]["id"]]
+            from . import competitive
+            diff = competitive.badges(current())
+            for r in rows:
+                if r["criterion"]["id"] in diff:
+                    r["differentiator"] = diff[r["criterion"]["id"]]
             meta = current().read_json("api_proofs_meta.json", {}) or {}
             only_runner = not any("api" in r["criterion"]["proofs"] and r["criterion"]["product"] != "aiguard"
                                   and not r["criterion"].get("aiguard") for r in rows)
@@ -461,6 +469,12 @@ def api(method, path, body, q):
         if body.get("job"):
             return 200, {"job": start_job("plan", make)}
         return 200, make()
+    if path == "/api/criteria/bakeoff":
+        from . import competitive
+        p = current()
+        if p.cfg.get("state") in ("applied", "partly_applied") and not body.get("confirm"):
+            pass   # adding criteria after Apply is fine: the next Apply makes what they need
+        return 200, {"added": competitive.add_pack(p)}
     if path == "/api/approve":
         p = current()
         by_se = (p.cfg.get("approval") or "se") == "se"
@@ -1119,6 +1133,9 @@ def page_file(path, q, token):
     if path == "/aiguard-report":
         from . import aiguard_runner
         return aiguard_runner.report(p, q.get("customer")).encode("utf-8")
+    if path == "/vendor-sheet":   # vendor-neutral: no competitor names, no SE notes
+        from . import competitive
+        return competitive.sheet_html(p).encode("utf-8")
     f = {"/plan": p.path("plan.html"), "/report": p.path("report.html")}.get(path)
     return f.read_bytes() if f and f.exists() else None
 
@@ -1178,7 +1195,7 @@ def serve(port=8790, open_browser=True):
             if u.path == "/" and method == "GET":
                 html = (HERE / "console.html").read_text(encoding="utf-8").replace("__POV_TOKEN__", token)
                 return self._send(200, raw=html.encode(), ctype="text/html; charset=utf-8")
-            if u.path in ("/plan", "/report", "/aiguard-report") and method == "GET":
+            if u.path in ("/plan", "/report", "/aiguard-report", "/vendor-sheet") and method == "GET":
                 data = page_file(u.path, q, token)
                 return self._send(200, raw=data, ctype="text/html; charset=utf-8") if data else \
                     self._send(404, {"error": "not found"})

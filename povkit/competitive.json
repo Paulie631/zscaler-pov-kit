@@ -1,0 +1,100 @@
+{
+ "about": "Competitive land mines: vendor-neutral success criteria where the Zscaler platform stands apart, proved by tests. 'why' and 'ask' are customer-facing and never name a vendor. 'se' notes are for the SE only, drafted from public positioning and NOT verified: confirm with competitive intelligence before relying on them.",
+ "vendors": {
+  "prisma": "Palo Alto Networks Prisma Access",
+  "netskope": "Netskope",
+  "cisco": "Cisco Secure Access",
+  "cloudflare": "Cloudflare One"
+ },
+ "se_status": "Draft, not verified: check with competitive intelligence.",
+ "differentiators": [
+  {
+   "id": "inspect-all",
+   "title": "Inspects all of it, not just web traffic",
+   "why": "Threats and data move on any port and through encrypted DNS. Inspecting only web traffic leaves a gap an attacker or a careless app can use.",
+   "ask": "Show TLS inspection of traffic on a non-standard port, and control of DNS over HTTPS, from the endpoint agent, with no extra appliance.",
+   "criteria": [
+    "IS-SSL-01",
+    "IS-SSL-03",
+    "IS-DNS-02"
+   ],
+   "se": {
+    "prisma": "Probe: which traffic the agent steers and decrypts by default, and whether non-web ports are inspected inline or only firewalled.",
+    "netskope": "Probe: whether non-web traffic needs a separate steering mode or product (cloud firewall) to be inspected, and how DoH is handled.",
+    "cisco": "Probe: whether DNS-layer protection and full proxy inspection are separate components, and what covers DoH from the agent.",
+    "cloudflare": "Probe: what the agent sends through the gateway by default, and whether TLS on non-standard ports is decrypted and inspected."
+   }
+  },
+  {
+   "id": "anywhere",
+   "title": "One agent, the same policy, on any network",
+   "why": "Users work from home, hotels and offices. Protection that changes with the network, or needs a VPN, is protection that fails when people travel.",
+   "ask": "Run the same tests from the office and from home Wi-Fi with no VPN: show identical results, internet and private apps, from one agent.",
+   "criteria": [
+    "IS-TEN-01",
+    "IS-ZCC-01",
+    "IS-ZCC-03",
+    "PA-APP-01",
+    "DX-SCR-01"
+   ],
+   "se": {
+    "prisma": "Probe: how many agents or modes cover internet, private apps and experience monitoring, and whether policy differs on and off network.",
+    "netskope": "Probe: whether private access and internet security use one agent and one policy, and how experience monitoring is licensed.",
+    "cisco": "Probe: how many clients or modules are installed for secure internet, private access and experience monitoring.",
+    "cloudflare": "Probe: digital experience monitoring depth (hop-by-hop path) compared with ZDX."
+   }
+  },
+  {
+   "id": "invisible-apps",
+   "title": "Private apps stay invisible",
+   "why": "An app that can be reached can be attacked. Connecting users to one app, not the network, removes the attack surface and stops lateral movement.",
+   "ask": "Show a user reaching one private app and nothing else on that server or network, with no inbound port open to the internet.",
+   "criteria": [
+    "PA-APP-01",
+    "PA-APP-02",
+    "PA-APP-04",
+    "PA-CON-01"
+   ],
+   "se": {
+    "prisma": "Probe: whether private access is per-app or network-level for the tested setup, and what is exposed inbound.",
+    "netskope": "Probe: whether access is scoped to app and port, and what a user can reach on the same server.",
+    "cisco": "Probe: whether access is per-app or a network tunnel in the tested mode, and what lateral movement is possible.",
+    "cloudflare": "Probe: how app scoping is set up (tunnel routes versus per-app), and what else a user can reach on that network."
+   }
+  },
+  {
+   "id": "hold-unknown",
+   "title": "Unknown files are held until they're proven safe",
+   "why": "Allowing a never-seen file while it's analyzed means patient zero gets it. Holding it until the sandbox verdict stops it first time.",
+   "ask": "Download a file no one has seen before and show it held until the sandbox verdict, not delivered and checked later.",
+   "criteria": [
+    "IS-SBX-01"
+   ],
+   "se": {
+    "prisma": "Probe: default behavior for first-seen files during analysis in the tested setup (hold versus allow and alert).",
+    "netskope": "Probe: whether first-seen files are held inline or allowed while sandboxed, and at what file sizes.",
+    "cisco": "Probe: whether the sandbox verdict blocks the first download or only later ones.",
+    "cloudflare": "Probe: whether sandboxing holds the first download, and which file types it covers."
+   }
+  },
+  {
+   "id": "ai-live",
+   "title": "AI security proven on their own AI, live",
+   "why": "AI risk is specific: prompt injection on their own apps, sensitive data in prompts, and AI tools nobody approved. It should be shown working, not described.",
+   "ask": "Attack your own AI application with prompt injection and data-leak prompts, and show each one blocked; show sensitive data stopped in a GenAI prompt and an unapproved AI tool isolated.",
+   "criteria": [
+    "AI-AIG-01",
+    "AI-AIG-02",
+    "AI-GEN-01",
+    "AI-GEN-02",
+    "AI-GEN-03"
+   ],
+   "se": {
+    "prisma": "Probe: whether runtime protection for the customer's own AI apps is part of the same platform and policy, or a separate product.",
+    "netskope": "Probe: whether protection covers the customer's own AI app (prompt injection), not only use of public GenAI.",
+    "cisco": "Probe: how AI app protection is delivered and whether it can be shown on the customer's own app in the POV.",
+    "cloudflare": "Probe: whether AI protection covers prompt injection on the customer's own app and data in GenAI prompts with the same policy."
+   }
+  }
+ ]
+}

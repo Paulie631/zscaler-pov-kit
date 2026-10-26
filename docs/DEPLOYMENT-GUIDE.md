@@ -390,6 +390,15 @@ No cloud account for the connectors? [CLOUDSHARE.md](CLOUDSHARE.md) builds a Clo
 Connectors, the test app, a Windows pilot) with no customer values in it; each POV starts a copy and enrolls it with
 the commands from **Next steps → ZPA App Connectors → CloudShare commands**.
 
+### Competitive land mines
+
+Success criteria › **Competitive land mines** lists five vendor-neutral differentiators, each proved by tests in the
+customer's own tenant (inspecting all traffic, one agent on any network, invisible private apps, unknown files held for
+the sandbox verdict, AI security live). Propose them at scoping: **Add the bake-off pack** puts their criteria in the
+POV, and **Vendor sheet for the customer** is a printable scoresheet asking every vendor to show the same things.
+Customer-facing text never names a competitor; the SE notes per competitor are drafts to verify with competitive
+intelligence and never leave the console. Confirm IS-SSL-03 (TLS on a non-standard port) in your lab first.
+
 ### The step-by-step path
 
 **Step by step** on Start a POV opens the same work as eight steps (Start a POV, Connect, Pilot users, Preflight,

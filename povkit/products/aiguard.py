@@ -429,12 +429,15 @@ class AIGuard(Product):
                  "provider_credential": "add_credential"}
         for it in [i for i in items_ if i["product"] == "aiguard" and i["action"] == "create"]:   # in plan order
             kind = it["kind"]
+            if not t.ledger.find(it["key"]):
+                log("info", f"Creating {it['name']} ({KINDS[kind].get('title', kind.replace('_', ' '))})…")
             if kind == "key":
                 secret = aiguard_secret(it["key"])
 
                 def keep(r, pov=pov, name=secret):
                     if r.get("key"):
                         secrets.put(pov.id, name, r["key"])
+                        log("info", "  its secret went straight to this computer's keychain")
                     return r.get("id")
                 t.create(it["key"], KINDS[kind]["res"], verbs[kind], extract_id=keep, stamped=False, **it["body"])
             elif kind == "provider_credential":   # the SE's model key, from the keychain, never in the change list

@@ -69,6 +69,18 @@
    "criteria": [
     "IS-URL-02"
    ]
+  },
+  {
+   "name": "Block DNS over HTTPS",
+   "action": "BLOCK",
+   "url_categories": [
+    "DNS_OVER_HTTPS"
+   ],
+   "criteria": [
+    "IS-DNS-02"
+   ],
+   "optional": true,
+   "why": "Stops lookups that hide from DNS control by going over HTTPS (browsers fall back to ordinary DNS)."
   }
  ],
  "isolation": [

@@ -37,7 +37,7 @@ class FakeTenant:
                       "url_category": [], "network_service": []}
         self.file_types = ["FTCATEGORY_WINDOWS_EXECUTABLES", "FTCATEGORY_MSI"]
         self.cbi = [{"id": "cbi-1", "name": "Default isolation", "url": "https://cbi.example", "defaultProfile": True}]
-        self.cats = ["GAMBLING", "ANONYMIZER", "SOCIAL_NETWORKING", "FINANCE", "HEALTH", "OTHER_GAMES"]
+        self.cats = ["GAMBLING", "ANONYMIZER", "SOCIAL_NETWORKING", "FINANCE", "HEALTH", "OTHER_GAMES", "DNS_OVER_HTTPS"]
         # as a live tenant returns them: Zscaler's named templates are flagged custom; predefined ones have no name
         self.engines = [{"id": 61, "name": "5 or more Credit Card Numbers", "customDlpEngine": True},
                         {"id": 63, "name": None, "predefinedEngineName": "PCI", "customDlpEngine": False},

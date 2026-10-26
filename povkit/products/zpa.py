@@ -602,6 +602,21 @@ class ZPA(Product):
                     "detail": ("only the pilot group is allowed, and no broad customer rule allows others"
                                if scoped and not broad else
                                f"rule scoped: {scoped}; broad customer rules: {', '.join(broad) or 'none'}")}
+        if criterion["id"] == "PA-APP-04":   # least privilege: the segment opens only the planned ports
+            e = ledger.find("zpa.app_segment")
+            live = self.live_object(t, e) if e else None
+            if not live:
+                return {"status": "fail", "detail": "the POV app segment isn't in ZPA"}
+            want = port_pairs((snap.get("app") or app_of(pov.cfg))["tcp_ports"])
+            got = [str(x) for x in (g(live, "tcp_port_ranges") or [])]
+            rng = g(live, "tcp_port_range") or []
+            if not got and rng:
+                got = [str(v) for r in rng for v in (g(r, "from"), g(r, "to"))]
+            ok = sorted(got) == sorted(want)
+            return {"status": "pass" if ok else "fail",
+                    "detail": f"the segment opens TCP {', '.join(map(str, (snap.get('app') or app_of(pov.cfg))['tcp_ports']))} "
+                              "only, to the pilot group only, through outbound-only connectors" if ok else
+                              f"the segment's ports ({', '.join(got) or 'none'}) aren't the planned ones"}
         if criterion["id"] == "PA-PRA-01":
             got = {k: (lambda e: self.live_object(t, e) if e else None)(ledger.find(f"zpa.{k}"))
                    for k in ("pra_segment", "pra_portal", "pra_console")}

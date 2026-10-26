@@ -374,12 +374,14 @@ def run_spec(spec, run_id, s):
             got = classify(r)
             detail = f"HTTP {r.status_code}, 10 fake card numbers (plain text)"
         elif kind == "tls_issuer":
-            issuer = tls_issuer(spec["host"])
+            issuer = tls_issuer(spec["host"], int(spec.get("port") or 443))
             got = "Zscaler" if issuer == "Zscaler" else "not-Zscaler"
-            detail = f"certificate issuer: {issuer}"
+            detail = f"certificate issuer: {issuer}" + (f" (TCP {spec['port']})" if spec.get("port") else "")
         elif kind == "tcp":
             got = tcp_probe(spec["host"], spec["port"])
             detail = f"TCP {spec['port']} to {spec['host']}"
+            if spec.get("expect") == "closed":   # least privilege: anything but a connection counts as closed
+                got, detail = ("open" if got == "open" else "closed"), detail + f" ({got})"
         elif kind == "dns":
             # Not confirmed yet (TESTPLAN): whether ZIA answers a DNS block with an error or a block-page address.
             # Anything but a normal answer counts as blocked.

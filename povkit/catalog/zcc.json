@@ -1,12 +1,51 @@
 {
-  "product": "zcc",
-  "criteria": [
-    {"id": "IS-ZCC-01", "phase": "v1", "title": "Pilot devices are enrolled and the tunnel is up",
-     "statement": "Every pilot device shows as registered in Client Connector, and its traffic reaches the customer's tenant.",
-     "proofs": ["api", "probe"],
-     "probe": [{"type": "zcc_running"}, {"type": "via_zscaler"}]},
-    {"id": "IS-ZCC-02", "phase": "v1", "title": "The POV forwarding profile is the one in effect",
-     "statement": "Pilot devices use the POV app profile and its Z-Tunnel 2.0 forwarding profile.",
-     "proofs": ["api"]}
-  ]
+ "product": "zcc",
+ "criteria": [
+  {
+   "id": "IS-ZCC-01",
+   "phase": "v1",
+   "title": "Pilot devices are enrolled and the tunnel is up",
+   "statement": "Every pilot device shows as registered in Client Connector, and its traffic reaches the customer's tenant.",
+   "proofs": [
+    "api",
+    "probe"
+   ],
+   "probe": [
+    {
+     "type": "zcc_running"
+    },
+    {
+     "type": "via_zscaler"
+    }
+   ]
+  },
+  {
+   "id": "IS-ZCC-02",
+   "phase": "v1",
+   "title": "The POV forwarding profile is the one in effect",
+   "statement": "Pilot devices use the POV app profile and its Z-Tunnel 2.0 forwarding profile.",
+   "proofs": [
+    "api"
+   ]
+  },
+  {
+   "id": "IS-ZCC-03",
+   "phase": "v1",
+   "optional": true,
+   "title": "Same protection off the corporate network",
+   "statement": "On home or hotel Wi-Fi, with no VPN, a pilot device keeps exactly the same policy: the same tests behave the same way.",
+   "proofs": [
+    "probe",
+    "attested"
+   ],
+   "probe": [
+    {
+     "type": "http",
+     "url": "https://www.example.com/",
+     "expect": "block"
+    }
+   ],
+   "attest": "Run the device tests on a home or hotel network with no VPN; they match the office run (each one shows the Zscaler data center and public IP)."
+  }
+ ]
 }

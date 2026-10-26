@@ -250,6 +250,12 @@ pre{white-space:pre-wrap;word-break:break-word;background:var(--soft);border-rad
     <div class="tablewrap" style="margin-top:14px"><table><thead><tr><th>ID</th><th>Criterion</th><th>Proofs</th><th>Result</th></tr></thead><tbody id="crrows"></tbody></table></div>
     <div class="hint">Click a row for its evidence. Showed it live? Mark it Demonstrated.</div>
   </div>
+  <div class="panel" id="cmpanel">
+    <h2>Competitive land mines</h2>
+    <p class="muted" style="margin-top:0">Fair, vendor-neutral criteria where the platform stands apart, each one a live test. Propose them at scoping, so every vendor is held to them. Customer-facing text never names a competitor.</p>
+    <div class="row" style="gap:8px"><button id="cmpack">Add the bake-off pack</button><button id="cmsheet">Vendor sheet for the customer ↗</button><span class="hint" id="cmmsg"></span></div>
+    <div id="cmbody" style="margin-top:10px"></div>
+  </div>
   <div class="panel">
     <h2>Executive summary</h2>
     <p class="muted" style="margin:0">Customer and internal versions, as Word and PowerPoint: <a href="#" id="crgoexec">Handover › Executive summary</a>.</p>
@@ -1251,9 +1257,10 @@ async function aiguardTab(){const w=$("#agwrap");const c=S&&S.current;
         provs[pt]={use:u.startsWith("c:")?"customer":u,cred:u.startsWith("c:")?u.slice(2)||null:null,model:card.querySelector(".agpm").value.trim()}}
       let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
       const r=await api("/api/aiguard/settings",{providers:provs,competitor:$("#agcomp").value,apply:true,by});
-      $("#agpxsave").disabled=true;$("#agpxmsg").innerHTML='<div class="notice">Saved. Applying it to the tenant (about a minute)…</div><div class="log" style="display:block"></div>';
+      $("#agpxsave").disabled=true;$("#agpxmsg").innerHTML='<div class="notice">Saved. Applying it: reading AI Guard (only), then making the proxy key and rule. Each step shows below.</div><div class="log" style="display:block"></div>';
       try{const res=await runJob(r.job,$("#agpxmsg .log"));const done=note(res.made.length?`Applied: ${res.made.join(", ")}. LLM proxy is ready in the Test runner (pick the models there).`:"Applied: nothing new to create (AI Guard already matches).","good");
-        await aiguardTab();$("#agpxmsg")&&($("#agpxmsg").innerHTML=done)}
+        const steps=$("#agpxmsg .log").innerHTML,n=$("#agpxmsg .log").children.length;
+        await aiguardTab();$("#agpxmsg")&&($("#agpxmsg").innerHTML=done+`<details style="margin-top:6px"><summary class="muted" style="cursor:pointer">What it did (${n} step${n==1?"":"s"}) ›</summary><div class="log">${steps}</div></details>`)}
       catch(e){$("#agpxmsg").insertAdjacentHTML("beforeend",note(e.message,"bad"))}finally{$("#agpxsave").disabled=false}}catch(e){$("#agpxmsg").innerHTML=note(e.message,"bad")}};
   if(typeof storiesHTML=="function")storiesHTML();
 }
@@ -1457,12 +1464,23 @@ async function criteria(){let R;try{R=await api("/api/criteria");CR=R.rows}catch
   if(R.proofs_due&&!CRAUTO){CRAUTO=true;$("#crwhen").innerHTML='<span class="hint">Checking the setup behind each criterion (read-only)…</span>';
     api("/api/test-api",{auto:true}).then(async r=>{if(r.job){await runJob(r.job,document.createElement("div"));criteria()}}).catch(()=>{$("#crwhen").innerHTML=""})}
   $("#crstat").innerHTML=`<div><b>${n("pass")}</b>passed</div><div><b>${n("fail")}</b>failed</div><div><b>${n("incomplete")}</b>still to prove</div><div><b>${CR.length}</b>criteria</div>`;
-  $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k=="attested"?"demonstrated":k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span>${whyShort(r)}${r.waiting_on?`<div class="hint" style="margin-top:4px">waiting on: ${r.waiting_on.map(w=>`<a href="#" class="crwait">${esc(w.title)}</a>`).join("; ")}</div>`:""}</td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
+  $("#crrows").innerHTML=CR.map((r,i)=>`<tr class="r" data-i="${i}"><td><code>${esc(r.criterion.id)}</code></td><td>${esc(r.criterion.title)}${r.differentiator?` <span class="chip" title="${esc(r.differentiator.title+": "+r.differentiator.why)}" style="background:#e7f1fb;color:#1b3a75">Differentiator</span>`:""}</td><td>${Object.entries(r.proofs).map(([k,p])=>`<span class="badge b-${esc(p.status)}" title="${esc(p.detail||"")}">${esc(k=="attested"?"demonstrated":k)}</span>`).join(" ")}</td><td><span class="badge b-${esc(r.status)}">${esc(r.status)}</span>${whyShort(r)}${r.waiting_on?`<div class="hint" style="margin-top:4px">waiting on: ${r.waiting_on.map(w=>`<a href="#" class="crwait">${esc(w.title)}</a>`).join("; ")}</div>`:""}</td></tr>${open==i?detail(r,i):""}`).join("")||'<tr><td colspan="4" class="empty">No criteria for this POV.</td></tr>';
   $$("#crrows tr.r").forEach(tr=>tr.onclick=()=>{open=open==+tr.dataset.i?null:+tr.dataset.i;criteria()});
   $$(".crwait").forEach(x=>x.onclick=e=>{e.preventDefault();e.stopPropagation();goManual()});
   $$(".attgo").forEach(b=>b.onclick=async e=>{e.stopPropagation();const i=+b.dataset.i;
     try{await api("/api/attest",{criterion:CR[i].criterion.id,note:$("#att"+i).value.trim()||"Demonstrated live to the customer",by:(()=>{try{return localStorage.getItem("pov.exby")||"the SE"}catch(e){return "the SE"}})()});criteria()}catch(err){alertIn(i,err.message)}});
-  $$("#crrows tr.detail").forEach(tr=>tr.onclick=e=>e.stopPropagation())}
+  $$("#crrows tr.detail").forEach(tr=>tr.onclick=e=>e.stopPropagation());
+  drawCompete()}
+async function drawCompete(){let C;try{C=await api("/api/competitive")}catch(e){$("#cmbody").innerHTML=note(e.message,"bad");return}
+  const inPov=new Set((CR||[]).map(r=>r.criterion.id));
+  $("#cmbody").innerHTML=C.differentiators.length?C.differentiators.map(d=>`<div class="card" style="margin-bottom:10px"><h4>${esc(d.title)}</h4>
+    <p class="muted" style="margin:4px 0">${esc(d.why)}</p><p style="margin:4px 0"><b>Ask every vendor:</b> ${esc(d.ask)}</p>
+    <div>${d.criteria.map(c=>`<span class="chip" title="${esc(c.title)}">${esc(c.id)}${inPov.has(c.id)?" ✓":""}</span>${c.lab_check?` <span class="hint" title="${esc(c.lab_check)}">confirm in your lab first</span>`:""}`).join(" ")}</div>
+    <details style="margin-top:8px"><summary class="muted" style="cursor:pointer">SE notes · ${esc(C.status)}</summary><ul style="margin:6px 0 0 18px;padding:0">${Object.entries(d.se).map(([k,v])=>`<li><b>${esc(C.vendors[k]||k)}:</b> ${esc(v)}</li>`).join("")}</ul></details></div>`).join("")+
+    `<p class="hint">✓ = in this POV. SE notes stay in this console: they're not in the report, the vendor sheet, exports or anything sent to Claude.</p>`
+    :'<p class="muted">None of this POV\'s products have land mines yet.</p>';
+  $("#cmpack").onclick=async()=>{try{const r=await api("/api/criteria/bakeoff",{});$("#cmmsg").textContent=r.added.length?`Added ${r.added.join(", ")}. Apply makes what they need.`:"The pack is already in this POV.";await load();criteria()}catch(e){$("#cmmsg").textContent=e.message}};
+  $("#cmsheet").onclick=()=>window.open(`/vendor-sheet?t=${encodeURIComponent(TOKEN)}`,"_blank")}
 let CRAUTO=false;
 function whyShort(r){const ex=Object.values(r.proofs).flatMap(p=>p.explain||[]);return ex.length&&r.status!="pass"?`<div class="hint" style="margin-top:4px;max-width:340px">${esc(ex[0].why)}</div>`:""}
 function explainHTML(ex){if(!ex||!ex.length)return "";
@@ -1517,7 +1535,7 @@ async function devTestsTab(){const w=$("#dtwrap");const c=S&&S.current;if(!c){w.
   const show=()=>{$$(".dtview").forEach(v=>v.style.display=v.dataset.v==DTTAB?(v.dataset.v=="runner"?"grid":""):"none");$$("#dtsub button").forEach(b=>b.classList.toggle("on",b.dataset.s==DTTAB))};
   $$("#dtsub button").forEach(b=>b.onclick=()=>{DTTAB=b.dataset.s;show();if(DTTAB=="helpers")drawHelpers();if(DTTAB=="logs")drawTenantLogs()});show();if(DTTAB=="helpers")drawHelpers();if(DTTAB=="logs")setTimeout(()=>drawTenantLogs(),0);
   const count=()=>{const n=[...DTsel].filter(id=>all.some(t=>t.id==id)).length;$("#dtrun").textContent=`Run ${n} test${n==1?"":"s"}`;$("#dtshowall").textContent=`Show ${n==1?"it":"them"}, step by step`};
-  const drawLib=()=>{$("#dtlib").innerHTML=DT.criteria.map(g=>`<div style="margin:10px 0"><label class="chk" style="font-weight:600"><input type="checkbox" class="dtgrp" data-c="${esc(g.criterion)}" ${g.tests.every(t=>DTsel.has(t.id))?"checked":""}> <code>${esc(g.criterion)}</code> ${esc(g.title)}</label>
+  const drawLib=()=>{$("#dtlib").innerHTML=DT.criteria.map(g=>`<div style="margin:10px 0"><label class="chk" style="font-weight:600"><input type="checkbox" class="dtgrp" data-c="${esc(g.criterion)}" ${g.tests.every(t=>DTsel.has(t.id))?"checked":""}> <code>${esc(g.criterion)}</code> ${esc(g.title)}</label>${g.differentiator?` <span class="chip" title="${esc(g.differentiator.title+": "+g.differentiator.why)}" style="background:#e7f1fb;color:#1b3a75">Differentiator</span>`:""}
       ${g.tests.map(t=>`<label class="agtest" style="margin-left:22px"><input type="checkbox" class="dtt" data-t="${esc(t.id)}" ${DTsel.has(t.id)?"checked":""}><span>${esc(t.text)}</span></label>`).join("")}</div>`).join("");
     $$(".dtt").forEach(x=>x.onchange=()=>{x.checked?DTsel.add(x.dataset.t):DTsel.delete(x.dataset.t);drawLib()});
     $$(".dtgrp").forEach(x=>x.onchange=()=>{const g=DT.criteria.find(c=>c.criterion==x.dataset.c);g.tests.forEach(t=>x.checked?DTsel.add(t.id):DTsel.delete(t.id));drawLib()});count()};

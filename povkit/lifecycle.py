@@ -90,15 +90,24 @@ def _tally(c):
             f"{len(c)} check{'' if len(c) == 1 else 's'}" + (f", {bad} to fix" if bad else "") + (f", {warn} to look at" if warn else ""))
 
 
-def discover(pov, tenant_for, log=None):
+def discover(pov, tenant_for, log=None, only=None):
+    """only: re-read just these products, and plan the rest from the last reading (a quick apply of one product's
+    setting doesn't need the whole tenant read again). The others' checks aren't repeated."""
     raw = tenant_for(pov, "discovery")
     t = ReadOnlyTenant(Narrated(raw, log) if log else raw)
     say = log or (lambda *a: None)
     snaps, checks = {}, []
+    last = pov.read_json("discovery.json", {}) or {} if only else {}
+    cached = last.get("products") or {}
+    when = str(last.get("at") or "")[11:16]
     for p in products.selected(pov.products):
         if not p.ready:
             checks.append(check(f"{p.name}-later", p.title, INFO, getattr(p, "later_note", "")
                                 or f"arrives in {p.phase}; its criteria are in the catalog"))
+            continue
+        if only and p.name not in only and p.name in cached:
+            snaps[p.name] = cached[p.name]
+            say("info", f"{p.title}: not changing it, so using the last reading ({when} UTC) instead of reading it again")
             continue
         say("info", f"{p.title}: reading the tenant (read-only)")
         try:
@@ -113,6 +122,9 @@ def discover(pov, tenant_for, log=None):
     from . import identity
     if not set(pov.products) & PILOT_PRODUCTS:   # AI Guard alone has no pilot users (its app is the scope)
         ident, ic = {}, []
+    elif only and not set(only) & PILOT_PRODUCTS and "identity" in cached:
+        ident, ic = cached["identity"], []
+        say("info", "Pilot users: unchanged, using the last reading")
     else:
         say("info", "Pilot users: finding them across products (read-only)")
         try:
@@ -187,7 +199,11 @@ def make_plan(pov, snaps, log=None):
 
 
 def plan(pov, tenant_for, log=None):
-    snaps, checks = discover(pov, tenant_for, log)
+    return _plan(pov, tenant_for, log)[:4]
+
+
+def _plan(pov, tenant_for, log=None, only=None):
+    snaps, checks = discover(pov, tenant_for, log, only)
     if log:
         log("info", "Working out what to make (nothing is written yet)")
     items, notes = make_plan(pov, snaps, log)
@@ -197,7 +213,7 @@ def plan(pov, tenant_for, log=None):
     pov.log("plan", f"change list {h[:12]}: {len(items)} items")
     if log:
         log("ok", f"Ready: {len(items)} items. Nothing has changed in the tenant.")
-    return items, notes, h, checks
+    return items, notes, h, checks, snaps
 
 
 def _uc_key(uc_id):
@@ -284,7 +300,10 @@ def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
         raise KitError("This POV needs the customer's approval of each change list, so the setting is saved but not "
                        "applied: Setup › Sign-off, then Apply.")
     last_by = (ChangeList(pov.dir).approval() or {}).get("by")   # making the list again clears the old approval
-    items, notes, h, checks = plan(pov, tenant_for)
+    from .core.guard import CachedReads
+    shared = CachedReads(tenant_for(pov, "discovery"))   # one sign-in and one read of each list, for both steps
+    reads = lambda p, which: shared if which == "discovery" else tenant_for(p, which)  # noqa: E731
+    items, notes, h, checks, snaps = _plan(pov, reads, log, only=set(only) if only else None)
     bad = [c["label"] for c in checks if c["status"] == FAIL]
     if bad:
         raise KitError("Saved, but not applied: the checks found problems (" + "; ".join(bad[:3]) + "). Setup › Preflight.")
@@ -294,15 +313,21 @@ def quick_apply(pov, tenant_for, only, why, by=None, log=lambda *a: None):
         who = (by or "").strip() or last_by or "SE"
         rec = cl.approve(who, f"Signed off by the SE when saving {why} (customer sign-off not required for this POV).")
         pov.log("approve", f"change list {rec['hash'][:12]} approved by {rec['by']} ({why})")
+        log("ok", f"Signed off as {rec['by']}")
     led = ledger(pov)
     before = {e["key"] for e in led.active()}
-    apply(pov, tenant_for, log, only=set(only) if only else None)
+    todo = [i for i in items if i["action"] in ("create", "create_or_adopt") and not led.find(i["key"])
+            and (not only or i["product"] in only)]
+    log("info", f"Making {len(todo)} object{'' if len(todo) == 1 else 's'} now: " + ", ".join(i["name"] for i in todo)
+        if todo else "Nothing new to make: the tenant already matches")
+    apply(pov, tenant_for, log, only=set(only) if only else None, found=(snaps, checks))
     made = [e["name"] for e in ledger(pov).active() if e["key"] not in before]
     return {"made": made}
 
 
-def apply(pov, tenant_for, log, only=None):
-    snaps, checks = discover(pov, tenant_for)
+def apply(pov, tenant_for, log, only=None, found=None):
+    """found: (snaps, checks) from a discovery made moments ago in the same job, so it isn't read twice."""
+    snaps, checks = found or discover(pov, tenant_for)
     failed = [c for c in checks if c["status"] == FAIL]
     if failed:
         why = "; ".join(c["label"] for c in failed)
