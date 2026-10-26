@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -63,6 +64,9 @@ def unsecret(o):
     return o
 
 
+LOCK = threading.Lock()   # discovery reads products in parallel: one writer at a time, so lines never interleave
+
+
 def write(pov, resource, method, a, kw, out=None, error=None):
     """Called by Tenant.call when recording is on. Best effort: never breaks the call it records."""
     try:
@@ -73,8 +77,9 @@ def write(pov, resource, method, a, kw, out=None, error=None):
                "error": red.text(str(error))[:300] if error else None}
         d = pov.path("recordings")
         d.mkdir(exist_ok=True)
-        with (d / f"{time.strftime('%Y-%m-%d', time.gmtime())}.jsonl").open("a", encoding="utf-8") as f:
-            f.write(json.dumps(rec, default=str) + "\n")
+        line = json.dumps(rec, default=str) + "\n"
+        with LOCK, (d / f"{time.strftime('%Y-%m-%d', time.gmtime())}.jsonl").open("a", encoding="utf-8") as f:
+            f.write(line)
     except Exception:
         pass
 
