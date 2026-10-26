@@ -489,9 +489,12 @@ def api(method, path, body, q):
     if path == "/api/plan":
         p = current()
 
+        reuse = max(0, min(15, int(body.get("reuse") or 0)))   # the setup steps: a reading from moments ago is fine
+
         def make(log=None):
-            items, notes, h, checks = lifecycle.plan(p, tf, log)
-            return {"items": items, "notes": notes, "hash": h, "checks": checks}
+            items, notes, h, checks = lifecycle.plan(p, tf, log, reuse_minutes=reuse)
+            return {"items": items, "notes": notes, "hash": h, "checks": checks,
+                    "read_at": (p.read_json("discovery.json", {}) or {}).get("at")}
         if body.get("job"):
             return 200, {"job": start_job("plan", make)}
         return 200, make()

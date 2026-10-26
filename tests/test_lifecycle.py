@@ -280,3 +280,24 @@ def test_discovery_reads_products_at_once_and_reuses_a_recent_reading(pov_all, t
     lines.clear()
     lifecycle.discover(pov_all, tenant_for, lambda lvl, m: lines.append(m), reuse_minutes=15)
     assert not any("Using the tenant reading" in m for m in lines)
+
+
+def test_plan_reuses_a_fresh_reading_unless_something_changed(pov, tenant, tenant_for):
+    import time as _t
+    calls = []
+    orig = tenant.call
+
+    def counted(*a, **k):
+        calls.append(a[0])
+        return orig(*a, **k)
+    tenant.call = counted
+    lifecycle.plan(pov, tenant_for)
+    n = len(calls)
+    _t.sleep(1.1)
+    items, _, h, checks = lifecycle.plan(pov, tenant_for, reuse_minutes=10)
+    assert len(calls) == n and items and checks                        # reused: no tenant calls, same checks
+    _t.sleep(1.1)
+    pov.cfg["pilot_group"] = "Another group"
+    pov.save()                                                         # a setting changed: read again
+    lifecycle.plan(pov, tenant_for, reuse_minutes=10)
+    assert len(calls) > n

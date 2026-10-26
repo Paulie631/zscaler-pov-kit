@@ -370,9 +370,16 @@ async function api(path,body){
 function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function note(msg,kind){return `<div class="notice ${kind||""}">${esc(msg)}</div>`}
 // a read-only job shown live: each tenant read and check as it happens, folded away when done
-async function liveJob(path,box,label){
+// moving past a gate with steps for people still open: recorded as the SE's call, so the checklist moves on too
+async function moveOn(stage){let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
+  try{await api("/api/manual/skip",{stage,by:by||"SE",why:"moved on in Setup; to do later"});await load()}catch(_){}}
+// which tenant reading a setup step used, and a way to read it again
+function readAt(r){if(!r||!r.read_at)return "";const t=String(r.read_at).slice(11,16);
+  setTimeout(()=>{const a=$("#wreread");a&&(a.onclick=e=>{e.preventDefault();W.fresh=true;wizard()})},0);
+  return `<div class="hint" style="margin:0 0 8px">From the tenant reading at ${esc(t)} UTC. <a href="#" id="wreread">Read the tenant again</a></div>`}
+async function liveJob(path,box,label,extra){
   box.innerHTML=`<details class="doing" open><summary class="muted" style="cursor:pointer">${esc(label)}</summary><div class="log"></div></details>`;
-  const el=box.querySelector(".log"),r=await runJob((await api(path,{job:true})).job,el);
+  const el=box.querySelector(".log"),r=await runJob((await api(path,Object.assign({job:true},extra||{}))).job,el);
   const n=el.children.length,d=box.querySelector("details");d.open=false;
   d.querySelector("summary").textContent=`What the kit read and checked (${n} step${n==1?"":"s"}) ›`;return r}
 // ---- AI Guard: the POV policy, detector by detector (Policy tab and Test runner share it)
@@ -763,9 +770,9 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       const passed=await gate($("#wpeople"),"preflight",{title:"Steps for people before the change list",listTitle:"In the Zscaler console",
         intro:"These need a person in the Zscaler console. Until they're done, some checks above can't pass, or a product sits out the change list.",redraw:()=>draw()});
       $("#wgate").innerHTML=(fails.length?note(`${fails.length} thing${fails.length>1?"s":""} to fix first (often in the Pilot users step), then run the checks again.`,"bad"):"")+
-        (!passed?note("Finish the steps for people above, or Continue anyway (recorded).","bad"):"")+
-        `<div class="row" style="margin-top:14px"><button id="wback">‹ Back</button><button id="wrerun">Run checks again</button><button id="wcopy" title="Checks only. No secrets.">Copy report</button><button class="primary" id="wnext" ${fails.length||!passed?"disabled":""}>Continue ›</button></div>`;
-      bindNav();$("#wrerun").onclick=run;
+        (!passed&&!fails.length?note("Some steps for people above are still open. You can continue: they stay on the list, and the parts that need them wait.","warn"):"")+
+        `<div class="row" style="margin-top:14px"><button id="wback">‹ Back</button><button id="wrerun">Run checks again</button><button id="wcopy" title="Checks only. No secrets.">Copy report</button><button class="primary" id="wnext" ${fails.length?"disabled":""}>Continue ›</button></div>`;
+      bindNav(async()=>{if(!passed)await moveOn("preflight");W.step=4;wizard()});$("#wrerun").onclick=()=>{W.fresh=true;run()};
       $("#wcopy").onclick=async()=>{const t=reportText(W.checks);try{await navigator.clipboard.writeText(t);$("#wcopy").textContent="Copied ✓"}catch(e){download("pov-preflight.txt",t,"text/plain")}}};
     const run=async()=>{$("#wchecks").innerHTML='<div class="notice">Running the checks (read-only)…</div>';$("#wgate").innerHTML="";
       try{W.checks=(await liveJob("/api/preflight",$("#wdoing"),"What it’s doing now")).checks;wsteps();
@@ -777,12 +784,12 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
   else if(W.step==4&&seMode()){
     st.innerHTML=head(4,"Apply to the tenant","What the kit will make in "+esc(c.customer)+"’s tenant, for the pilot users only, then you apply it. Your sign-off is recorded as it applies; each object goes in the ledger, so teardown removes exactly them. (Need the customer to approve first? <a href=\"#\" id=\"wtocust2\">Switch to customer approval</a>.)")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Reading the tenant (read-only) and working out what to make…</div></div>';
     $("#wtocust2").onclick=async e=>{e.preventDefault();await api("/api/settings",{values:{approval:"customer"}});await load();wizard()};
-    try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now");W.plan=r;const ch=await api("/api/changes",{});await load();wsteps();
+    try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now",{reuse:W.fresh?0:10});W.fresh=false;W.plan=r;const ch=await api("/api/changes",{});await load();wsteps();
       const acts=r.items.filter(i=>i.action=="customer_action"),pend=ch.pending,made=ch.made.filter(m=>m.state!="deleted");
       const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
       const kindOf=i=>esc(KIND[i.kind]||i.kind.replace(/_/g," "));
       let by="";try{by=localStorage.getItem("pov.exby")||""}catch(_){}
-      $("#wplan").innerHTML=`${r.checks.some(x=>x.status=="fail")?note("The checks found problems; nothing can be applied until they're fixed. See Preflight.","bad"):""}
+      $("#wplan").innerHTML=`${readAt(r)}${r.checks.some(x=>x.status=="fail")?note("The checks found problems; nothing can be applied until they're fixed. See Preflight.","bad"):""}
         <div class="group-h">${pend.length?`To make now · ${pend.length}`:"Nothing new to make"}</div>
         ${pend.length?`<div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th></tr>${pend.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(title(i.product))} · ${kindOf(i)}</div></td><td>${esc(i.affects)}</td></tr>`).join("")}</table></div>`:`<p class="muted">Everything in the plan is already in the tenant.</p>`}
         ${pend.length&&!r.checks.some(x=>x.status=="fail")?`<div class="row" style="margin-top:12px;gap:8px"><input type="text" id="wby2" placeholder="Your name (recorded as the sign-off)" value="${esc(by)}" style="width:260px"><button class="primary" id="wapply2">Apply ${pend.length} change${pend.length==1?"":"s"} ›</button></div>`:""}
@@ -796,17 +803,17 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
       bindNav(()=>{W.step=7;wizard()});
       $("#wapply2")&&($("#wapply2").onclick=async()=>{const b=$("#wapply2");b.disabled=true;$("#wlog2").style.display="block";const nm=$("#wby2").value.trim();try{if(nm)localStorage.setItem("pov.exby",nm)}catch(_){}
         try{const res=await runJob((await api("/api/apply-direct",{by:nm})).job,$("#wlog2"));await load();
-          $("#wafter2").innerHTML=note(`Applied: ${res.made.length} object${res.made.length==1?"":"s"} made.`,"good");setTimeout(()=>wizard(),1200)}
+          $("#wafter2").innerHTML=note(`Applied: ${res.made.length} object${res.made.length==1?"":"s"} made. Next: the steps for people.`,"good");setTimeout(()=>{W.step=7;wizard()},1200)}
         catch(e){$("#wafter2").innerHTML=note(e.message,"bad");b.disabled=false}});
     }catch(e){$("#wplan").innerHTML=note(e.message,"bad")+nav(true,false);bindNav()}
   }
   else if(W.step==4){
     st.innerHTML=head(4,"The change list","Everything the kit will create, who it affects, and the changes only the customer makes. Walk the customer's admin through it; any change after approval needs a new approval.")+'<div id="wdoing"></div><div id="wplan"><div class="notice">Making the change list from the tenant (read-only)…</div></div>';
-    try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now");W.plan=r;await load();wsteps();
+    try{const r=await liveJob("/api/plan",$("#wdoing"),"What it’s doing now",{reuse:W.fresh?0:10});W.fresh=false;W.plan=r;await load();wsteps();
       const creates=r.items.filter(i=>i.action!="customer_action"), acts=r.items.filter(i=>i.action=="customer_action");
       const byP={};for(const i of creates)(byP[i.product]=byP[i.product]||[]).push(i);
       const title=n=>(S.products.find(p=>p.name==n)||{title:n}).title;
-      $("#wplan").innerHTML=`<div class="stat" style="margin:6px 0 10px"><div><b>${creates.length}</b>objects to create</div><div><b>${acts.length}</b>customer actions</div><div><b style="font:600 15px var(--mono);margin-top:4px">${esc(r.hash.slice(0,16))}</b>change list</div></div>
+      $("#wplan").innerHTML=`${readAt(r)}<div class="stat" style="margin:6px 0 10px"><div><b>${creates.length}</b>objects to create</div><div><b>${acts.length}</b>customer actions</div><div><b style="font:600 15px var(--mono);margin-top:4px">${esc(r.hash.slice(0,16))}</b>change list</div></div>
         ${r.checks.some(x=>x.status=="fail")?note("Discovery found problems; apply will refuse until they're fixed. See Preflight.","bad"):""}
         ${Object.entries(byP).map(([p,is])=>`<div class="group-h">${esc(title(p))} · ${is.length}</div><div class="tablewrap"><table><tr><th>Object</th><th>Applies to</th><th>Criteria</th></tr>${is.map(i=>`<tr><td><b>${esc(i.name)}</b><div class="muted" style="font-size:12px">${esc(KIND[i.kind]||i.kind.replace(/_/g," "))}${i.placement?" · placed at the "+esc(i.placement):""}${i.action=="create_or_adopt"?" · or built by hand and adopted":""}</div>${i.why?`<div style="font-size:12.5px">${esc(i.why)}</div>`:""}</td><td>${esc(i.affects)}</td><td>${i.criteria.map(x=>`<span class="chip">${esc(x)}</span>`).join("")}</td></tr>`).join("")}</table></div>`).join("")}
         ${acts.length?`<div class="group-h">Changes only the customer makes</div><ul>${acts.map(a=>`<li><b>${esc(a.name)}</b><div class="muted" style="font-size:12.5px">${esc(a.why)}</div></li>`).join("")}</ul>`:""}
@@ -877,7 +884,10 @@ async function wizard(){if(!S)await load();wsteps();const st=$("#wstage"),c=S.cu
     const draw=async()=>{const passed=await gate($("#wfin"),"finish",{title:"After Apply",listTitle:"In order",
         intro:"Entitlements, passwords, connectors and pilot devices: the things Zscaler's API can't do.",redraw:()=>draw()});
       await load();wsteps();
-      $("#wfinnav").innerHTML=(passed?note("Setup is finished: the POV is ready to test. Next steps has the probe pack, the traffic generator and the rest.","good"):"")+nav(true,true,passed?"Next steps ›":"Next steps (finish these first) ›",!passed);bindNav()};
+      const left=((await api("/api/manual")).steps||[]).filter(x=>x.stage=="finish"&&x.status=="open").length;
+      $("#wfinnav").innerHTML=(passed?note("Setup is finished: the POV is ready to test. Next steps has the probe pack, the traffic generator and the rest.","good"):
+        note(`${left} step${left==1?"":"s"} for people still open. You can go on: they stay on the checklist, and the tests that need them wait.`,"warn"))+nav(true,true,"Next steps ›");
+      bindNav(async()=>{if(!passed)await moveOn("finish");W.step=8;wizard()})};
     await draw();
   }
   else if(W.step==8){

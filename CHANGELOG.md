@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.94
+- **No more loop at Finish setup.** After Apply, the checklist pointed at Finish setup, and Finish setup wouldn't open Next steps until every step for people was done, including "pilot devices run Client Connector", which can't happen until you set up a pilot device. Now **Next steps** is always open: steps still to do stay on the checklist (and the tests that need them wait), and moving on is recorded, so the checklist moves on too. Preflight works the same way for steps for people; real check failures still stop it.
+- **After Apply, Setup goes straight to Finish setup**, instead of reading the whole tenant again to show "nothing new to make".
+- **"Run the tests on a pilot device" on the checklist opens Device tests** (it opened Finish setup again).
+- **Fewer full tenant reads.** The setup steps reuse a reading from the last 10 minutes when nothing was applied and no setting changed since, and say which reading they used, with **Read the tenant again**. From Quick start to applied, the tenant is now read twice (Quick start, and Apply itself, which always reads fresh before writing) instead of four times.
+
 ## 0.9.93
 - **Use cases: from directions to changes in one click.** When Claude can only write directions because a product the use case needs isn't in the POV (ZPA for an internal app, say), or a product wasn't readable in the last tenant reading, the card says so and offers one button: **Add ZPA to this POV, read the tenant and ask Claude again**. It adds the product, reads the tenant (read-only), and asks Claude again, so the card comes back with changes the kit can build. Then **Accept and make it in the tenant** applies them as before, with the POV's own sign-off rule (the SE's, or the customer's). If the product still can't be read, the card says why (a missing ZPA customer ID, say) and nothing changes.
 - **Only what the API can't do is left for a person** (Client Connector profiles, tenant-wide settings, the customer's own objects), under "Left for a person", and each group can be ticked off when it's done.

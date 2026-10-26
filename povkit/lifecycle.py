@@ -112,9 +112,10 @@ def discover(pov, tenant_for, log=None, only=None, reuse_minutes=0):
     if reuse_minutes and cached and not only:
         age = time.time() - _epoch(last.get("at"))
         led_at = pov.path("ledger.json").stat().st_mtime if pov.path("ledger.json").exists() else 0
-        if age <= reuse_minutes * 60 and led_at <= _epoch(last.get("at")):
+        cfg_at = pov.path("pov.json").stat().st_mtime if pov.path("pov.json").exists() else 0   # settings since?
+        if age <= reuse_minutes * 60 and max(led_at, cfg_at) <= _epoch(last.get("at")) + 1:
             say("ok", f"Using the tenant reading from {when} UTC ({max(1, int(age // 60))} min ago; nothing applied since)")
-            return dict(cached), []
+            return dict(cached), list(last.get("checks") or [])
     snaps, checks, todo = {}, [], []
     for p in products.selected(pov.products):
         if not p.ready:
@@ -181,7 +182,8 @@ def discover(pov, tenant_for, log=None, only=None, reuse_minutes=0):
     if waiting:
         snaps["_waiting"] = waiting
     snaps_out = snaps
-    pov.write_json("discovery.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "products": snaps_out})
+    pov.write_json("discovery.json", {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "products": snaps_out,
+                                      "checks": checks})
     pov.log("discover", f"discovery: {len(checks)} checks")
     return snaps, checks
 
@@ -229,12 +231,14 @@ def make_plan(pov, snaps, log=None):
     return items, notes
 
 
-def plan(pov, tenant_for, log=None):
-    return _plan(pov, tenant_for, log)[:4]
+def plan(pov, tenant_for, log=None, reuse_minutes=0):
+    """reuse_minutes: plan from the last tenant reading when it's this recent and nothing was applied or changed in
+    the POV's settings since (the setup steps, moments after Preflight or Quick start read it). 0 always reads."""
+    return _plan(pov, tenant_for, log, reuse_minutes=reuse_minutes)[:4]
 
 
-def _plan(pov, tenant_for, log=None, only=None):
-    snaps, checks = discover(pov, tenant_for, log, only)
+def _plan(pov, tenant_for, log=None, only=None, reuse_minutes=0):
+    snaps, checks = discover(pov, tenant_for, log, only, reuse_minutes=reuse_minutes)
     if log:
         log("info", "Working out what to make (nothing is written yet)")
     items, notes = make_plan(pov, snaps, log)

@@ -63,8 +63,8 @@ def steps(pov):
     if prods & {"zia", "zcc", "zpa", "zdx", "eai"}:
         runs = evidence.probe_runs(pov)
         add("device", "Run the tests on a pilot device", runs,
-            f"{len(runs)} probe run(s) imported" if runs else "Set up a pilot device, run pov-probe test, import the file.",
-            "step:7")
+            f"{len(runs)} probe run(s) imported" if runs else "Set up a pilot device, then run the tests from Device tests.",
+            "tab:devtests")
     if "aiguard" in prods:
         from . import aiguard_calibrate as cal
         m = cal.summary(pov=pov)
