@@ -1,0 +1,38 @@
+{
+ "product": "dspm",
+ "criteria": [
+  {
+   "id": "DS-FND-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Sensitive data in the cloud is found and classified",
+   "statement": "DSPM finds the sensitive data in the connected account (customer records, payroll, health records, card numbers) and classifies it by type and amount, across S3 and DynamoDB.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "DSPM's data inventory shows the seed stack's zpov-records bucket and zpov-customers table classified (PII, PCI, PHI, with counts). Screenshot it."
+  },
+  {
+   "id": "DS-RSK-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Risky exposure of sensitive data is flagged",
+   "statement": "Sensitive data in a weakly protected store (no public access block, no versioning or logging, readable by any role in the account) is flagged with a fix, ahead of anything else.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "DSPM flags the zpov-misconfigured bucket (and the public decoy file, if the stack made one) as sensitive data at risk, with remediation. Screenshot it."
+  },
+  {
+   "id": "DS-ACC-01",
+   "phase": "v3",
+   "draft": true,
+   "title": "Who and what can reach sensitive data is mapped",
+   "statement": "DSPM shows which identities and services can read the sensitive data, including the AI agent that shouldn't.",
+   "proofs": [
+    "attested"
+   ],
+   "attest": "The access view for zpov-records shows zpov-support-agent's role among those that can read it. Screenshot it."
+  }
+ ]
+}

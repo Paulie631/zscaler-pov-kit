@@ -57,6 +57,8 @@ def guide(pov):
                    and not led.find(i["key"])] if applied else []
     if zcc_by_hand:
         keys.append(("customer", "zcc.by_hand"))
+    if {"aispm", "dspm"} & set(pov.products):
+        keys.append(("end", "cloud.end.seed"))
     keys.append(("end", "end.api_clients"))
 
     done = pov.read_json(DONE_FILE, {}) or {}

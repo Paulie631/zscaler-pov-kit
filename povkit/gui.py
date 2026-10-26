@@ -908,6 +908,13 @@ def api(method, path, body, q):
                                       every=int(body.get("every") or 30), per_type=int(body.get("count") or 4))
         p.log("traffic", f"AWS traffic generator template for {t['Parameters']['PilotUser']['Default']}")
         return 200, {"name": name, "template": t}
+    if path == "/api/seed/aws":
+        from . import seed_aws
+        p = current()
+        name, t = seed_aws.for_pov(p, mcp=bool(body.get("mcp")), public_decoy=bool(body.get("public_decoy")))
+        p.log("seed", f"seed stack template (MCP server: {'yes' if body.get('mcp') else 'no'}, public decoy: "
+                      f"{'yes' if body.get('public_decoy') else 'no'})")
+        return 200, {"name": name, "template": t}
     if path == "/api/traffic/cloudshare":
         from . import traffic_aws
         p = current()

@@ -218,6 +218,15 @@ def c_test(a):
     return 1 if any(r["status"] == "fail" for r in rows) else 2 if any(r["status"] != "pass" for r in rows) else 0
 
 
+def c_seed(a):
+    from . import seed_aws
+    p = _pov(a)
+    out = seed_aws.write(a.out, p, mcp=a.mcp, public_decoy=a.public_decoy)
+    print(f"Seed stack: {out}. In the customer's TEST AWS account, after it's connected to Zscaler: CloudFormation > "
+          "Create stack > Upload a template file, tick the IAM acknowledgement, Submit. Steps: docs/SEED-STACK.md.")
+    return 0
+
+
 def c_zpa_template(a):
     from . import connector_template
     p = _pov(a)
@@ -721,6 +730,11 @@ def parser():
     s.add_argument("--cloud", choices=["aws", "azure"], default="aws")
     s.add_argument("--out")
     s.add_argument("--show-key", action="store_true")
+    s = cmd("seed", c_seed, "seed template [--mcp] [--public-decoy]: the AI-SPM / DSPM seed stack (CloudFormation)")
+    s.add_argument("what", choices=["template"])
+    s.add_argument("--mcp", action="store_true", help="add an MCP server with no authentication")
+    s.add_argument("--public-decoy", action="store_true", help="make one decoy file public")
+    s.add_argument("--out")
     s = cmd("aiguard", c_aiguard_policy, "aiguard policy monitor|attacks|data: what the POV's AI Guard policy blocks")
     s.add_argument("what", choices=["policy"])
     s.add_argument("profile", choices=["monitor", "attacks", "data"])

@@ -16,7 +16,7 @@ from .core.ledger import Ledger
 
 
 SHORT = {"zid": "ZIdentity", "zia": "ZIA", "zcc": "ZCC", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB", "eai": "Endpoint AI",
-         "aispm": "AI-SPM", "airt": "AI Red Teaming",
+         "aispm": "AI-SPM", "dspm": "DSPM", "airt": "AI Red Teaming",
          "easm": "EASM", "zbi": "Business Insights", "zms": "Microsegmentation", "ztw": "Cloud Connector"}
 
 

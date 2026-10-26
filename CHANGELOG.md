@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.82
+- **Seed stack for AI-SPM and DSPM** (Next steps › Seed stack, or `pov-kit seed template [--mcp] [--public-decoy]`): CloudFormation for the customer's test AWS account with synthetic sensitive data (customers, payroll, patients, cards; CSV, JSON, PDF and Word), a deliberately weak bucket, a DynamoDB table, AI training data with personal data in it, an over-permissioned AI agent on Bedrock and, optionally, an MCP server with no authentication and a public decoy file. Everything is named zpov-… and tagged; deleting the stack empties and removes it all. Step-by-step deployment: docs/SEED-STACK.md.
+- **DSPM (draft)**: a new product with three attested criteria (sensitive data found and classified, risky exposure flagged, access to sensitive data mapped).
+- AI-SPM and DSPM put their cloud steps on the steps for people: connect a test account with Zscaler's own onboarding template, then deploy the seed stack, with the criteria they hold up; removing both is an end-of-POV step. AI Red Teaming adds "name the AI app to scan, and who approves it".
+
 ## 0.9.81
 - **GenAI in browser isolation** (opt-in criterion AI-GEN-03, part of AI Access Security): a POV Cloud App Control rule opens an assistant that's neither approved nor blocked (Perplexity) in Cloud Browser Isolation for the pilot group, so users read answers but can't paste, upload or download. The device test expects isolation, and the rule's demo switch offers Block, Caution, Isolate and Allow. Tenants without an isolation profile: the rule is left out, with a note.
 - **AI Asset Management / AI-SPM (draft)**: a new product with four criteria, each shown and recorded by a person (no API in the Zscaler SDK yet): shadow AI inventoried (the traffic generator sends GenAI traffic so there's something to find), AI assets in a connected cloud account found, risky AI exposures flagged with a fix, and governance reported against NIST AI RMF, the EU AI Act or ISO 42001.

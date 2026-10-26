@@ -21,7 +21,7 @@
    "proofs": [
     "attested"
    ],
-   "attest": "The connected cloud account's AI assets are listed (models, AI services, MCP servers or agents). Screenshot the list with the account named."
+   "attest": "With the test account connected and the seed stack deployed, AI-SPM lists its AI assets: the zpov-support-agent function, the Bedrock model it uses, the zpov-training-data bucket and, if deployed, zpov-mcp-server. Screenshot the list with the account named."
   },
   {
    "id": "AS-RSK-01",
@@ -32,7 +32,7 @@
    "proofs": [
     "attested"
    ],
-   "attest": "At least one AI risk finding is shown with its severity and remediation. Screenshot it."
+   "attest": "AI-SPM flags at least one of the seed stack's risks (the over-permissioned zpov-support-agent role, personal data in zpov-training-data, or the unauthenticated zpov-mcp-server) with its severity and fix. Screenshot it."
   },
   {
    "id": "AS-GOV-01",

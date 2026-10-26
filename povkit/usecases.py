@@ -42,7 +42,7 @@ KINDS = {"url_filtering": "zia", "ssl": "zia", "cloud_app_control": "zia", "file
          "firewall": "zia",
          "zpa_app": "zpa", "aiguard_block": "aiguard", "zdx_deeptrace": "zdx", "casb_dlp": "casb"}
 SHORT = {"zia": "ZIA", "zcc": "Client Connector", "zpa": "ZPA", "aiguard": "AI Guard", "zdx": "ZDX", "casb": "CASB", "eai": "Endpoint AI",
-         "aispm": "AI-SPM", "airt": "AI Red Teaming"}
+         "aispm": "AI-SPM", "dspm": "DSPM", "airt": "AI Red Teaming"}
 IPV4 = re.compile(r"^(\d{1,3}\.){3}\d{1,3}(/\d{1,2})?$")
 PORTS = re.compile(r"^(\d{1,5})(-(\d{1,5}))?$")
 PROBE = {"http": ({"url", "expect"}, {"block", "caution", "allow", "isolate"}),
